@@ -121,7 +121,11 @@ func (s *Server) handleTestIndexer(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	inst.Tracker.CountRequest(inst.ID, 1) // the test is a real search
 	res := s.testIndexerInstance(r.Context(), inst)
+	if !res.OK {
+		inst.Tracker.LearnLimit(inst.ID, res.Message) // "Request limit reached" is worth knowing
+	}
 	msg := ""
 	if !res.OK {
 		msg = res.Message

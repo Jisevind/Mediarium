@@ -190,9 +190,9 @@ func (s *Server) handleSeriesSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	series = s.seriesWithAltTitles(r.Context(), series)
-	outcomes := indexers.SearchAll(r.Context(), instances, tvSearchQuery(series.Title, season, episode), tvCategory)
+	outcomes := indexers.SearchAll(indexers.AsManual(r.Context()), instances, tvSearchQuery(series.Title, season, episode), tvCategory)
 	for _, q := range s.extraTVQueries(series, season, episode) {
-		outcomes = append(outcomes, indexers.SearchAll(r.Context(), instances, q, tvCategory)...)
+		outcomes = append(outcomes, indexers.SearchAll(indexers.AsManual(r.Context()), instances, q, tvCategory)...)
 	}
 	merged := indexers.MergeResults(outcomes)
 	mapper := s.releaseMapper(series)

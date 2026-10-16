@@ -8,6 +8,14 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.1.2] - 2026-10-16
+
+### Added
+- **Daily limits for indexers** (reported by anguyen1776 on GitHub, #61): Mediarium now learns an indexer's daily limit from its "Request limit reached" answer, stops automatic searches two requests before it, shows "12 of 25 requests today" on the indexer's card and uses the indexer again after midnight (UTC). A search you start yourself still asks the indexer and warns you. A new optional **Requests per day** setting on each indexer (also `requestsPerDay` in the settings file) is there for a limit you know.
+
+### Fixed
+- Free indexers with a daily request cap (such as Drunken Slug and Althub) are no longer used up by Mediarium's own connection checks: the check no longer runs a search, skips an indexer that has just answered a real search, and asks at most every 6 hours (reported by anguyen1776 on GitHub, #61).
+
 ## [3.1.1] - 2026-10-16
 
 ### Added

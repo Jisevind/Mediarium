@@ -140,7 +140,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	outcomes := indexers.SearchAll(r.Context(), list, query, mediaCategories)
+	outcomes := indexers.SearchAll(indexers.AsManual(r.Context()), list, query, mediaCategories)
 	merged := indexers.MergeResults(outcomes)
 
 	blocked := s.blockedKeys()

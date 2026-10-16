@@ -62,6 +62,9 @@ type Instance struct {
 	// Priority is how much this indexer is preferred: PriorityPreferred,
 	// PriorityNormal (the default) or PriorityLast.
 	Priority int
+	// RequestsPerDay is the daily limit a person set for the indexer; 0 = none
+	// set, so what the indexer itself reported (if anything) is used.
+	RequestsPerDay int
 }
 
 // Indexer priorities. Between two equally good releases the one from the
@@ -88,6 +91,11 @@ type Outcome struct {
 	Skipped     bool
 	PausedUntil time.Time
 	Health      Health
+	// LimitNote is set when the indexer's daily limit is used up. The indexer
+	// is then skipped by automatic searches (Skipped is true, Err is nil: it is
+	// not a problem). In a search a person started it is still asked, and the
+	// note is the warning to show.
+	LimitNote string
 }
 
 // apostropheless drops the apostrophes and quote marks inside a name.
@@ -113,6 +121,7 @@ func SearchAll(ctx context.Context, instances []Instance, query string, categori
 		}
 	}
 
+	manual := isManual(ctx)
 	outcomes := make([]Outcome, len(enabled))
 	var wg sync.WaitGroup
 	for i, inst := range enabled {
@@ -121,8 +130,17 @@ func SearchAll(ctx context.Context, instances []Instance, query string, categori
 			outcomes[i] = Outcome{IndexerName: inst.Name, Skipped: true, PausedUntil: until, Health: h}
 			continue
 		}
+		var limitNote string
+		if q := inst.Tracker.Quota(inst.ID, inst.RequestsPerDay); q.Blocked {
+			limitNote = q.Message(nil)
+			if !manual {
+				outcomes[i] = Outcome{IndexerName: inst.Name, Skipped: true, PausedUntil: q.BackAt, LimitNote: limitNote}
+				continue
+			}
+			slog.Warn("indexers: asking an indexer that has reached its daily limit, because a person started the search", "indexer", inst.Name)
+		}
 		wg.Add(1)
-		go func(i int, inst Instance) {
+		go func(i int, inst Instance, limitNote string) {
 			defer wg.Done()
 			// A bug, or a site that finds one, must cost this indexer's
 			// results only, not the whole program.
@@ -144,6 +162,7 @@ func SearchAll(ctx context.Context, instances []Instance, query string, categori
 				outcomes[i] = Outcome{IndexerName: inst.Name, Err: err}
 				return
 			}
+			inst.Tracker.CountRequest(inst.ID, 1)
 			reqCtx, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()
 
@@ -168,13 +187,13 @@ func SearchAll(ctx context.Context, instances []Instance, query string, categori
 				}
 				results[j].Priority = inst.Priority
 			}
-			outcomes[i] = Outcome{IndexerName: inst.Name, Results: results, Err: err}
+			outcomes[i] = Outcome{IndexerName: inst.Name, Results: results, Err: err, LimitNote: limitNote}
 			// A search cut short by the caller, or waiting for the VPN, says
 			// nothing about the indexer.
 			if ctx.Err() == nil && !errors.Is(err, context.Canceled) && !errors.Is(err, netproxy.ErrWaitingForVPN) {
 				inst.Tracker.RecordSearch(inst.ID, results, err)
 			}
-		}(i, inst)
+		}(i, inst, limitNote)
 	}
 	wg.Wait()
 	if ctx.Err() == nil {
@@ -190,7 +209,7 @@ func SearchAll(ctx context.Context, instances []Instance, query string, categori
 // A wait for the VPN isn't logged: health already reports the VPN.
 func noteSearchProblem(o Outcome) {
 	// a search skipped because others were waiting says nothing about the indexer
-	if o.Err == nil || errors.Is(o.Err, context.Canceled) || errors.Is(o.Err, ErrSearchQueueFull) || errors.Is(o.Err, netproxy.ErrWaitingForVPN) {
+	if o.Err == nil || IsDailyLimit(o.Err) || errors.Is(o.Err, context.Canceled) || errors.Is(o.Err, ErrSearchQueueFull) || errors.Is(o.Err, netproxy.ErrWaitingForVPN) {
 		return
 	}
 	problems.Record(problems.Problem{Code: problems.IndexerCode(o.Err), Subject: o.IndexerName, Message: ProblemMessage(o), Err: o.Err})
@@ -205,6 +224,9 @@ func ProblemMessage(o Outcome) string {
 	}
 	if msg := netproxy.WaitMessage(o.Err); msg != "" {
 		return msg
+	}
+	if IsDailyLimit(o.Err) {
+		return fmt.Sprintf("%s has reached its daily limit of requests. It is used again after midnight (UTC).", o.IndexerName)
 	}
 	switch problems.IndexerCode(o.Err) {
 	case problems.CodeIndexerRateLimited:

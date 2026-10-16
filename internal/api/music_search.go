@@ -134,7 +134,7 @@ func (s *Server) handleAlbumSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	blocked := s.blockedKeys()
 	sources := s.sourcesFor("")
-	outcomes := indexers.SearchAll(r.Context(), instances, albumQuery(artist, album), musicCategories)
+	outcomes := indexers.SearchAll(indexers.AsManual(r.Context()), instances, albumQuery(artist, album), musicCategories)
 	for _, res := range indexers.MergeResults(outcomes) {
 		rel := music.ParseRelease(res.Title)
 		p := musicReleasePayload{

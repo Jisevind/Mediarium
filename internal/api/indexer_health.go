@@ -30,6 +30,13 @@ func addPauseInfo(p *indexerPayload, inst indexers.Instance) {
 	}
 }
 
+// addQuotaInfo fills in where the indexer stands against its daily limit.
+func addQuotaInfo(p *indexerPayload, inst indexers.Instance) {
+	q := inst.Tracker.Quota(inst.ID, inst.RequestsPerDay)
+	p.DailyLimit, p.LimitLearned, p.RequestsToday = q.Limit, q.Learned, q.Used
+	p.LimitNote = q.Message(nil)
+}
+
 // handleResumeIndexer is "Try again now": the indexer is asked by the next
 // search, and its failures are forgotten.
 func (s *Server) handleResumeIndexer(w http.ResponseWriter, r *http.Request) {

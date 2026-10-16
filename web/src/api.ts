@@ -729,6 +729,14 @@ export interface IndexerConfig {
   pausedUntil?: string
   pausedNote?: string
   pausedWhy?: string
+  // Daily limit: the number a person set (0 = none), the limit in use (set or
+  // learned from the indexer, 0 = none known) and the requests made today.
+  requestsPerDay?: number
+  dailyLimit?: number
+  limitLearned?: boolean
+  requestsToday?: number
+  // Set while automatic searches leave the indexer alone, in plain words.
+  limitNote?: string
 }
 
 // The delay profile (Settings > Languages and automation): how long automatic
@@ -2355,6 +2363,8 @@ export interface SearchAnswer<T> {
   results: T[]
   sources: number
   unanswered: { name: string; message: string }[]
+  // For example an indexer that was asked after its daily limit was used up.
+  warnings?: string[]
 }
 
 export interface MusicRelease extends SearchResult {
@@ -2916,7 +2926,7 @@ export const api = {
   testIndexerConfig: (data: { name: string; baseUrl: string; apiKey: string }) =>
     post<{ ok: boolean; message: string }>('/indexers/test', data),
   testIndexer: (id: number) => post<{ ok: boolean; message: string }>(`/indexers/${id}/test`),
-  updateIndexer: (id: number, data: { name?: string; baseUrl?: string; apiKey?: string; enabled?: boolean }) => put<IndexerConfig>(`/indexers/${id}`, data),
+  updateIndexer: (id: number, data: { name?: string; baseUrl?: string; apiKey?: string; enabled?: boolean; requestsPerDay?: number }) => put<IndexerConfig>(`/indexers/${id}`, data),
   setIndexerEnabled: (id: number, enabled: boolean) => put<null>(`/indexers/${id}/enabled`, { enabled }),
 
   listUsenetServers: () => get<UsenetServer[]>('/usenet-servers'),

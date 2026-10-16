@@ -617,7 +617,7 @@ function TracksPanel({ album }: { album: MusicAlbum }) {
 function ReleasesPanel({ album, onChanged }: { album: MusicAlbum; onChanged: () => void }) {
   const toast = useToast()
   const [results, setResults] = useState<MusicRelease[] | null>(null)
-  const [answered, setAnswered] = useState<{ sources: number; unanswered: Unanswered[] }>({ sources: 0, unanswered: [] })
+  const [answered, setAnswered] = useState<{ sources: number; unanswered: Unanswered[]; warnings?: string[] }>({ sources: 0, unanswered: [] })
   const [error, setError] = useState('')
   const [grabbing, setGrabbing] = useState<string | null>(null)
 
@@ -627,7 +627,7 @@ function ReleasesPanel({ album, onChanged }: { album: MusicAlbum; onChanged: () 
     api
       .albumSearch(album.id)
       .then((a) => {
-        setAnswered({ sources: a.sources, unanswered: a.unanswered })
+        setAnswered({ sources: a.sources, unanswered: a.unanswered, warnings: a.warnings })
         setResults(a.results)
       })
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
@@ -650,14 +650,14 @@ function ReleasesPanel({ album, onChanged }: { album: MusicAlbum; onChanged: () 
   if (error) return <p className="error-text">{error}</p>
   if (results === null) return <div className="skeleton" style={{ height: 120 }} />
   if (results.length === 0) {
-    return <ReleaseNotice className="album-empty" sources={answered.sources} unanswered={answered.unanswered} results={0} />
+    return <ReleaseNotice className="album-empty" sources={answered.sources} unanswered={answered.unanswered} warnings={answered.warnings} results={0} />
   }
   return (
     <div className="album-releases">
       <p className="album-empty">
         {plural(results.length, '{n} release found. Releases Mediarium would skip are marked with the reason, and you can still pick any of them.', '{n} releases found. Releases Mediarium would skip are marked with the reason, and you can still pick any of them.')}
       </p>
-      <ReleaseNotice className="album-empty" sources={answered.sources} unanswered={answered.unanswered} results={results.length} />
+      <ReleaseNotice className="album-empty" sources={answered.sources} unanswered={answered.unanswered} warnings={answered.warnings} results={results.length} />
       <div className="table-scroll">
         <ReleaseTable results={results} grabbing={grabbing} onGrab={grab} qualityLabel={releaseQuality} />
       </div>

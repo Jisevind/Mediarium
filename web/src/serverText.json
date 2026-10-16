@@ -503,6 +503,7 @@
  "Reports are for movies and shows.",
  "Request for {0} approved{1}",
  "Request for {0} declined{1}",
+ "Requests per day must be a number from 0 to {0}. Use 0 for no limit.",
  "Restart is not available here. Start Mediarium again yourself.",
  "Reusing the files already downloaded instead of downloading again. Checking them first.",
  "Saved a backup ({0}, {1})",

@@ -20,6 +20,7 @@ type searchAnswer[T any] struct {
 	Results    []T                `json:"results"`
 	Sources    int                `json:"sources"` // indexers that were asked
 	Unanswered []unansweredSource `json:"unanswered"`
+	Warnings   []string           `json:"warnings"` // for example an indexer asked past its daily limit
 }
 
 // unansweredFrom lists the indexers that failed, in the order asked. An indexer
@@ -38,8 +39,27 @@ func unansweredFrom(outcomes []indexers.Outcome) []unansweredSource {
 		}
 		if o.Skipped {
 			listed[o.IndexerName] = true
-			out = append(out, unansweredSource{Name: o.IndexerName, Message: indexers.PausedMessage(o.IndexerName, o.Health, nil)})
+			msg := indexers.PausedMessage(o.IndexerName, o.Health, nil)
+			if o.LimitNote != "" {
+				msg = o.IndexerName + ": " + o.LimitNote
+			}
+			out = append(out, unansweredSource{Name: o.IndexerName, Message: msg})
 		}
+	}
+	return out
+}
+
+// limitWarnings lists the indexers that were asked although their daily limit
+// is used up (a search started by hand asks them anyway), once each.
+func limitWarnings(outcomes []indexers.Outcome) []string {
+	out := []string{}
+	listed := map[string]bool{}
+	for _, o := range outcomes {
+		if o.LimitNote == "" || o.Skipped || listed[o.IndexerName] {
+			continue
+		}
+		listed[o.IndexerName] = true
+		out = append(out, o.IndexerName+": "+o.LimitNote+" It was asked anyway, so this search may be refused.")
 	}
 	return out
 }
@@ -54,5 +74,5 @@ func writeSearch[T any](w http.ResponseWriter, r *http.Request, results []T, sou
 		writeJSON(w, http.StatusOK, results)
 		return
 	}
-	writeJSON(w, http.StatusOK, searchAnswer[T]{Results: results, Sources: sources, Unanswered: unansweredFrom(outcomes)})
+	writeJSON(w, http.StatusOK, searchAnswer[T]{Results: results, Sources: sources, Unanswered: unansweredFrom(outcomes), Warnings: limitWarnings(outcomes)})
 }

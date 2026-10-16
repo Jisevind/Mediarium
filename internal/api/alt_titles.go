@@ -198,6 +198,9 @@ func (s *Server) seriesWithAltTitles(ctx context.Context, sr library.Series) lib
 // of them) while it says no, so a title that is found under its main name costs
 // one search a cycle, not five.
 func (s *Server) searchMovieTitles(ctx context.Context, instances []indexers.Instance, m library.Movie, enough func([]indexers.Outcome) bool) []indexers.Outcome {
+	if enough == nil {
+		ctx = indexers.AsManual(ctx) // a person asked for this search
+	}
 	outcomes := indexers.SearchAll(ctx, instances, m.Title, movieCategory)
 	extra := 0
 	for _, t := range m.AltTitles {

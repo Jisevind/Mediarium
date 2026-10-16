@@ -38,6 +38,19 @@ Searches on one indexer are also spaced out, a second and a half apart (six seco
 
 Scripts: `POST /api/indexers/{id}/resume` is **Try again now**; `GET /api/indexers` adds `failures`, `pausedUntil`, `pausedNote` and `pausedWhy` to a paused indexer.
 
+## Daily limits
+
+Free indexers often allow only a few requests a day, 25 for example, and answer "Request limit reached" after that. Spacing searches apart does nothing against a daily count, so Mediarium counts the requests it makes to each indexer per day (UTC) and leaves the indexer alone before the day is used up.
+
+- **Learning the limit.** When an indexer answers with something like `Request limit reached (26/25)` or `Request limit reached. Retry in 894 minutes.`, Mediarium remembers the limit (25) and when the requests are back: after the number of minutes the indexer gave, or after midnight UTC when it gave none. This is not counted as a failure, and the indexer is not paused for hours like one that keeps failing.
+- **Setting it yourself.** Edit the indexer and fill in **Requests per day**. A number you set wins over what the indexer reported. Leave it at 0 to use the limit the indexer reports, if it reports one; an indexer with no limit set and none learned is never held back.
+- **What counts.** Every request Mediarium makes to the indexer: searches, feed reads, the Test button, the connection watch and fetching a release you grabbed. The card shows "12 of 25 requests today" once a limit is known. Requests made by other programs with the same key aren't seen, but the count catches up as soon as the indexer reports its own.
+- **What happens at the limit.** Automatic searches, feed reads and connection checks stop two requests before the limit (so a search you start by hand still has room) and the card says "Daily limit of 25 reached. It is used again after midnight (UTC)." They start again by themselves when the day turns. A search you start yourself from a movie, show or album still asks the indexer, and warns you that it may be refused.
+
+The connection watch ([Notifications](./notifications.md#connection-watch)) doesn't use up searches: see the page for what it asks.
+
+Scripts: `GET /api/indexers` adds `requestsPerDay` (what you set), `dailyLimit` (the limit in use), `limitLearned`, `requestsToday` and `limitNote`; `PUT /api/indexers/{id}` takes `requestsPerDay`. In a settings file an indexer can have `requestsPerDay: 25`.
+
 ## How each indexer is doing
 
 **Settings > System > Statistics** has an **Indexers, last 30 days** card (administrators only): for each indexer the number of searches, how many failed, the share that worked, how many releases it returned and how many of its releases were grabbed, by hand or by Mediarium. A search skipped because of a pause is not counted. The counters are kept for 90 days. Script: `GET /api/stats/indexers`.

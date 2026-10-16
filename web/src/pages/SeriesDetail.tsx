@@ -81,7 +81,7 @@ function SeriesPage() {
   const [message, setMessage] = useState('')
   const [target, setTarget] = useState<SearchTarget | null>(null)
   const [results, setResults] = useState<SearchResult[] | null>(null)
-  const [answered, setAnswered] = useState<{ sources: number; unanswered: Unanswered[] }>({ sources: 0, unanswered: [] })
+  const [answered, setAnswered] = useState<{ sources: number; unanswered: Unanswered[]; warnings?: string[] }>({ sources: 0, unanswered: [] })
   const [searching, setSearching] = useState(false)
   const [grabbing, setGrabbing] = useState<string | null>(null)
   const [searchingNow, setSearchingNow] = useState(false)
@@ -138,7 +138,7 @@ function SeriesPage() {
     try {
       const a = await api.seriesSearch(seriesId, st.season, st.episode)
       if (mine !== searchId.current) return
-      setAnswered({ sources: a.sources, unanswered: a.unanswered })
+      setAnswered({ sources: a.sources, unanswered: a.unanswered, warnings: a.warnings })
       setResults(a.results)
     } catch (e) {
       if (mine === searchId.current) setError(e instanceof Error ? e.message : String(e))
@@ -389,7 +389,7 @@ function SeriesPage() {
         <section ref={releasesRef} className="card" style={{ marginBottom: 24, scrollMarginTop: 80 }}>
           <h2>{t('Releases for {target}', { target: target.label })}</h2>
           {searching && <p>{t('Looking for releases…')}</p>}
-          {results !== null && <ReleaseNotice sources={answered.sources} unanswered={answered.unanswered} results={results.length} />}
+          {results !== null && <ReleaseNotice sources={answered.sources} unanswered={answered.unanswered} warnings={answered.warnings} results={results.length} />}
           {!searching && (results === null || results.length === 0) && (
             <button className="btn-sm" onClick={() => setTarget(null)}>
               {t('Close')}

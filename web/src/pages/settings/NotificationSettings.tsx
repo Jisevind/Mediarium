@@ -498,6 +498,7 @@ function Watch() {
             : minutes === 60
               ? t('Every hour Mediarium checks that your Usenet provider and indexers still accept your login.')
               : plural(minutes, 'Every {n} minute Mediarium checks that your Usenet provider and indexers still accept your login.', 'Every {n} minutes Mediarium checks that your Usenet provider and indexers still accept your login.')}{' '}
+        {minutes !== 0 && t("Indexers are asked less often than that: at most every 6 hours, and not at all when a search has worked since the last check, so the checks do not use up an indexer's daily limit.")}{' '}
         {minutes !== 0 &&
           tx('If one stops working (an expired subscription, a changed password, the service being down) it notifies you once, and again when it recovers. Turn on {event} on a notification to get these.', {
             event: <strong>{t('Something is wrong')}</strong>,
