@@ -59,6 +59,7 @@ type bookPayload struct {
 	AuthorKey   string            `json:"authorKey,omitempty"`
 	Year        int               `json:"year,omitempty"`
 	CoverURL    string            `json:"coverUrl,omitempty"`
+	CoverChosen bool              `json:"coverChosen,omitempty"` // a person gave this book its cover ("Remove my cover" is on offer)
 	Description string            `json:"description,omitempty"`
 	AddedAt     string            `json:"addedAt"`
 	Ebook       bookFormatPayload `json:"ebook"`
@@ -75,7 +76,7 @@ type bookPayload struct {
 }
 
 func toBookPayload(b books.Book, admin bool) bookPayload {
-	p := bookPayload{ID: b.ID, OLKey: b.OLKey, Title: b.Title, Author: b.Author, AuthorKey: b.AuthorKey, Year: b.Year, CoverURL: books.LocalCoverURL(b.CoverID, "M"),
+	p := bookPayload{ID: b.ID, OLKey: b.OLKey, Title: b.Title, Author: b.Author, AuthorKey: b.AuthorKey, Year: b.Year, CoverURL: b.CoverPath("M"), CoverChosen: b.OwnCover > 0 || b.PickedCoverID > 0,
 		Description: b.Description, AddedAt: b.AddedAt,
 		Ebook:      bookFormatPayload{Wanted: b.WantEbook, Status: b.EbookStatus, Format: b.EbookFormat},
 		Audiobook:  bookFormatPayload{Wanted: b.WantAudiobook, Status: b.AudioStatus, Format: b.AudioFormat},
@@ -109,7 +110,7 @@ func (s *Server) handleListBooks(w http.ResponseWriter, r *http.Request) {
 			p.Description = ""
 		}
 		out = append(out, p)
-		covers = append(covers, b.CoverID)
+		covers = append(covers, b.OLCoverID())
 	}
 	s.warmBookCovers("M", covers)
 	writeJSON(w, http.StatusOK, out)

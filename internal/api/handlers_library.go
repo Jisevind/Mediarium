@@ -68,6 +68,10 @@ type searchResultPayload struct {
 	// grab is still allowed). Both use the Preferred audio language setting.
 	Language    string `json:"language,omitempty"`
 	LanguageFit string `json:"languageFit,omitempty"`
+	// MatchedTitle is the other title of the movie or show the release is
+	// named by ("Der Herr der Ringe"), when it is not named by the main one.
+	// Only set for a search on a library item.
+	MatchedTitle string `json:"matchedTitle,omitempty"`
 }
 
 // toSearchResultPayload builds a search result for the UI. Its download URL
@@ -96,7 +100,7 @@ func (s *Server) toSearchResultPayload(res indexers.Result) searchResultPayload 
 	if !res.PublishDate.IsZero() {
 		payload.PublishDate = res.PublishDate.Format("2006-01-02T15:04:05Z07:00")
 	}
-	fit := quality.FitLanguage(release, s.preferredLanguage())
+	fit := quality.FitLanguageOnly(release, s.preferredLanguage(), s.languageOnly())
 	payload.Language = fit.Label
 	if fit.Label == "" && fit.Rank < 3 {
 		payload.Language = "Not stated"
@@ -182,6 +186,9 @@ type moviePayload struct {
 	// RootPath is the library folder chosen for the movie ("" = the main
 	// movies folder).
 	RootPath string `json:"rootPath,omitempty"`
+	// FolderPath is the full folder the movie's files are in, or go to when it
+	// has none (as Mediarium sees it). Only filled in for a single movie.
+	FolderPath string `json:"folderPath,omitempty"`
 }
 
 // toMoviePayload builds a library movie's JSON; who resolves the account
@@ -245,6 +252,7 @@ func (s *Server) handleGetMovie(w http.ResponseWriter, r *http.Request) {
 	}
 	out := toMoviePayload(m, s.accountNames())
 	out.SizeBytes = fileSize(m.FilePath)
+	out.FolderPath = s.movieFolderFor(m)
 	if t, err := s.MovieRepo.TitleTags(library.TagMovie, m.ID); err == nil {
 		out.Tags = t
 	}

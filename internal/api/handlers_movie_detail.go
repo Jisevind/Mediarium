@@ -38,6 +38,9 @@ type movieDetailPayload struct {
 	Status      string `json:"status,omitempty"`    // library state: missing/downloading/downloaded
 	Quality     string `json:"quality,omitempty"`
 	FilePath    string `json:"filePath,omitempty"`
+	// FolderPath is the full folder of the movie's files in the library (as
+	// Mediarium sees it), or where they go when it has none.
+	FolderPath string `json:"folderPath,omitempty"`
 
 	// From TMDB. ReleaseStatus is TMDB's own status ("Released", "In
 	// Production"...), kept apart from Status above, the library state.
@@ -99,6 +102,7 @@ func (s *Server) handleTMDBMovieDetail(w http.ResponseWriter, r *http.Request) {
 		payload.Status = string(libMovie.Status)
 		payload.Quality = libMovie.Quality
 		payload.FilePath = libMovie.FilePath
+		payload.FolderPath = s.movieFolderFor(libMovie)
 	}
 
 	writeJSON(w, http.StatusOK, payload)

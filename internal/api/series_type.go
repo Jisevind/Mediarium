@@ -269,8 +269,13 @@ func parseFor(mapper func(parser.Release) parser.Release, title string) parser.R
 // extraTVQueries are the searches a show needs besides "Show S01E05": the
 // absolute number ("Show 105") or the air date ("Show 2024 03 15") of the
 // episode, and for a show with scene or anime numbering the names releases
-// use for it (see numberingQueries).
+// use for it (see numberingQueries), and the same search under each of the
+// show's other titles (a German title for a person who wants German audio).
 func (s *Server) extraTVQueries(series library.Series, season, episode int) []string {
+	return append(s.extraNumberingQueries(series, season, episode), altTVQueries(series, season, episode)...)
+}
+
+func (s *Server) extraNumberingQueries(series library.Series, season, episode int) []string {
 	out := s.extraTVQueriesFor(series, season, episode)
 	if season <= 0 || episode <= 0 {
 		return out

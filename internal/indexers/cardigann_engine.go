@@ -702,7 +702,8 @@ func (s *cgSession) resolve(ref string, base *url.URL) (string, error) {
 // that is a full address must lead to the site itself: the definitions come
 // from a public repository anyone can send changes to, and these requests
 // carry the person's login, cookie or passkey. An address on a host that has
-// nothing to do with the site would hand those to a stranger.
+// nothing to do with the site would hand those to a stranger. (A site that
+// sends no credentials may use another public host: see checkSiteAddress.)
 func (s *cgSession) resolvePath(p string) (string, error) {
 	p = strings.TrimSpace(p)
 	out, err := s.resolve(p, s.base)
@@ -721,7 +722,11 @@ func (s *cgSession) resolvePath(p string) (string, error) {
 }
 
 // checkSiteAddress refuses an address that is not a web address of the site
-// itself (see resolvePath).
+// itself (see resolvePath). A site that sends no login, cookie, key or
+// passkey has nothing to hand over, so its definition may name another public
+// host (a movie site whose search runs on a separate API host). The address
+// still may not point at this machine or the home network, and the request
+// goes through the same network checks as every other.
 func (s *cgSession) checkSiteAddress(raw string) error {
 	u, err := url.Parse(raw)
 	if err != nil {
@@ -730,10 +735,60 @@ func (s *cgSession) checkSiteAddress(raw string) error {
 	if u.Scheme != "http" && u.Scheme != "https" {
 		return fmt.Errorf("%s: the site definition wants to use an address that is not a web address, so Mediarium refused", s.name)
 	}
-	if !s.siteRelated(u.Hostname()) {
-		return fmt.Errorf("%s: the site definition wants to connect to %s, which is not one of the site's own addresses, so Mediarium refused", s.name, u.Hostname())
+	if s.siteRelated(u.Hostname()) {
+		return nil
 	}
-	return nil
+	if !s.sendsCredentials() {
+		if localHost(u.Hostname()) && !localHost(s.base.Hostname()) {
+			return fmt.Errorf("%s: the site definition wants to connect to %s, which is on your own network, so Mediarium refused", s.name, u.Hostname())
+		}
+		return nil
+	}
+	return fmt.Errorf("%s: the site definition wants to connect to %s, which is not one of the site's own addresses, so Mediarium refused", s.name, u.Hostname())
+}
+
+// credentialNames are setting names that hold a sign-in, beyond the secret
+// ones SecretSetting already knows.
+var credentialNames = []string{"username", "user", "uid", "login", "email", "userid", "user_id"}
+
+// sendsCredentials reports whether requests to this site can carry something
+// the person would not want a stranger to have: the definition signs in, or a
+// setting that holds a login, cookie, key or passkey is filled in, or a
+// header the definition adds carries an authorisation or cookie.
+func (s *cgSession) sendsCredentials() bool {
+	if s.def == nil {
+		return true // nothing known about the site: stay strict
+	}
+	if s.def.Login != nil {
+		return true
+	}
+	for _, st := range s.def.Settings {
+		if strings.TrimSpace(s.settings[st.Name]) == "" {
+			continue
+		}
+		if SecretSetting(st.Type, st.Name) {
+			return true
+		}
+		n := strings.ToLower(st.Name)
+		for _, c := range credentialNames {
+			if n == c {
+				return true
+			}
+		}
+	}
+	headerBlocks := []map[string][]string{s.def.Search.Headers}
+	if s.def.Download != nil {
+		headerBlocks = append(headerBlocks, s.def.Download.Headers)
+	}
+	for _, h := range headerBlocks {
+		for k := range h {
+			switch strings.ToLower(k) {
+			case "authorization", "cookie", "x-api-key", "proxy-authorization":
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // siteRelated reports whether host is the site's address (the one the person

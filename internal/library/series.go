@@ -48,6 +48,10 @@ type Series struct {
 	// (see aliases.go); release names that use one are taken for the show.
 	Aliases []string
 
+	// AltTitles are other titles of the show (its title where a release was
+	// made, such as a German one), as for Movie.AltTitles.
+	AltTitles []string
+
 	// Populated by GetSeries/ListSeries only, for the library views.
 	EpisodeCount    int
 	DownloadedCount int
@@ -77,18 +81,21 @@ const seriesSelect = `
 	       (SELECT COUNT(*) FROM episodes e WHERE e.series_id = s.id AND (e.season > 0 OR e.monitored = 1 OR e.status = 'downloaded')),
 	       (SELECT COUNT(*) FROM episodes e WHERE e.series_id = s.id AND e.status = 'downloaded'),
 	       COALESCE(s.profile_id, 0), s.source_pref, COALESCE(s.added_by, 0), s.genres, s.no_upgrade, s.details_state, s.details_note, s.series_type,
-	       COALESCE(s.copy_of, 0), s.tvdb_id, s.imdb_id, s.tmdb_status, s.root_path
+	       COALESCE(s.copy_of, 0), s.tvdb_id, s.imdb_id, s.tmdb_status, s.root_path,
+	       COALESCE((SELECT names FROM title_names WHERE kind = 'tv' AND tmdb_id = s.tmdb_id), '')
 	FROM series s`
 
 func scanSeries(scan func(dest ...any) error) (Series, error) {
 	var (
 		s      Series
 		genres sql.NullString
+		alts   string
 	)
-	if err := scan(&s.ID, &s.TMDBID, &s.Title, &s.Year, &s.Overview, &s.PosterPath, &s.FirstAirDate, &s.Monitored, &s.EpisodeCount, &s.DownloadedCount, &s.ProfileID, &s.SourcePref, &s.AddedBy, &genres, &s.NoUpgrade, &s.DetailsState, &s.DetailsNote, &s.SeriesType, &s.CopyOf, &s.TVDBID, &s.IMDBID, &s.TMDBStatus, &s.RootPath); err != nil {
+	if err := scan(&s.ID, &s.TMDBID, &s.Title, &s.Year, &s.Overview, &s.PosterPath, &s.FirstAirDate, &s.Monitored, &s.EpisodeCount, &s.DownloadedCount, &s.ProfileID, &s.SourcePref, &s.AddedBy, &genres, &s.NoUpgrade, &s.DetailsState, &s.DetailsNote, &s.SeriesType, &s.CopyOf, &s.TVDBID, &s.IMDBID, &s.TMDBStatus, &s.RootPath, &alts); err != nil {
 		return Series{}, fmt.Errorf("scan series: %w", err)
 	}
 	s.Genres = decodeGenres(genres)
+	s.AltTitles = decodeTitleNames(alts)
 	return s, nil
 }
 

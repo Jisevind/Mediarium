@@ -3,7 +3,8 @@ import { Link, useNavigate } from 'react-router-dom'
 import { api, can, isAdmin, type Book, type BookFormat, type BulkResult, type BulkTitle, type CollectionListItem, type Movie, type MusicArtist, type QualityProfile, type QueueItem, type Series, type SourcePref } from '../api'
 import { useAuth } from '../AuthContext'
 import { defaultProfileFor } from '../profileDefaults'
-import { useKinds, useModules, type MediaKind } from '../ModulesContext'
+import { useModules, type MediaKind } from '../ModulesContext'
+import { activeLibraryTab, libraryTabs } from '../libraryTabs'
 import MusicLibrary from './MusicLibrary'
 import BookLibrary from './BookLibrary'
 import ActionMenu from '../components/ActionMenu'
@@ -138,7 +139,6 @@ type Tab = MediaKind | BookFormat
 const TAB_COLOR: Record<Tab, string> = { movie: 'var(--c-movie)', tv: 'var(--c-tv)', music: 'var(--c-music)', ebook: 'var(--c-book)', audiobook: 'var(--c-audiobook)' }
 
 const TAB_LABEL: Record<Tab, string> = { movie: t('Movies'), tv: t('TV'), music: t('Music'), ebook: t('Ebooks'), audiobook: t('Audiobooks') }
-const isTab = (v: string | null): v is Tab => v !== null && v in TAB_LABEL
 
 export default function Library() {
   const [filtersOpen, setFiltersOpen] = useState(false)
@@ -156,17 +156,12 @@ export default function Library() {
   const { on } = useModules()
   const musicOn = on('music')
   const booksOn = on('ebooks') || on('audiobooks')
-  const videoKinds = useKinds()
   // The tabs: movies, TV and music (whichever are on), then ebooks and audiobooks.
-  const kinds: Tab[] = [
-    ...(on('movies') || on('tv') || musicOn || !booksOn ? videoKinds : []),
-    ...(on('ebooks') ? (['ebook'] as const) : []),
-    ...(on('audiobooks') ? (['audiobook'] as const) : []),
-  ]
-  // The Library opens on the first tab (Movies) unless the address asks for another.
-  const tab: Tab = isTab(ui.kind) ? ui.kind : 'movie'
-  // A kind that is switched off cannot be shown: fall back to the first that is on.
-  const active: Tab = kinds.includes(tab) ? tab : kinds[0]
+  // The left menu lists the same ones (see libraryTabs.ts).
+  const kinds: Tab[] = libraryTabs(on)
+  // The Library opens on the first tab (Movies) unless the address asks for another;
+  // a kind that is switched off cannot be shown, so the first that is on opens instead.
+  const active: Tab = activeLibraryTab(kinds, ui.kind)
   const kind: Kind = active === 'tv' ? 'tv' : 'movie'
   const [bookList, setBookList] = useState<Book[] | null>(null)
   const [queueNow, setQueueNow] = useState<QueueItem[]>([])

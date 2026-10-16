@@ -204,7 +204,7 @@ func buildImportEntry(kind libimport.Kind, g libimport.Group, item importItemPay
 	}
 	e.Kind = "series"
 	for _, f := range g.Files {
-		e.Files = append(e.Files, library.ImportFile{Path: f.Path, Quality: f.Quality, Season: f.Season, Episodes: f.Episodes})
+		e.Files = append(e.Files, library.ImportFile{Path: f.Path, Quality: f.Quality, Season: f.Season, Episodes: f.Episodes, Absolute: f.Absolute})
 		if f.ModTime.After(e.AddedAt) {
 			e.AddedAt = f.ModTime
 		}

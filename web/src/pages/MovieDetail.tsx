@@ -18,6 +18,8 @@ import Switch from '../components/Switch'
 import TitleHero from '../components/TitleHero'
 import { CastCard, titleLinks } from '../components/TitlePreview'
 import WatchLinks from '../components/WatchLinks'
+import FolderLine from '../components/FolderLine'
+import LocateDialog from '../components/LocateDialog'
 import TitleEvents from '../components/TitleEvents'
 import SearchStatus from '../components/SearchStatus'
 import { describeState } from '../components/state'
@@ -59,6 +61,7 @@ function MoviePage() {
   const [similar, setSimilar] = useState<DiscoverMovie[]>([])
   const [error, setError] = useState('')
   const [adding, setAdding] = useState(false)
+  const [locating, setLocating] = useState(false)
   const [monitored, setMonitored] = useState<boolean | null>(null)
   const [results, setResults] = useState<SearchResult[] | null>(null)
   // The releases list is drawn above the files and settings: bring it into view when a search answers.
@@ -77,7 +80,10 @@ function MoviePage() {
     if (!movie?.libraryId) return
     setRescanning(true)
     try {
-      toast.success(rescanMessage(await api.rescanMovie(movie.libraryId)))
+      const found = await api.rescanMovie(movie.libraryId)
+      const text = rescanMessage(found)
+      if (found.looked || found.busy) toast.info(text)
+      else toast.success(text)
       reload()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e))
@@ -296,8 +302,8 @@ function MoviePage() {
               )}
               {can(me, 'releases') && <InfoTip text={t('Lists every release your indexers found for this movie, so you can pick one yourself instead of letting Mediarium choose.')} />}
               {movie.status === 'downloaded' && <WatchLinks tmdbId={movie.tmdbId} kind="movie" />}
-              {admin && movie.status === 'downloaded' && movie.filePath && (
-                <button className="btn-with-icon" onClick={() => void rescan()} disabled={rescanning} title={t('Looks at the file on your disk again: if it was deleted by hand the movie is wanted again, and a renamed file is found.')}>
+              {admin && ((movie.status === 'downloaded' && movie.filePath) || movie.status === 'missing') && (
+                <button className="btn-with-icon" onClick={() => void rescan()} disabled={rescanning} title={movie.filePath ? t('Looks at the file on your disk again: if it was deleted by hand the movie is wanted again, and a renamed file is found.') : t("Looks in the movie's folder for a video file you put there by hand and adds it to the movie.")}>
                   <Icon name="folder" size={16} /> {rescanning ? t('Checking…') : t('Rescan files')}
                 </button>
               )}
@@ -329,6 +335,16 @@ function MoviePage() {
             {movie.filePath && <code className="filepath">{movie.filePath}</code>}
           </div>
         )}
+        {inLibrary && admin && movie.folderPath && (
+          <FolderLine path={movie.folderPath} kind="movie">
+            {movie.libraryId && (
+              <button type="button" className="btn-sm btn-with-icon" onClick={() => setLocating(true)}>
+                <Icon name="folder" size={14} /> {t('Locate the file')}
+              </button>
+            )}
+          </FolderLine>
+        )}
+        {locating && movie.libraryId && <LocateDialog kind="movie" id={movie.libraryId} start={movie.folderPath} onClose={() => setLocating(false)} onDone={reload} />}
         {inLibrary && movie.libraryId && <WatchedLine kind="movie" id={movie.libraryId} />}
       </TitleHero>
 

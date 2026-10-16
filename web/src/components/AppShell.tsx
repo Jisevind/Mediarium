@@ -1,7 +1,7 @@
 import SidebarScrollMark from './SidebarScrollMark'
 import { MiniPlayer, MusicPlayerProvider } from './MusicPlayer'
 import { Fragment, useCallback, useEffect, useRef, useState, Suspense } from 'react'
-import { NavLink, Outlet, useLocation, useNavigate, useNavigationType } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation, useNavigate, useNavigationType } from 'react-router-dom'
 import { scrollToTop } from '../scrollTop'
 import { api, isAdmin, type AppLink, type WatchLink } from '../api'
 import { useAuth } from '../AuthContext'
@@ -12,12 +12,13 @@ import { inPage, pageParts, pageTitle, settingsGroupsFor } from '../settingsNav'
 import { useLive } from '../useLive'
 import { useUnreadErrors } from '../useProblems'
 import { useModules } from '../ModulesContext'
+import { libraryEntries, type LibraryTab } from '../libraryTabs'
 import BrandMark from './BrandMark'
 import PageLoading from './PageLoading'
-import BusyNotice from './BusyNotice'
 import FeedbackNudge from './FeedbackNudge'
 import ImportBanner from './ImportBanner'
 import Icon, { type IconName } from './Icon'
+import KindGlyph from './KindGlyph'
 import ProfileMenu from './ProfileMenu'
 import ReportHost from './ReportHost'
 import SideTools from './SideTools'
@@ -37,6 +38,16 @@ const NAV: { to: string; label: string; icon: IconName; sec: SectionKey; end?: b
   { to: '/queue', label: t('Activity'), icon: 'activity', sec: 'activity' },
   { to: '/settings/media', label: t('Settings'), icon: 'sliders', sec: 'settings' },
 ]
+
+// The lines under "Library" in the left menu: what each one is called, the glyph
+// it wears and its colour (the same as the Library's tabs).
+const LIBRARY_LINE: Record<LibraryTab, { label: string; glyph: 'movie' | 'tv' | 'music' | 'book' | 'audiobook'; color: string }> = {
+  movie: { label: t('Movies'), glyph: 'movie', color: 'var(--c-movie)' },
+  tv: { label: t('TV shows'), glyph: 'tv', color: 'var(--c-tv)' },
+  music: { label: t('Music'), glyph: 'music', color: 'var(--c-music)' },
+  ebook: { label: t('Ebooks'), glyph: 'book', color: 'var(--c-book)' },
+  audiobook: { label: t('Audiobooks'), glyph: 'audiobook', color: 'var(--c-audiobook)' },
+}
 
 // Where Back goes from a detail page that was opened directly; undefined
 // for pages that aren't a single title.
@@ -134,15 +145,17 @@ function Shell() {
   const ebooksOn = moduleOn('ebooks')
   const audiobooksOn = moduleOn('audiobooks')
   const musicOn = moduleOn('music')
+  // The lines under "Library": each kind that is switched on opens the Library on its tab.
+  const libraryLines = libraryEntries(moduleOn, location.pathname, location.search)
   const inUpcoming = location.pathname.startsWith('/wanted') || location.pathname.startsWith('/calendar')
   // Errors from the last day that nobody has marked as read (administrators only).
   const unreadErrors = useUnreadErrors(admin)
   const errorDot = <span className="nav-dot" role="img" aria-label={t('New errors')} title={t('New errors. See Settings, System, Logs and errors.')} />
 
-  // Close the mobile drawer whenever the page changes.
+  // Close the mobile drawer whenever the page changes (a Library line only changes the address's query).
   useEffect(() => {
     setMenuOpen(false)
-  }, [location.pathname])
+  }, [location.pathname, location.search])
 
   // On a phone the search is an icon that opens a bar over the header.
   const [searchOpen, setSearchOpen] = useState(false)
@@ -261,13 +274,28 @@ function Shell() {
         </div>
         {nav.map((n) => (
           <Fragment key={n.to}>
-          <NavLink to={n.to} end={n.end} style={{ ['--nc' as string]: `var(--c-${n.sec})` }} className={({ isActive }) => (n.sec === 'settings' ? (inSettings ? 'active parent-open' : '') : isActive || (n.sec === 'calendar' && inUpcoming) ? 'active' : '')}>
+          <NavLink to={n.to} end={n.end} style={{ ['--nc' as string]: `var(--c-${n.sec})` }} className={({ isActive }) => (n.sec === 'settings' ? (inSettings ? 'active parent-open' : '') : n.sec === 'library' ? (isActive ? 'active parent-open' : '') : isActive || (n.sec === 'calendar' && inUpcoming) ? 'active' : '')}>
             <span className="nav-ico">
               <Icon name={n.icon} size={17} />
             </span>
             <span className="nav-label">{n.label}</span>
             {n.to === '/queue' && active > 0 && <span className="nav-count">{active}</span>}
           </NavLink>
+          {n.sec === 'library' && (
+            <div className="subnav subnav-library" aria-label={t('Library')} role="group">
+              {libraryLines.map((l) => {
+                const line = LIBRARY_LINE[l.tab]
+                return (
+                  <Link key={l.tab} to={l.to} style={{ ['--sc' as string]: line.color }} className={l.active ? 'active' : ''} aria-current={l.active ? 'page' : undefined}>
+                    <span className="nav-ico">
+                      <KindGlyph kind={line.glyph} size={15} />
+                    </span>
+                    <span className="nav-label">{line.label}</span>
+                  </Link>
+                )
+              })}
+            </div>
+          )}
           </Fragment>
         ))}
         {(
@@ -397,7 +425,6 @@ function Shell() {
             <ProfileMenu />
           </div>
         </header>
-        <BusyNotice />
         <ImportBanner />
         <main id="main" className="content" ref={mainRef} tabIndex={-1}>
           <Suspense fallback={<PageLoading />}>

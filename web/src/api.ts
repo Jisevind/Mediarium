@@ -615,6 +615,7 @@ export interface Settings {
   defaultTvProfileId?: number // the profile shows use when they have none of their own; 0 = the same as movies
   defaultSources?: SourcePref
   qualityLanguage?: string
+  qualityLanguageOnly?: boolean // only take releases that say they are in one of those languages
   infoLanguage?: string // the TMDB language titles are read in, like "de-DE"
   infoLanguages?: { tag: string; name: string }[]
   hasOpenSubtitlesApiKey?: boolean
@@ -971,6 +972,9 @@ export interface SearchResult {
   // (clearly another language only, so automation skips it).
   language?: string
   languageFit?: 'ok' | 'mixed' | 'other'
+  // The other title of the movie or show the release is named by ("Der Herr der
+  // Ringe"), when it is not the main one. Only set for a search on a library item.
+  matchedTitle?: string
 }
 
 export type MediaStatus = 'missing' | 'downloading' | 'downloaded'
@@ -1190,6 +1194,7 @@ export interface AddSeriesOptions {
 export interface Series {
   id: number
   rootPath?: string // the library folder chosen for it (left out = the main one)
+  folderPath?: string // the full folder of its files, as Mediarium sees it (single show only)
   copyOf?: number // the main show's id when this is a second copy
   copies?: number // how many second copies a main show has
   tags?: string[]
@@ -1329,12 +1334,36 @@ export interface QueueItem {
   language?: string // the audio languages the release names
 }
 
+// One folder of the file picker: the folders and video files inside the
+// library folders. At the top (path "") the entries are the library folders.
+export interface BrowseAnswer {
+  path: string
+  parent: string
+  entries: { name: string; path: string; dir: boolean; size?: number }[]
+}
+
+// What changing a show's folder found.
+export interface SeriesFolderReport {
+  folder: string
+  found: number
+  total: number
+  missing: number
+  notPlaced: number
+  message: string
+}
+
 // What looking at a title's files again found.
 export interface RescanReport {
   found: number
   renamed: number
   missing: number
   skipped: number
+  // For a movie that had no file: the file it was given, the folder that was
+  // looked in when there was none to give, and whether a download in progress
+  // made Mediarium leave it alone.
+  added?: string
+  looked?: string
+  busy?: boolean
 }
 
 export interface BlocklistEntry {
@@ -1718,6 +1747,7 @@ export interface MovieDetail extends TitleDetails {
   status?: 'missing' | 'downloading' | 'downloaded'
   quality?: string
   filePath?: string
+  folderPath?: string // the full folder of its files, as Mediarium sees it
   // The series of films this one is part of, when it is.
   collection?: CollectionRef
 }
@@ -2078,6 +2108,7 @@ export interface Book {
   authorKey?: string
   year?: number
   coverUrl?: string
+  coverChosen?: boolean // a person chose this cover, so "Remove my cover" brings the automatic one back
   description?: string
   addedAt: string
   ebook: BookFormatState
@@ -3095,6 +3126,16 @@ export const api = {
     post<Book | Requested>('/books', data),
   setBookWanted: (id: number, format: BookFormat, wanted: boolean) => put<Book>(`/books/${id}/want`, { format, wanted }),
   deleteBook: (id: number, deleteFiles: boolean) => del<null>(`/books/${id}?deleteFiles=${deleteFiles}`),
+  // Change cover: upload a picture, give a link to one, pick another edition's cover, or take the choice away.
+  uploadBookCover: (id: number, file: Blob, name: string) => {
+    const form = new FormData()
+    form.set('file', file, name)
+    return request<Book>(`/books/${id}/cover`, { method: 'POST', body: form, headers: {} })
+  },
+  setBookCoverLink: (id: number, url: string) => post<Book>(`/books/${id}/cover/link`, { url }),
+  bookCoverEditions: (id: number) => get<{ editions: { coverId: number; url: string }[]; current: number }>(`/books/${id}/cover/editions`),
+  pickBookCover: (id: number, coverId: number) => put<Book>(`/books/${id}/cover/edition`, { coverId }),
+  removeBookCover: (id: number) => del<Book>(`/books/${id}/cover`),
   bookReleases: (id: number, format: BookFormat) => get<SearchResult[]>(`/books/${id}/releases?format=${format}`),
   grabBook: (id: number, data: { format: BookFormat; releaseTitle: string; downloadUrl: string; sizeBytes: number; protocol?: 'usenet' | 'torrent' }) =>
     post<{ queueId: number }>(`/books/${id}/grab`, data),
@@ -3143,6 +3184,10 @@ export const api = {
   putStreamPause: (enabled: boolean) => put<{ enabled: boolean; watching: number; servers: number; held: number }>('/downloads/stream-pause', { enabled }),
   rescanMovie: (id: number) => post<RescanReport>(`/movies/${id}/rescan`),
   rescanSeries: (id: number) => post<RescanReport>(`/series/${id}/rescan`),
+  browseLibrary: (path = '') => get<BrowseAnswer>(`/library/browse?path=${encodeURIComponent(path)}`),
+  locateMovieFile: (id: number, path: string) => post<RescanReport>(`/movies/${id}/locate-file`, { path }),
+  locateMovieFolder: (id: number, path: string) => post<RescanReport>(`/movies/${id}/locate-folder`, { path }),
+  changeSeriesFolder: (id: number, path: string) => post<SeriesFolderReport>(`/series/${id}/change-folder`, { path }),
   deleteMovieFile: (id: number) => del<{ files: number; episodes: number; trashed: boolean }>(`/movies/${id}/file`),
   deleteEpisodeFile: (id: number) => del<{ files: number; episodes: number; trashed: boolean }>(`/episodes/${id}/file`),
   deleteSeasonFiles: (seriesId: number, season: number) => del<{ files: number; episodes: number; trashed: boolean }>(`/series/${seriesId}/seasons/${season}/files`),

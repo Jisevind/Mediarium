@@ -21,7 +21,6 @@ import (
 	"github.com/rdborg/mediarium/internal/api"
 	"github.com/rdborg/mediarium/internal/backup"
 	"github.com/rdborg/mediarium/internal/config"
-	"github.com/rdborg/mediarium/internal/crypto"
 	"github.com/rdborg/mediarium/internal/httpsec"
 	"github.com/rdborg/mediarium/internal/logbuf"
 	"github.com/rdborg/mediarium/internal/selfupdate"
@@ -177,7 +176,7 @@ func run() error {
 	}
 	defer db.Close()
 
-	box, err := crypto.LoadOrCreateKey(cfg.SecretKeyPath)
+	box, err := loadSecretKey(db, cfg.SecretKeyPath)
 	if err != nil {
 		return fmt.Errorf("load encryption key: %w", err)
 	}
@@ -215,7 +214,10 @@ func run() error {
 	server.AnnounceSetup()
 
 	scheduler := server.StartAutomation()
-	defer scheduler.Stop()
+	defer stopWithin("the background jobs", scheduler.Stop, schedulerStopGrace)
+	// Runs before the scheduler stops (defers run last to first): downloads end and
+	// the torrent engine closes, with every item left as the next start resumes from.
+	defer server.Shutdown()
 
 	stopMonitor := server.StartMonitor()
 	defer stopMonitor()
@@ -283,6 +285,27 @@ func run() error {
 // stop signal before it kills a container, and the database still has to be
 // closed after this.
 const shutdownGrace = 5 * time.Second
+
+// schedulerStopGrace is how long the background jobs may take to wind down.
+// A job that does not watch for the stop must not keep the database from
+// closing before Docker's 10 second kill.
+const schedulerStopGrace = 4 * time.Second
+
+// stopWithin runs stop and gives up waiting for it after grace, so what comes
+// next (closing the database) always happens. The slow one is left running; the
+// program is exiting anyway.
+func stopWithin(what string, stop func(), grace time.Duration) {
+	done := make(chan struct{})
+	go func() {
+		stop()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(grace):
+		log.Printf("Stopped waiting for %s after %s; closing anyway.", what, grace)
+	}
+}
 
 // stopServing stops taking requests and gives the running ones up to grace to
 // finish. A video stream or a big upload can go on for hours, so whatever is

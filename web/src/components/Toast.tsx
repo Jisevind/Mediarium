@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react'
+import BusyNotice from './BusyNotice'
 
 interface ToastItem {
   id: number
@@ -40,13 +41,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div className="toast-stack" role="status" aria-live="polite">
         {items.map((t) => (
-          <div key={t.id} className={`toast toast-${t.kind}`}>
+          <div key={t.id} className={`toast toast-${t.kind}`} role={t.kind === 'error' ? 'alert' : undefined}>
             <span className="toast-icon" aria-hidden="true">
               {t.kind === 'success' ? '✓' : t.kind === 'error' ? '!' : 'i'}
             </span>
             {t.message}
           </div>
         ))}
+        <BusyNotice />
       </div>
     </ToastContext.Provider>
   )

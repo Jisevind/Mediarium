@@ -79,6 +79,9 @@ const (
 	KeyDefaultTVProfileID = "library.default_profile_id_tv" // id of the quality profile shows with none of their own use; unset = the same default as movies
 	KeyPresetsVersion     = "library.presets_version"       // revision of the built-in quality presets last applied; unset means never (set at start, not user-editable)
 
+	// "Only take releases in these languages", next to quality.language.
+	KeyQualityLanguageOnly = "quality.language_only" // "1" takes only releases that say they are in a wanted audio language (no untagged, English-only or bare multi releases unless English is wanted); unset or "0" keeps those as a lower-ranked fallback
+
 	// Phase 4 — subtitles module.
 	KeySubtitlesEnabled      = "subtitles.enabled"                // the master switch: "1" turns downloading subtitles on; unset or "0" leaves it off (upgrades from a version that had subtitles in use are switched on once, by a migration)
 	KeyOpenSubtitlesUsername = "subtitles.opensubtitles_username" // optional account for a higher download quota

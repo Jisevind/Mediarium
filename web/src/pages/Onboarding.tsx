@@ -291,6 +291,7 @@ export default function Onboarding({ startStep = 0 }: { startStep?: number }) {
   // One step's work at a time: a second press while the first is still going
   // is ignored (it would otherwise fail with "already exists" after the first went through).
   const working = useRef(false)
+  const legalSaved = useRef(true) // false when saving the legal flag after creating the account failed
   const [busy, setBusy] = useState(false)
   async function guard(fn: () => Promise<void>) {
     if (working.current) return
@@ -312,7 +313,16 @@ export default function Onboarding({ startStep = 0 }: { startStep?: number }) {
     if (!adminCheck.attempt()) return
     await guard(async () => {
       await api.createAdmin({ username, password, name: name.trim() || undefined, email: email.trim() || undefined, setupCode: setupCode.trim() || undefined })
-      await api.putSettings({ legalAcknowledged: true })
+      // The account exists now, so go on whatever happens next. If saving the
+      // legal flag fails (a busy server, a dropped connection) it is tried
+      // again with the next step; pressing Create account again would only
+      // answer that an administrator already exists.
+      try {
+        await api.putSettings({ legalAcknowledged: true })
+        legalSaved.current = true
+      } catch {
+        legalSaved.current = false
+      }
       setStep(S.types)
     })
   }
@@ -323,6 +333,10 @@ export default function Onboarding({ startStep = 0 }: { startStep?: number }) {
       return
     }
     await guard(async () => {
+      if (!legalSaved.current) {
+        await api.putSettings({ legalAcknowledged: true })
+        legalSaved.current = true
+      }
       await api.setModules({ movies: chosen.movies, tv: chosen.tv, music: chosen.music, ebooks: !!chosen.ebooks, audiobooks: !!chosen.audiobooks })
       loadSvc()
       setStep(S.paths)

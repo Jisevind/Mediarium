@@ -86,6 +86,7 @@ type Server struct {
 	authorCheck       authorCheck    // when followed authors were last checked (books_authors.go)
 	seriesCheck       authorCheck    // when followed series were last checked (books_series.go)
 	hc                hardcoverState // the Hardcover client for the saved token (books_series.go)
+	coverLink         *http.Client   // downloads a book cover from a pasted link; nil = the public-internet-only client (books_owncover.go)
 
 	mediaClient    *mediaservers.Client
 	mediaRefresher *mediaservers.Refresher // rescans Plex/Jellyfin/Emby after imports
@@ -179,21 +180,12 @@ const discoverCacheSeconds = 300
 
 func New(db *sql.DB, cfg config.Config, box *crypto.Box, defaultTMDBAPIKey, version string) (*Server, error) {
 	settingsStore := settings.New(db, box)
-	tmdbKey, err := settingsStore.Get(settings.KeyTMDBAPIKey)
-	if err != nil {
-		return nil, err
-	}
+	tmdbKey := optionalKey(settingsStore, settings.KeyTMDBAPIKey)
 	if tmdbKey == "" {
 		tmdbKey = defaultTMDBAPIKey
 	}
-	subsKey, err := settingsStore.Get(settings.KeyOpenSubtitlesAPIKey)
-	if err != nil {
-		return nil, err
-	}
-	traktClientID, err := settingsStore.Get(settings.KeyTraktClientID)
-	if err != nil {
-		return nil, err
-	}
+	subsKey := optionalKey(settingsStore, settings.KeyOpenSubtitlesAPIKey)
+	traktClientID := optionalKey(settingsStore, settings.KeyTraktClientID)
 
 	tracker, err := usage.NewTracker(db)
 	if err != nil {
@@ -553,6 +545,12 @@ func (s *Server) protectedRoutes() *routeTable {
 	play.HandleFunc("GET /api/books/{id}/comic", s.handleComic)
 	play.HandleFunc("GET /api/books/{id}/comic/{n}", s.handleComicPage)
 	member.HandleFunc("GET /api/books/{id}/file-cover", s.handleBookFileCover)
+	member.HandleFunc("GET /api/books/{id}/own-cover", s.handleBookOwnCover)
+	manage.HandleFunc("POST /api/books/{id}/cover", s.handleUploadBookCover)
+	manage.HandleFunc("POST /api/books/{id}/cover/link", s.handleBookCoverLink)
+	manage.HandleFunc("GET /api/books/{id}/cover/editions", s.handleBookCoverEditions)
+	manage.HandleFunc("PUT /api/books/{id}/cover/edition", s.handlePickBookCover)
+	manage.HandleFunc("DELETE /api/books/{id}/cover", s.handleRemoveBookCover)
 	play.HandleFunc("GET /api/books/{id}/tracks", s.handleBookTracks)
 	play.HandleFunc("GET /api/books/{id}/listen/{n}", s.handleListenBook)
 	admin.HandleFunc("GET /api/books/import", s.handleBookImportStatus)
@@ -690,6 +688,10 @@ func (s *Server) protectedRoutes() *routeTable {
 	// Library management: removing titles, per-title profile and downloaders, imports.
 	admin.HandleFunc("POST /api/movies/{id}/rescan", s.handleRescanMovie)
 	admin.HandleFunc("POST /api/series/{id}/rescan", s.handleRescanSeries)
+	admin.HandleFunc("GET /api/library/browse", s.handleBrowse)
+	admin.HandleFunc("POST /api/movies/{id}/locate-file", s.handleLocateMovieFile)
+	admin.HandleFunc("POST /api/movies/{id}/locate-folder", s.handleLocateMovieFolder)
+	admin.HandleFunc("POST /api/series/{id}/change-folder", s.handleChangeSeriesFolder)
 	admin.HandleFunc("DELETE /api/movies/{id}/file", s.handleDeleteMovieFile)
 	admin.HandleFunc("DELETE /api/episodes/{id}/file", s.handleDeleteEpisodeFile)
 	admin.HandleFunc("DELETE /api/series/{id}/seasons/{season}/files", s.handleDeleteSeasonFiles)

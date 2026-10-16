@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import type { SearchResult } from '../api'
 import { formatBytes } from '../format'
-import { t } from '../i18n'
+import { locale, t } from '../i18n'
 import { FIRST_DIRECTION, ageOf, filterReleases, indexersIn, publishedAt, qualitiesIn, sortReleases, type ReleaseSortKey, type SortDir } from '../releaseSort'
 import Dropdown from './Dropdown'
 import Icon from './Icon'
@@ -106,6 +106,7 @@ export default function ReleaseTable({
               <tr key={r.downloadUrl} style={r.rejections?.length || r.blocklisted ? { opacity: 0.75 } : undefined}>
                 <td style={{ wordBreak: 'break-all' }}>
                   {r.title}
+                  {r.matchedTitle && <div className="lang-hint lang-hint-wrap">{t('Matched on the title "{title}"', { title: r.matchedTitle })}</div>}
                   {showPackBadge && (r.episodes?.length ?? 0) === 0 && (
                     <span className="badge" style={{ marginLeft: 8 }}>
                       {t('season pack')}
@@ -164,7 +165,7 @@ export default function ReleaseTable({
                   </span>
                 </td>
                 <td>{formatBytes(r.sizeBytes)}</td>
-                <td title={r.publishDate && publishedAt(r) ? new Date(publishedAt(r)).toLocaleString() : undefined}>{ageOf(r) || '—'}</td>
+                <td title={r.publishDate && publishedAt(r) ? new Date(publishedAt(r)).toLocaleString(locale()) : undefined}>{ageOf(r) || '—'}</td>
                 <td>{r.protocol === 'torrent' ? `${r.seeders ?? 0} / ${r.peers ?? 0}` : '—'}</td>
                 <td>
                   <button className="primary" disabled={grabbing !== null} onClick={() => onGrab(r)}>

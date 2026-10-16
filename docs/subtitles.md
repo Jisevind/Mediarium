@@ -10,6 +10,10 @@ Subtitles that come inside a download are always imported and always listed in a
 
 For scripts: the switch is the setting `subtitles.enabled` (`subtitlesEnabled` in `GET`/`PUT /api/settings`). While it is off, `/api/subtitles/*`, `/api/movies/{id}/subtitles*` and `/api/episodes/{id}/subtitles*` answer `409` with "Subtitles are switched off".
 
+## Which languages
+
+**Languages to keep** under **Settings > Info, lists and subtitles > Subtitles** offers English, Spanish, French, German, Italian, Portuguese (Portugal and Brazil), Dutch, Swedish, Danish, Finnish, Norwegian, Polish, Czech, Slovak, Slovenian, Hungarian, Romanian, Bulgarian, Croatian, Serbian, Bosnian, Ukrainian, Greek, Turkish, Russian, Arabic, Hebrew, Japanese, Korean, Chinese (Simplified and Traditional), Hindi, Indonesian, Thai, Vietnamese and Catalan. They use the language codes OpenSubtitles uses (`hr`, `sr`, `bs`, `sl` and so on). OpenSubtitles has a single Serbian: its Latin and Cyrillic subtitles are both `sr`, so Mediarium keeps whichever one it is given, and reads the file in the right alphabet. Scripts can send any code made of two or three letters (`pt-BR` and `zh-CN` style regions are fine), up to 50 languages in `subtitleLanguages`.
+
 ## Where subtitles come from
 
 1. **The release itself.** When a movie or episode is imported, Mediarium copies the subtitle files from the finished download (`.srt`, `.ass`, `.ssa`, `.sub` with `.idx`, and `.sup`) next to the video, named the way Plex, Jellyfin and Kodi expect: `Movie (2020).en.srt`, `Movie (2020).fr.srt`. This is free and uses none of your daily allowance.

@@ -22,14 +22,22 @@ type searchAnswer[T any] struct {
 	Unanswered []unansweredSource `json:"unanswered"`
 }
 
-// unansweredFrom lists the indexers that failed, in the order asked.
+// unansweredFrom lists the indexers that failed, in the order asked. An indexer
+// asked for several titles of one movie or show is listed once, with the first
+// thing it said.
 func unansweredFrom(outcomes []indexers.Outcome) []unansweredSource {
 	out := []unansweredSource{}
+	listed := map[string]bool{}
 	for _, o := range outcomes {
+		if listed[o.IndexerName] {
+			continue
+		}
 		if o.Err != nil {
+			listed[o.IndexerName] = true
 			out = append(out, unansweredSource{Name: o.IndexerName, Message: indexers.ProblemMessage(o)})
 		}
 		if o.Skipped {
+			listed[o.IndexerName] = true
 			out = append(out, unansweredSource{Name: o.IndexerName, Message: indexers.PausedMessage(o.IndexerName, o.Health, nil)})
 		}
 	}

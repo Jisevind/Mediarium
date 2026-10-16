@@ -10,6 +10,8 @@ import SeriesTypePicker from '../components/SeriesTypePicker'
 import Switch from '../components/Switch'
 import TitleHero from '../components/TitleHero'
 import WatchLinks from '../components/WatchLinks'
+import FolderLine from '../components/FolderLine'
+import LocateDialog from '../components/LocateDialog'
 import TitleEvents from '../components/TitleEvents'
 import { useToast } from '../components/Toast'
 import ReleaseTable from '../components/ReleaseTable'
@@ -213,6 +215,7 @@ function SeriesPage() {
 
   const [refreshing, setRefreshing] = useState(false)
   const [rescanning, setRescanning] = useState(false)
+  const [changingFolder, setChangingFolder] = useState(false)
   async function rescan() {
     setError('')
     setRescanning(true)
@@ -368,6 +371,14 @@ function SeriesPage() {
           </ProfilePicker>
           {canManage && <SeriesTypePicker id={seriesId} value={series.seriesType ?? 'standard'} onChange={(type) => setSeries((cur) => (cur ? { ...cur, seriesType: type } : cur))} />}
         </div>
+        {admin && series.folderPath && (
+          <FolderLine path={series.folderPath} kind="series">
+            <button type="button" className="btn-sm btn-with-icon" onClick={() => setChangingFolder(true)}>
+              <Icon name="folder" size={14} /> {t('Change folder')}
+            </button>
+          </FolderLine>
+        )}
+        {changingFolder && <LocateDialog kind="series" id={seriesId} start={series.folderPath} onClose={() => setChangingFolder(false)} onDone={load} />}
         <WatchedLine kind="tv" id={seriesId} />
       </TitleHero>
 

@@ -97,7 +97,8 @@ func (s *Server) replaceWithSmaller(ctx context.Context, m library.Movie, instan
 	}
 	profile := s.profileForMovie(profiles, m)
 	sources := s.sourcesFor(m.SourcePref)
-	outcomes := indexers.SearchAll(ctx, instances, m.Title, movieCategory)
+	m = s.movieWithAltTitles(ctx, m)
+	outcomes := s.searchMovieTitles(ctx, instances, m, nil)
 	found := s.limitMovieResults(ctx, m, profile, false, filterSources(matchingResults(dropBlocked(s.freshOnly(indexers.MergeResults(outcomes)), blocked), m), sources))
 	best := pickSmallerResult(found, profile, quality.Tier(m.Quality), size, m.Year)
 	if best == nil {

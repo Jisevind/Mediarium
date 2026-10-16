@@ -1,11 +1,11 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import BackupCard from '../../components/BackupCard'
 import CloudBackupCard from '../../components/CloudBackupCard'
 import Icon from '../../components/Icon'
 import { useToast } from '../../components/Toast'
 import { useConfirm } from '../../components/ConfirmProvider'
 import { FieldError, useValidation } from '../../useValidation'
-import { t, tx } from '../../i18n'
+import { st, t, tx } from '../../i18n'
 import { withBase } from '../../base'
 import TipLabel from '../../components/TipLabel'
 
@@ -19,6 +19,8 @@ export default function BackupSettings() {
   const [restoring, setRestoring] = useState(false)
   const [waiting, setWaiting] = useState(false)
   const input = useRef<HTMLInputElement>(null)
+  const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null)
+  useEffect(() => () => { if (pollTimer.current) clearInterval(pollTimer.current) }, []) // stop waiting for the restart when the page goes away
   const errors = {
     file: file
       ? /\.zip(\.enc)?$/i.test(file.name)
@@ -45,11 +47,12 @@ export default function BackupSettings() {
         // A proxy in front can answer with a web page instead of JSON.
       }
       if (data?.needPassphrase) setAskPassphrase(true)
-      if (!res.ok) throw new Error(data?.error ?? t('The restore failed (error {status}). If the backup is big, make sure any proxy in front of Mediarium allows large uploads.', { status: String(res.status) }))
+      if (!res.ok) throw new Error(data?.error ? st(data.error) : t('The restore failed (error {status}). If the backup is big, make sure any proxy in front of Mediarium allows large uploads.', { status: String(res.status) }))
       toast.success(t('Backup accepted. Restarting…'))
       setWaiting(true)
       // Wait for the app to come back, then reload onto the restored data.
       const started = Date.now()
+      if (pollTimer.current) clearInterval(pollTimer.current)
       const poll = setInterval(async () => {
         try {
           const r = await fetch(withBase('/api/version'), { cache: 'no-store' })
@@ -67,6 +70,7 @@ export default function BackupSettings() {
           toast.info(t("Mediarium didn't come back. Start it again and reload this page."))
         }
       }, 2000)
+      pollTimer.current = poll
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e))
       setRestoring(false)

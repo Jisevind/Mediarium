@@ -305,7 +305,7 @@ func (s *Server) noteMovieSearch(ctx context.Context, mode limitMode, m library.
 	profile quality.Profile, best *indexers.Result, upgradeFrom quality.Tier) {
 	keep := func(res indexers.Result) (bool, string) {
 		rel := parser.Parse(res.Title)
-		if normalizeTitle(rel.Title) != normalizeTitle(m.Title) {
+		if normalizeTitle(rel.Title) != normalizeTitle(m.Title) && matchingAltTitle(rel.Title, m.AltTitles) == "" {
 			return false, "other films"
 		}
 		if m.Year != 0 && rel.Year != 0 && rel.Year != m.Year {
@@ -391,8 +391,11 @@ func (s *Server) noteTVSearch(ctx context.Context, force bool, series library.Se
 
 func failedIndexers(outcomes []indexers.Outcome) []string {
 	var out []string
+	seen := map[string]bool{}
 	for _, o := range outcomes {
-		if o.Err != nil {
+		// An indexer is asked once for each title searched, so it can fail more than once.
+		if o.Err != nil && !seen[o.IndexerName] {
+			seen[o.IndexerName] = true
 			out = append(out, o.IndexerName)
 		}
 	}

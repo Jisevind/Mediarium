@@ -69,6 +69,9 @@ func (s *Server) settleInterrupted(queueID int64, run *pipelineRun) (bool, error
 	case run.paused.Load():
 		_ = s.QueueRepo.Pause(queueID, false)
 		return true, errPaused
+	case run.shutdown.Load():
+		// Mediarium is stopping: leave the item as it is, it is found interrupted at the next start.
+		return true, errPaused
 	}
 	return false, nil
 }

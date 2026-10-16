@@ -99,7 +99,7 @@ func (s *Server) bookCalendarEntries() ([]calendarEntryPayload, error) {
 		if b.Author != "" {
 			title = b.Author + " — " + b.Title
 		}
-		out = append(out, calendarEntryPayload{Kind: "book", ID: b.ID, BookID: b.ID, Title: title, Subtitle: subtitle, ReleaseDate: b.ReleaseDate, Status: bookCalendarStatus(b), PosterURL: books.LocalCoverURL(b.CoverID, "M")})
+		out = append(out, calendarEntryPayload{Kind: "book", ID: b.ID, BookID: b.ID, Title: title, Subtitle: subtitle, ReleaseDate: b.ReleaseDate, Status: bookCalendarStatus(b), PosterURL: b.CoverPath("M")})
 	}
 	return out, nil
 }

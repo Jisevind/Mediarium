@@ -140,7 +140,7 @@ func (n *queueNamer) describe(it queue.Item) (title, subtitle, poster string) {
 		}
 	case it.BookID > 0:
 		if b, ok := n.book(it.BookID); ok {
-			title, poster = b.Title, books.LocalCoverURL(b.CoverID, "M")
+			title, poster = b.Title, b.CoverPath("M")
 			subtitle = "Ebook · " + b.Author
 			if it.BookFormat == string(books.Audiobook) {
 				subtitle = "Audiobook · " + b.Author

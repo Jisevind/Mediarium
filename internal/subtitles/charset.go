@@ -29,10 +29,31 @@ func ToUTF8(data []byte, language string) []byte {
 	case utf8.Valid(data):
 		return data
 	}
-	if out, err := codePageFor(language).NewDecoder().Bytes(data); err == nil {
+	enc := codePageFor(language)
+	if baseLanguage(strings.ToLower(language)) == "sr" && mostlyCyrillic(data) {
+		enc = charmap.Windows1251
+	}
+	if out, err := enc.NewDecoder().Bytes(data); err == nil {
 		return out
 	}
 	return data
+}
+
+// mostlyCyrillic tells a Serbian subtitle saved in Windows-1251 (Cyrillic)
+// from one saved in Windows-1250 (Latin). OpenSubtitles has one "sr" for both.
+// In a Cyrillic file nearly every letter is a byte above 0x7F; in a Latin one
+// only the few letters with a hook or a stroke (š, đ, č, ć, ž) are.
+func mostlyCyrillic(data []byte) bool {
+	high, ascii := 0, 0
+	for _, b := range data {
+		switch {
+		case b >= 0x80:
+			high++
+		case b >= 'A' && b <= 'Z', b >= 'a' && b <= 'z':
+			ascii++
+		}
+	}
+	return high > ascii
 }
 
 // codePageFor is the Windows code page subtitles in a language are usually

@@ -105,7 +105,8 @@ func (s *Server) handleMovieSearch(w http.ResponseWriter, r *http.Request) {
 
 	_, beforeHome := s.homeReleaseHold(r.Context(), m, profile)
 	sizeReasons := s.movieSizeRejections(r.Context(), m, profile)
-	outcomes := indexers.SearchAll(r.Context(), instances, m.Title, movieCategory)
+	m = s.movieWithAltTitles(r.Context(), m)
+	outcomes := s.searchMovieTitles(r.Context(), instances, m, nil)
 	merged := indexers.MergeResults(outcomes)
 	out := []searchResultPayload{}
 	for _, res := range merged {
@@ -113,6 +114,7 @@ func (s *Server) handleMovieSearch(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		p := s.toSearchResultPayload(res)
+		p.MatchedTitle = matchedOtherTitle(res.Title, m.Title, m.AltTitles)
 		p.Blocklisted = blocked[blocklist.Key(res.Title)]
 		p.Rejections = append(p.Rejections, rejectionsFor(res.Title, profile, m.Status == library.StatusDownloaded, m.Quality, m.ReleaseTitle)...)
 		p.Rejections = append(p.Rejections, sizeReasons(res.Title, res.SizeBytes)...)

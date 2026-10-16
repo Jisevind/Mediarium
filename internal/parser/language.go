@@ -39,6 +39,8 @@ var languageTags = map[string]string{
 	"KOREAN": "Korean", "KOR": "Korean",
 	"CHINESE": "Chinese", "MANDARIN": "Chinese", "CANTONESE": "Chinese",
 	"THAI": "Thai", "VIETNAMESE": "Vietnamese",
+	"CROATIAN": "Croatian", "HRV": "Croatian", "SERBIAN": "Serbian", "SRB": "Serbian", "BOSNIAN": "Bosnian",
+	"SLOVENIAN": "Slovenian", "SLOVENE": "Slovenian", "BULGARIAN": "Bulgarian", "BUL": "Bulgarian",
 }
 
 // multiTags say a release holds several audio languages.

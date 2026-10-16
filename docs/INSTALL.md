@@ -299,7 +299,7 @@ environment:
 
 Restart the container and Mediarium answers under that path: the pages, the API, the Radarr, Sonarr and Lidarr addresses for [other apps](./other-apps.md) (`https://home.example.com/mediarium/radarr`), the metrics, the "Add to home screen" files, push notifications, and the addresses for e-readers (the OPDS catalogue and the Kobo address on your profile page both include the path). You don't rebuild anything; the same program works under any path. Leave `URL_BASE` empty (or don't set it) and nothing changes.
 
-Rules for the value: a path with letters, numbers, dashes, underscores and dots, like `/mediarium` or `/apps/media`. A slash at the start and end doesn't matter. It can't start with a name Mediarium already uses (`api`, `radarr`, `sonarr`, `lidarr`, `settings`, `library` and the other page names); the container then stops with a message saying so.
+Rules for the value: a path with letters, numbers, dashes, underscores and dots, like `/mediarium` or `/tools/media`. A slash at the start and end doesn't matter. It can't start with a name Mediarium already uses (`api`, `radarr`, `sonarr`, `lidarr`, `settings`, `library`, `help`, `apps`, `opds`, `kobo` and the other page names); the container then stops with a message saying so.
 
 Your proxy has to send the path on to Mediarium. Both of these work, so use whichever your proxy does by default: pass the path along unchanged, or remove it before passing the request on. Examples:
 

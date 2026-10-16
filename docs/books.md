@@ -53,7 +53,20 @@ Each book has a page with its cover, author, year and description, and a panel f
 - **Want the ebook / Want the audiobook**: switch a format off to stop looking for it, or on to start.
 - **Search now** looks for that format straight away and downloads the best release it finds.
 - **Choose a release** lists what your indexers have for the book, best first, so you can pick one yourself.
+- **Change cover** gives the book a cover of your own. See below.
 - **Remove** (administrators) takes the book out of your library. Tick **Also delete its files** to remove the ebook file and the audiobook folder as well. They go to the recycle bin first when it is on.
+
+### Changing a cover
+
+Open Library has no cover for some books, and for others it only has one for a different edition, so the book is added with a blank cover. **Change cover** (on the book's page, for administrators and for accounts that may manage books) fixes that. It opens a small window with three ways:
+
+- **Upload a picture**: choose a JPEG, PNG or WebP file of up to 8 MB. Anything else is refused. A WebP picture is converted to JPEG in your browser before it is sent.
+- **Paste a link**: paste the address of a picture, starting with `http://` or `https://`. Mediarium downloads it once, with the same size limit. It only fetches from the public internet: a link to this machine or to your home network (a `192.168.x.x` address, for example) is refused, so download the picture and upload it instead.
+- **Other editions**: when Open Library lists more than one cover for the book, they are shown here as small pictures. Click the one you want. This is skipped for a book Open Library has only one cover for.
+
+Mediarium opens every picture to make sure it really is one (the file name and the type the site claims don't count), shrinks it to at most 800 by 1200 pixels, and keeps its own copy as a JPEG inside the database, so it is part of your backups. The cover shows everywhere the book does: the Library, Discover, the calendar, Activity, and on an e-reader through OPDS and Kobo sync.
+
+A cover you chose is kept apart from the automatic one, so nothing that looks the book up again can replace it. **Remove my cover** (in the same window, shown once you have chosen one) takes your choice away and brings the automatic cover back.
 
 ![A book page: the cover, the ebook and audiobook rows with their status and file, and the buttons to search, read or listen](images/book-page.png)
 
@@ -286,6 +299,12 @@ The dashboard has an **Ebooks** and an **Audiobooks** card with how many books y
 | GET | `/api/books/{id}/releases?format=` | The matching releases, best first |
 | POST | `/api/books/{id}/grab` | `{"format", "releaseTitle", "downloadUrl", "sizeBytes", "protocol"}` |
 | DELETE | `/api/books/{id}?deleteFiles=` | Remove a book (administrators) |
+| POST | `/api/books/{id}/cover` | Give the book a cover by uploading a picture: a multipart form with the picture in `file` (JPEG or PNG, up to 8 MB). Answers the book. Needs permission to manage |
+| POST | `/api/books/{id}/cover/link` | The same from a link: `{"url": "https://..."}`. Only the public internet is fetched; a link to this machine or the home network is refused with 400. Needs permission to manage |
+| GET | `/api/books/{id}/cover/editions` | The covers Open Library has for the book: `editions` (`coverId`, `url`) and `current`, the one shown now (0 when the book shows a picture of its own). Needs permission to manage |
+| PUT | `/api/books/{id}/cover/edition` | Show one of those covers: `{"coverId": 123}`. 400 for a cover that isn't in the list |
+| DELETE | `/api/books/{id}/cover` | Remove the chosen cover, so the automatic one shows again. Needs permission to manage |
+| GET | `/api/books/{id}/own-cover` | The picture of a cover you uploaded or linked, as a JPEG (the `coverUrl` of the book points at it, with `?v=` so a new picture is fetched) |
 | POST | `/api/books/import` | Start importing the books already on disk: `{"format": "ebook", "audiobook" or ""}` (administrators). 409 while one runs |
 | GET | `/api/books/import` | Where the import is: `phase` (running, done, failed), `done`, `total`, a `summary` by result and the `results` (administrators) |
 

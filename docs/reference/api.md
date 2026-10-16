@@ -129,10 +129,16 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | GET | `/api/books/{id}` | any account |  |
 | GET | `/api/books/{id}/comic` | signed in | says how many pages the comic of a book has. |
 | GET | `/api/books/{id}/comic/{n}` | signed in | serves one page (n counts from 1). |
+| DELETE | `/api/books/{id}/cover` | signed in | DELETE /api/books/{id}/cover: take the chosen cover away. |
+| POST | `/api/books/{id}/cover` | signed in | POST /api/books/{id}/cover: a multipart form with the picture in "file". |
+| PUT | `/api/books/{id}/cover/edition` | signed in | PUT /api/books/{id}/cover/edition {"coverId": 123}: show another edition's cover. |
+| GET | `/api/books/{id}/cover/editions` | signed in | GET /api/books/{id}/cover/editions: the covers Open Library has for the book. |
+| POST | `/api/books/{id}/cover/link` | signed in | POST /api/books/{id}/cover/link {"url": "https://..."} |
 | GET | `/api/books/{id}/file-cover` | any account | serves the cover of a book taken from its own file (the first page of a comic). |
 | POST | `/api/books/{id}/grab` | signed in |  |
 | GET | `/api/books/{id}/links` | any account | GET /api/books/{id}/links: where the book can be read or listened to, the connected Audiobookshelf and Kavita servers that have it. |
 | GET | `/api/books/{id}/listen/{n}` | signed in | GET /api/books/{id}/listen/{n}: one track, with ranges for seeking. |
+| GET | `/api/books/{id}/own-cover` | any account | serves the picture a person gave a book. |
 | GET | `/api/books/{id}/progress` | any account | GET /api/books/{id}/progress?format=: where the person is in one format. |
 | PUT | `/api/books/{id}/progress` | any account | PUT /api/books/{id}/progress: saves where the person is. |
 | GET | `/api/books/{id}/read` | signed in | GET /api/books/{id}/read: the ebook file. |
@@ -328,6 +334,7 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 
 | Method | Path | Access | What it does |
 |---|---|---|---|
+| GET | `/api/library/browse` | admin | lists the folders and video files inside the library folders and the downloads folder, for choosing a file or folder. |
 | POST | `/api/library/bulk/folder` | admin | is POST /api/library/bulk/folder: the chosen titles keep their files where they are, and their next files go to rootPath. |
 | PUT | `/api/library/bulk/monitored` | admin | turns monitoring on or off for the chosen titles. |
 | PUT | `/api/library/bulk/no-upgrade` | admin | switches the search for better versions off (noUpgrade true) or back on for the chosen titles. |
@@ -423,6 +430,8 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | GET | `/api/movies/{id}/files` | any account | lists the files in a movie's folder on disk. |
 | PUT | `/api/movies/{id}/folder` | signed in | is PUT /api/movies/{id}/folder: where the movie's next files go. |
 | POST | `/api/movies/{id}/grab` | signed in | queues a release for a movie and starts the download and import in the background. |
+| POST | `/api/movies/{id}/locate-file` | admin | sets the file a person picked as the movie's file. |
+| POST | `/api/movies/{id}/locate-folder` | admin | looks in a folder a person picked and gives the movie the biggest video there. |
 | PUT | `/api/movies/{id}/monitored` | signed in |  |
 | PUT | `/api/movies/{id}/no-upgrade` | admin | and handleSetSeriesNoUpgrade switch the search for better versions off for one title (or back on). |
 | PUT | `/api/movies/{id}/profile` | admin |  |
@@ -612,6 +621,7 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | GET | `/api/series` | any account |  |
 | DELETE | `/api/series/{id}` | admin | removes a show from the library. |
 | GET | `/api/series/{id}` | any account |  |
+| POST | `/api/series/{id}/change-folder` | admin | reads the episode files in the folder a person picked and attaches them to the show's episodes. |
 | GET | `/api/series/{id}/copies` | any account | GET /api/series/{id}/copies |
 | POST | `/api/series/{id}/copies` | admin | POST /api/series/{id}/copies {"profileId": 4} adds a second copy of a show, with the same episodes monitored, and starts looking for them. |
 | GET | `/api/series/{id}/disk-usage` | admin |  |
@@ -821,4 +831,4 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | PUT | `/api/watched/settings` | admin | PUT /api/watched/settings {"sync": true, "cleanup": {...}} |
 | POST | `/api/watched/sync` | admin | POST /api/watched/sync: read what's been watched now. |
 
-481 routes.
+491 routes.

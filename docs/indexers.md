@@ -34,7 +34,7 @@ While an indexer is paused:
 
 The first answer that works clears the count, and so does **Try again now**, a **Test** that passes, or editing the indexer. When a pause ends, the next search asks the indexer again; if that fails too, the next pause is longer. The pauses are kept across restarts. A search that you cancel yourself is never counted as a failure.
 
-Searches on one indexer are also spaced out, a second and a half apart (six seconds for one that recently said you made too many requests), so a search of the whole library never sends a burst. When so many searches are already lined up for an indexer that a new one would wait more than 10 minutes, the new one skips that indexer instead of waiting; this isn't counted as a failure.
+Searches on one indexer are also spaced out, a second and a half apart (six seconds for one that recently said you made too many requests), so a search of the whole library never sends a burst. When so many searches are already lined up for an indexer that a new one would wait more than 10 minutes, the new one skips that indexer instead of waiting; this isn't counted as a failure. A movie or show with other titles in the languages you want ([Releases named in your language](./quality-profiles.md#releases-named-in-your-language)) is one more search for each title, at most four more for a movie and two for a season or episode, spaced the same way.
 
 Scripts: `POST /api/indexers/{id}/resume` is **Try again now**; `GET /api/indexers` adds `failures`, `pausedUntil`, `pausedNote` and `pausedWhy` to a paused indexer.
 

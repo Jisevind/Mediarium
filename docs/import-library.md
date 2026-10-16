@@ -19,6 +19,12 @@ Open **Library** and press **Import existing** (or **Import what you already hav
 
 The quality (for example `WEBDL-1080p`) is read from each file name, for movies and for every episode of a show. When the file name doesn't say (`Show - S01E01 - Pilot.mkv`), Mediarium looks at the folders above it, nearest first: `Season 01 1080p`, then the show's folder such as `Show (2008) [1080p BluRay]`. A folder only fills in what the file name leaves out, so a file that says `720p` is never changed by its folder. A file with no quality anywhere in its path stays **Not stated** (it's `Unknown` in the API), and the search for better versions leaves it alone.
 
+## Anime numbered by TheTVDB seasons
+
+Sonarr counts some anime in far more seasons than the movie database does: One Piece is 23 seasons in Sonarr and one long season in the movie database. A file named `One Piece - S23E10 - 1100 - Title.mkv` has no season 23 episode 10 to go to. Mediarium reads the number counted from the first episode (the `1100`) from the file name, and also from names that only carry that number, such as `[Group] One Piece - 1100 [1080p].mkv`. For an anime it then puts the file on that episode of the show's own order, the same order **Episode numbering: Anime** uses. A new show that the movie database calls Japanese animation is set to Anime when it is imported. If TheXEM or the anime lists are already known for the show, the season and episode of a file without that number are placed through them too.
+
+A season and episode that the show does list are always taken as the file says. When nothing says for certain which episode a file is, it is left out and the report's note tells you why: "Left out 55 episodes that the movie database doesn't list for this show" is followed by what to do, which is either to set the show's **Episode numbering** to **Anime** on its page and import the folder again, or to rename the files to the season and episode the show's page shows. Nothing is guessed. The same rule applies to a show's folder when you [move over from Sonarr](./migrate.md), and **Import a file by hand** places a file of an anime by the number in its name when the season and episode you typed do not exist.
+
 ## What happens in the background
 
 After you confirm, the server fills in the rest, a few titles at a time: poster, summary, genres and release date for movies, and the complete season and episode list for shows. Then the episodes found on disk are marked as downloaded.

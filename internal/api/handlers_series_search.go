@@ -50,7 +50,9 @@ func matchesShow(releaseTitle string, series library.Series) bool {
 			return true
 		}
 	}
-	return false
+	// The show's titles in the languages that are wanted ("Haus des Geldes"
+	// for "Money Heist"): the same year rule as above applies.
+	return matchingAltTitle(rel.Title, series.AltTitles) != ""
 }
 
 // withCountryTag reports whether a release title is the show's own title followed
@@ -84,7 +86,23 @@ func matchesShowFor(releaseTitle string, series library.Series, season int) bool
 		return false
 	}
 	words := strings.Fields(nonAlnum.ReplaceAllString(strings.ToLower(parser.Parse(releaseTitle).Title), " "))
-	show := strings.Fields(nonAlnum.ReplaceAllString(strings.ToLower(series.Title), " "))
+	if startsWithWords(words, series.Title) {
+		return true
+	}
+	// A special named by one of the show's other titles.
+	relWords := strings.Fields(metadata.TitleKey(parser.Parse(releaseTitle).Title))
+	for _, alt := range series.AltTitles {
+		if len(relWords) > 0 && startsWithKeyWords(relWords, alt) {
+			return true
+		}
+	}
+	return false
+}
+
+// startsWithWords reports whether words (lower case, already split) begin with
+// all the words of title and go on after them.
+func startsWithWords(words []string, title string) bool {
+	show := strings.Fields(nonAlnum.ReplaceAllString(strings.ToLower(title), " "))
 	if len(show) == 0 || len(words) <= len(show) {
 		return false
 	}
@@ -94,6 +112,28 @@ func matchesShowFor(releaseTitle string, series library.Series, season int) bool
 		}
 	}
 	return true
+}
+
+// startsWithKeyWords is startsWithWords for words that are title keys (any
+// alphabet, accents dropped), as an other title of a show is compared.
+func startsWithKeyWords(words []string, title string) bool {
+	for _, key := range metadata.TitleKeys(title) {
+		show := strings.Fields(key)
+		if len(show) == 0 || len(words) <= len(show) {
+			continue
+		}
+		same := true
+		for i := range show {
+			if words[i] != show[i] {
+				same = false
+				break
+			}
+		}
+		if same {
+			return true
+		}
+	}
+	return false
 }
 
 // tvSearchQuery builds the indexer query for a season pack ("Show S01") or
@@ -149,6 +189,7 @@ func (s *Server) handleSeriesSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	series = s.seriesWithAltTitles(r.Context(), series)
 	outcomes := indexers.SearchAll(r.Context(), instances, tvSearchQuery(series.Title, season, episode), tvCategory)
 	for _, q := range s.extraTVQueries(series, season, episode) {
 		outcomes = append(outcomes, indexers.SearchAll(r.Context(), instances, q, tvCategory)...)
@@ -170,6 +211,7 @@ func (s *Server) handleSeriesSearch(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		payload := s.toSearchResultPayload(res)
+		payload.MatchedTitle = matchedOtherTitle(res.Title, series.Title, series.AltTitles)
 		payload.Blocklisted = blocked[blocklist.Key(res.Title)]
 		payload.Rejections = append(payload.Rejections, rejectionsFor(res.Title, profile, false, "", "")...)
 		payload.Rejections = append(payload.Rejections, sizeReasons(res.Title, res.SizeBytes)...)

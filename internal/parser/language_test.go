@@ -30,6 +30,15 @@ func TestParseLanguages(t *testing.T) {
 		{"Spanish short tag", "Movie.2020.ESP.1080p.BluRay.x264-GRP", []string{"Spanish"}, false, false},
 		{"Latino", "Movie.2020.LATINO.1080p.WEB-DL.x264-GRP", []string{"Spanish"}, false, false},
 		{"Russian", "Movie.2020.RUS.1080p.BluRay.x264-GRP", []string{"Russian"}, false, false},
+		{"Croatian spelled out", "Movie.2020.CROATIAN.1080p.BluRay.x264-GRP", []string{"Croatian"}, false, false},
+		{"Croatian short tag", "Movie.2020.HRV.1080p.BluRay.x264-GRP", []string{"Croatian"}, false, false},
+		{"Serbian spelled out", "Movie.2020.SERBIAN.1080p.BluRay.x264-GRP", []string{"Serbian"}, false, false},
+		{"Serbian short tag", "Movie.2020.SRB.1080p.BluRay.x264-GRP", []string{"Serbian"}, false, false},
+		{"Bosnian", "Movie.2020.BOSNIAN.1080p.BluRay.x264-GRP", []string{"Bosnian"}, false, false},
+		{"Slovenian", "Movie.2020.SLOVENIAN.1080p.BluRay.x264-GRP", []string{"Slovenian"}, false, false},
+		{"Bulgarian", "Movie.2020.BULGARIAN.1080p.BluRay.x264-GRP", []string{"Bulgarian"}, false, false},
+		{"Bulgarian short tag", "Movie.2020.BUL.ENG.1080p.BluRay.x264-GRP", []string{"Bulgarian", "English"}, false, false},
+		{"a language word in the title", "The.Serbian.Film.2010.1080p.BluRay.x264-GRP", nil, false, false},
 		{"multi", "Movie.2020.MULTi.1080p.BluRay.x264-GRP", nil, true, false},
 		{"dual audio", "Movie.2020.DUAL.1080p.BluRay.x264-GRP", nil, true, false},
 		{"multi with the languages listed", "Movie.2020.MULTi.ITA.ENG.1080p.BluRay.x264-GRP", []string{"Italian", "English"}, true, false},
@@ -80,7 +89,7 @@ func TestLanguageNames(t *testing.T) {
 	if names[0] != "English" {
 		t.Fatalf("English should come first: %v", names)
 	}
-	for _, want := range []string{"Italian", "German", "French", "Spanish", "Russian"} {
+	for _, want := range []string{"Italian", "German", "French", "Spanish", "Russian", "Croatian", "Serbian", "Bosnian", "Slovenian", "Bulgarian"} {
 		if !slices.Contains(names, want) {
 			t.Errorf("%s is missing from %v", want, names)
 		}

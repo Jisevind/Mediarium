@@ -25,7 +25,7 @@ const (
 	maxMonitorMinutes   = 10080 // a week
 	maxSeedRatio        = 1000
 	maxSeedHours        = 87600 // ten years
-	maxSubtitleLangs    = 30
+	maxSubtitleLangs    = 50
 	maxServiceAccountLn = 100
 )
 

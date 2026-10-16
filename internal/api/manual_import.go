@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/rdborg/mediarium/internal/cleanup"
+	"github.com/rdborg/mediarium/internal/libimport"
 	"github.com/rdborg/mediarium/internal/library"
 	"github.com/rdborg/mediarium/internal/organizer"
 	"github.com/rdborg/mediarium/internal/parser"
@@ -157,8 +158,21 @@ func (s *Server) handleManualImport(w http.ResponseWriter, r *http.Request) {
 		}
 		ep, err := s.MovieRepo.GetEpisode(sr.ID, req.Season, req.Episode)
 		if err != nil {
-			writeError(w, http.StatusNotFound, fmt.Sprintf("%s has no season %d episode %d.", sr.Title, req.Season, req.Episode))
-			return
+			// An anime's files are often numbered by TheTVDB's seasons, which
+			// the movie database does not have. The number counted from the
+			// first episode that the file's name carries says which one it is.
+			found := false
+			if sr.SeriesType == library.SeriesAnime {
+				ep, found = s.episodeByAbsolute(sr.ID, filepath.Base(src))
+			}
+			if !found {
+				if sr.SeriesType == library.SeriesAnime {
+					writeError(w, http.StatusNotFound, fmt.Sprintf("%s has no season %d episode %d. Its episodes are numbered the way the movie database counts them, so pick the season and episode shown on the show's page.", sr.Title, req.Season, req.Episode))
+					return
+				}
+				writeError(w, http.StatusNotFound, fmt.Sprintf("%s has no season %d episode %d.", sr.Title, req.Season, req.Episode))
+				return
+			}
 		}
 		dest, err := s.buildTVDestPath(sr, ep, release, src)
 		if err != nil {
@@ -207,4 +221,23 @@ func (s *Server) manualSource(rel string) (string, error) {
 		return "", errors.New("That isn't a video file in the downloads folder any more.")
 	}
 	return real, nil
+}
+
+// episodeByAbsolute is the episode of a show that a file name's number,
+// counted from the first episode, stands for. Only a name with exactly one
+// such number counts, and only when the show has that many episodes.
+func (s *Server) episodeByAbsolute(seriesID int64, name string) (library.Episode, bool) {
+	numbers := libimport.AbsoluteNumbers(name)
+	if len(numbers) != 1 {
+		return library.Episode{}, false
+	}
+	episodes, err := s.MovieRepo.ListEpisodes(seriesID)
+	if err != nil {
+		return library.Episode{}, false
+	}
+	order := library.AbsoluteOrder(episodes)
+	if n := numbers[0]; n >= 1 && n <= len(order) {
+		return order[n-1], true
+	}
+	return library.Episode{}, false
 }

@@ -149,10 +149,10 @@ Scripts: `GET` and `PUT /api/search/delay` with `{"preferredProtocol": "usenet",
 
 ## Audio language
 
-**Settings > Library > Quality > Audio language** lists the languages you want to hear, best first (`quality.language`, or `qualityLanguage` in `PUT /api/settings`: names separated by commas, such as `Spanish,English`). English is the starting value. It applies to every profile.
+**Settings > Library > Quality > Audio language** lists the languages you want to hear, best first (`quality.language`, or `qualityLanguage` in `PUT /api/settings`: names separated by commas, such as `Spanish,English`). English is the starting value. It applies to every profile. The switch under the list, **Only take releases in these languages**, is `quality.language_only` (`qualityLanguageOnly` in `GET` and `PUT /api/settings`, `true` or `false`, off by default; the settings file has it too).
 
 With more than one language, a release is taken when it suits any of them, and one that suits an earlier language is chosen over one that only suits a later language. A release with two or more audio tracks counts when one of its languages is on your list. Add **Original language of the title** to the list and Mediarium puts each film's or show's own language there (Japanese for an anime, Korean for a Korean drama), as TMDB lists it. A title whose original language TMDB doesn't give just uses the other languages on your list.
-Mediarium reads the language tags in a release name (`ITA`, `ITALIAN`, `GER`, `GERMAN`, `FR`, `FRENCH`, `TRUEFRENCH`, `VFF`, `ESP`, `SPANISH`, `RUS`, `ENG`, `MULTi`, `DUAL`, `German.DL` and more). Tags are only read after the title, so a film called "The Italian Job" isn't taken for an Italian release. A release with no language tag is taken to be English. Subtitle tags such as `VOSTFR` and `SUBBED` don't change the audio language.
+Mediarium reads the language tags in a release name (`ITA`, `ITALIAN`, `GER`, `GERMAN`, `FR`, `FRENCH`, `TRUEFRENCH`, `VFF`, `ESP`, `SPANISH`, `RUS`, `ENG`, `HRV` and `CROATIAN`, `SRB` and `SERBIAN`, `BOSNIAN`, `SLOVENIAN`, `BUL` and `BULGARIAN`, `MULTi`, `DUAL`, `German.DL` and more). Tags are only read after the title, so a film called "The Italian Job" isn't taken for an Italian release. A release with no language tag is taken to be English. Subtitle tags such as `VOSTFR` and `SUBBED` don't change the audio language.
 
 | The release is | With English wanted, automatic search and RSS |
 |---|---|
@@ -163,12 +163,43 @@ Mediarium reads the language tags in a release name (`ITA`, `ITALIAN`, `GER`, `G
 
 The language comes before the quality when Mediarium ranks acceptable releases, so a plain English 1080p WEB-DL is chosen over an `iTA-ENG` Bluray. Upgrades follow the same rule, and a fallback profile judges the language the same way. Pick Italian and releases tagged `ITA` are taken first, plain untagged releases (taken to be English) come after them, and releases only in another language are still skipped.
 
+### Only take releases in these languages
+
+When English isn't the language you want, the table above still lets an untagged release, a release tagged English only, and a `MULTi` or `DUAL` release with no language named through as a last choice. That is why someone who wants German can still end up with an English release when no German one turns up. The switch **Only take releases in these languages** (under the list of languages) closes that gap. It is off by default, so nothing changes until you turn it on.
+
+With it on, a release has to say it is in one of your languages:
+
+| The release is | German wanted, switch on |
+|---|---|
+| tagged `GERMAN`, or `German.DL` | Taken, and ranked as before. |
+| `MULTi` naming German, such as `MULTi.GERMAN.ENG` | Taken. |
+| untagged (taken to be English) | **Never taken.** Taken as before when English is also on your list. |
+| tagged `ENG` only | **Never taken**, unless English is on your list. |
+| `MULTi` or `DUAL` that doesn't name German | **Never taken.** |
+| clearly another language, such as `ITALIAN` | **Never taken**, as before. |
+
+With English on your list (for example `German,English`), untagged and `ENG` releases count as English and are taken, but a bare `MULTi` or `DUAL` release is still skipped, because it doesn't say which languages it has. **Original language of the title** works as before: the title's own language counts as a wanted language, and a title whose original language isn't known just uses the other languages on your list. If the list is empty or holds only an unknown original language, every release is accepted, as without the switch.
+
+The switch applies everywhere the language is judged: automatic and scheduled searches, the RSS sync, IRC announces, upgrades, and the fallback profiles, for movies and shows. In the release list a release it skips is marked with the reason in plain words ("Untagged release, taken to be English, not German"; "Multi-language release that doesn't name German"), and **Grab** still works, because a release you pick by hand is always allowed.
+
 A film made in another language (a Korean or a French film, say) is usually released with its own language as the audio. Put **Original language of the title** on the list, below the language you like for everything else, and those films are found in their own language.
 A release tagged `HDRip` (or `HD-Rip`) is a re-encode of a TV capture or some other source that isn't a clean web or disc copy. It counts as an HDTV quality (HDTV-1080p, HDTV-720p), so a profile that only allows WEB-DL or Bluray leaves it out. A name that says `HDRip` and also `WEB-DL` or `BluRay` is read as the web or disc copy.
 
 The release list (**Choose a release** or **Find and download**) can be sorted by clicking a column name: once for the natural order (biggest, best or highest first, A to Z for names), again to reverse it, a third time to go back to the order Mediarium gave. Above the list, **Find in these releases** narrows it by words in the name, and **Any indexer** and **Any quality** by indexer and resolution; **Close** puts the card away. The subtitle search results sort the same way (release, source, rating, fit).
 
 In a title's release list a **Language** column shows what each release says ("Italian + English", "Multi"). A release that automation would skip for its language is marked with the reason ("Italian audio, not English"), and **Grab** still works, because a release you pick by hand is always allowed. The release list in `GET /api/movies/{id}/search`, `GET /api/series/{id}/search` and `GET /api/search` has `language` and `languageFit` (`ok`, `mixed` or `other`) for each release.
+
+### Releases named in your language
+
+A film or show made or released in another country is often posted under its local title. A German release of "The Lord of the Rings: The Fellowship of the Ring" is called something like `Der Herr der Ringe 2001 German ...`, and a search for the English title never finds it. So when your audio language list names a language besides English, Mediarium also looks for each title under the names TMDB lists for that language and country, plus the title's original name (when it is written in Latin letters, or is in a language on your list).
+
+- It keeps at most four other titles for each movie or show, and leaves out any that are the same as the English title once capital letters, punctuation, accents and a leading "The" are ignored. Names too short to tell apart from other things are left out: in Latin letters a name needs four letters ("Es" and "Eis" don't count).
+- **The searches** (**Search now** and the release list of a movie or show) ask your indexers for the English title first and then once for each other title, and show the releases together, each listed once. The automatic search is easier on your indexers: it tries the other titles only when the English title found nothing it would take, and at most two of them. A show is searched under at most two other titles for each season or episode, and the automatic search again only when the main title found nothing for it. These extra searches go through the same spacing as every other search, a second and a half apart on one indexer, so they don't cause "too many requests". An indexer that has just said so is left out of the rest.
+- **The matching** takes a release as the movie or show when its name is the English title or one of that title's own other titles. The year and season rules stay as they were, and for a movie that has a year, a release named by another title has to show that year too (a release with no year in its name is taken for the English title only). Only the other titles of the title being searched count: a German title that happens to be another film's English title doesn't pull that film's releases in.
+- In the release list, a release found under one of the other titles says "Matched on the title ..." under its name.
+- The titles are read from TMDB when a movie or show is searched for the first time after you choose a language (or in the background, a few at a time), and again when a show is refreshed or after 30 days. If you change the audio languages they are picked again. With only English wanted, none are kept and nothing extra is searched.
+
+Over the API, `GET /api/movies/{id}/search` and `GET /api/series/{id}/search` give `matchedTitle` for a release named by one of the other titles.
 
 ## Fallback profiles
 

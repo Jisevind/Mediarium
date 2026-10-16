@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -30,7 +31,13 @@ type File struct {
 	SizeBytes int64  `json:"sizeBytes"`
 	Season    int    `json:"season,omitempty"`
 	Episodes  []int  `json:"episodes,omitempty"`
-	Quality   string `json:"quality"`
+	// Absolute holds the episode numbers counted from the start of the show
+	// that the file name carries: "One Piece - S23E10 - 1100 - Title" or
+	// "[Group] One Piece - 1100". A file named only that way has no Season or
+	// Episodes. Which episodes these are is settled against the show's own
+	// episode list when the import runs.
+	Absolute []int  `json:"absolute,omitempty"`
+	Quality  string `json:"quality"`
 	// ModTime is when the file was last changed; an import uses it as the
 	// date the title was added. Zero when unknown.
 	ModTime time.Time `json:"-"`
@@ -244,7 +251,10 @@ func ScanTV(root string) (Result, error) {
 	seen := map[string]int{} // group key + season/episode -> index into that group's Files, to dedupe
 	for _, f := range files {
 		title, year, season, episodes, tier, ok := tvIdentity(f.rel)
-		if !ok {
+		var absolute []int
+		if ok {
+			absolute = absoluteInName(fileBase(f.rel[len(f.rel)-1]), len(episodes))
+		} else if title, year, absolute, tier, ok = absoluteIdentity(f.rel); !ok {
 			res.Skipped = append(res.Skipped, f.path+" - couldn't read a season/episode number from the name")
 			continue
 		}
@@ -255,8 +265,13 @@ func ScanTV(root string) (Result, error) {
 			groups[key] = g
 			order = append(order, key)
 		}
-		file := File{Path: f.path, SizeBytes: f.size, Season: season, Episodes: episodes, Quality: string(tier), ModTime: f.mod}
-		dupKey := fmt.Sprintf("%s#%d#%d", key, season, episodes[0])
+		file := File{Path: f.path, SizeBytes: f.size, Season: season, Episodes: episodes, Absolute: absolute, Quality: string(tier), ModTime: f.mod}
+		var dupKey string
+		if len(episodes) > 0 {
+			dupKey = fmt.Sprintf("%s#%d#%d", key, season, episodes[0])
+		} else {
+			dupKey = fmt.Sprintf("%s#%d#a%d", key, season, absolute[0])
+		}
 		if idx, dup := seen[dupKey]; dup {
 			// Two files claim the same episode (say a 720p and a 1080p
 			// copy): keep the bigger one and report the other.
@@ -283,6 +298,78 @@ func tvIdentity(rel []string) (title string, year, season int, episodes []int, t
 	if len(fr.Episodes) == 0 {
 		return "", 0, 0, nil, "", false
 	}
+	title, year, tier, ok = showIdentity(rel, fr)
+	if !ok {
+		return "", 0, 0, nil, "", false
+	}
+	return title, year, fr.Season, fr.Episodes, tier, true
+}
+
+// absoluteIdentity is tvIdentity for a file named only by its number counted
+// from the start of the show ("[Group] One Piece - 1100 [1080p]"), the way
+// anime is usually named.
+func absoluteIdentity(rel []string) (title string, year int, absolute []int, tier quality.Tier, ok bool) {
+	fr := parser.Parse(fileBase(rel[len(rel)-1]))
+	if len(fr.Absolute) == 0 || len(fr.Episodes) > 0 || fr.Season > 0 || fr.Special {
+		return "", 0, nil, "", false
+	}
+	title, year, tier, ok = showIdentity(rel, fr)
+	if !ok {
+		return "", 0, nil, "", false
+	}
+	return title, year, fr.Absolute, tier, true
+}
+
+// absoluteInNameRe finds the number a name carries after its season and
+// episode, the way Sonarr names anime: "S23E10 - 1100 - Title". Three or four
+// digits, set off by a dash or a dot and ended by a separator, so that
+// "S01E05.1080p" and "S01E05.x264" are not read as numbers.
+var absoluteInNameRe = regexp.MustCompile(`(?i)\bS\d{1,4}[ ._-]?E\d{1,3}(?:[ ._-]?E\d{1,3})*(?:-E?\d{1,3})?\s*[-.]\s*\(?(\d{3,4})(?:v\d)?(?:\s*-\s*(\d{3,4})(?:v\d)?)?\)?(?:[\s\-.\[(]|$)`)
+
+// AbsoluteNumbers is the episode numbers, counted from the start of the show,
+// that a file name carries: "[Group] One Piece - 1100" or "One Piece - S23E10 -
+// 1100 - Title". Nil when it has none, or when it is not sure.
+func AbsoluteNumbers(name string) []int {
+	base := fileBase(name)
+	fr := parser.Parse(base)
+	switch {
+	case len(fr.Episodes) > 0:
+		return absoluteInName(base, len(fr.Episodes))
+	case fr.Season == 0 && !fr.Special:
+		return fr.Absolute
+	}
+	return nil
+}
+
+// absoluteInName reads the absolute number out of a file name that has a
+// season and episodes. It answers nothing unless there is exactly one number
+// per episode, so it never attaches a number it is not sure of.
+func absoluteInName(base string, episodes int) []int {
+	m := absoluteInNameRe.FindStringSubmatch(base)
+	if m == nil {
+		return nil
+	}
+	first, _ := strconv.Atoi(m[1])
+	last := first
+	if m[2] != "" {
+		last, _ = strconv.Atoi(m[2])
+	}
+	if year := parser.Parse(base).Year; year != 0 && first == year {
+		return nil
+	}
+	if last < first || last-first+1 != episodes {
+		return nil
+	}
+	out := make([]int, 0, episodes)
+	for n := first; n <= last; n++ {
+		out = append(out, n)
+	}
+	return out
+}
+
+// showIdentity is the show a file belongs to: named by the folder directly
+// under the scan root, or by the file itself.
+func showIdentity(rel []string, fr parser.Release) (title string, year int, tier quality.Tier, ok bool) {
 	title, year = fr.Title, fr.Year
 	tier = tierFromNames(fileBase(rel[len(rel)-1]), nearestFolders(rel))
 	// The folder directly under the scan root is the series folder, unless
@@ -295,8 +382,8 @@ func tvIdentity(rel []string) (title string, year, season int, episodes []int, t
 		}
 	}
 	if title == "" {
-		return "", 0, 0, nil, "", false
+		return "", 0, "", false
 	}
 	title, year = fixFutureYear(title, year)
-	return title, year, fr.Season, fr.Episodes, tier, true
+	return title, year, tier, true
 }

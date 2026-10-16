@@ -536,7 +536,9 @@ button.danger-ghost:hover { background: color-mix(in srgb, var(--danger) 12%, tr
 .state-tag.st-details { --stc: var(--c-activity); }
 .state-tag.st-nodetails { --stc: var(--warning); }
 .title-controls { display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center; padding-top: 6px; border-top: 1px dashed var(--border); margin-top: 6px; }
-.filepath { font-size: 0.78rem; color: var(--text-dim); word-break: break-all; }
+.folder-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 10px; font-size: 0.9rem; }
+.folder-line code { min-width: 0; font-size: 0.82rem; overflow-wrap: anywhere; user-select: all; }
+.filepath {font-size: 0.78rem; color: var(--text-dim); word-break: break-all; }
 
 /* ---- Search dropdown groups ------------------------------------------- */
 .searchbox-group { padding: 8px 14px 4px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); font-weight: 600; }
@@ -2324,6 +2326,7 @@ label.check-hint small { display: block; margin-top: 2px; color: var(--text-dim)
   .bulkbar.open .bulkbar-actions { display: flex; }
 }
 .lang-hint { color: var(--text-dim); font-size: 0.85rem; white-space: nowrap; }
+.lang-hint.lang-hint-wrap { white-space: normal; overflow-wrap: anywhere; }
 
 /* "More like your library": the switch for older titles sits in the heading */
 .rail-head .rail-older { margin-left: auto; }
@@ -2773,6 +2776,14 @@ a.bar-label:hover { color: var(--accent); }
 .book-format.kind-ebook { --fc: var(--c-book); }
 .book-format.kind-audiobook { --fc: var(--c-audiobook); }
 .book-format .switch input:checked + .switch-track { background: var(--fc); border-color: var(--fc); }
+/* Change cover: the picture chosen, and the covers of other editions to pick from. */
+.change-cover-preview { width: 120px; aspect-ratio: 2 / 3; border-radius: 8px; overflow: hidden; background: var(--surface); border: 1px solid var(--border); }
+.change-cover-preview img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.change-cover-editions { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 10px; }
+.change-cover-pick { padding: 0; aspect-ratio: 2 / 3; border-radius: 8px; overflow: hidden; background: var(--surface); border: 2px solid var(--border); cursor: pointer; }
+.change-cover-pick img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.change-cover-pick:hover:not(:disabled) { border-color: var(--text-dim); }
+.change-cover-pick.current { border-color: var(--c-book); }
 .book-format-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .book-format-head h2 { margin: 0; display: inline-flex; align-items: center; gap: 8px; font-size: 1.1rem; }
 .book-file { margin: 0; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }

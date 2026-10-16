@@ -35,6 +35,9 @@ type ImportFile struct {
 	Quality  string `json:"quality"`
 	Season   int    `json:"season"`
 	Episodes []int  `json:"episodes"`
+	// Absolute is the number counted from the show's first episode that the
+	// file name carries, when it does (see libimport.File).
+	Absolute []int `json:"absolute,omitempty"`
 }
 
 // ImportEntry is one title the person confirmed.
@@ -583,6 +586,14 @@ type SeriesDetails struct {
 	PosterPath   string
 	FirstAirDate string
 	Genres       []string
+	// GuessedType is the type the movie database's details suggest
+	// (SeriesAnime for Japanese animation). A show this import adds starts
+	// with it.
+	GuessedType string
+	// SceneMap says which episode of the show a season and episode of another
+	// numbering (TheTVDB's, as anime releases use it) stands for. Nil when
+	// nothing is known about the show's other numberings.
+	SceneMap func(season, episode int) (int, int, bool)
 }
 
 // SeriesImportResult counts what a show's import did with its files.
@@ -590,6 +601,85 @@ type SeriesImportResult struct {
 	Imported int // episodes marked downloaded
 	Skipped  int // episodes that already were
 	Unknown  int // episodes on disk that the movie database does not list
+	Remapped int // episodes found through their absolute number or the show's other numbering
+}
+
+// ImportPlacer returns a function that says which episodes of a show a file
+// is, by the rules of resolveImportFile: as named when the show lists them,
+// and for an anime also by the absolute number in the name or the show's
+// other numbering. ok is false when no rule names them for certain.
+func ImportPlacer(episodes []Episode, anime bool, scene func(season, episode int) (int, int, bool)) func(ImportFile) (season int, eps []int, ok bool) {
+	listed := map[[2]int]bool{}
+	for _, e := range episodes {
+		listed[[2]int{e.Season, e.Episode}] = true
+	}
+	order := AbsoluteOrder(episodes)
+	has := func(season, episode int) bool { return listed[[2]int{season, episode}] }
+	return func(f ImportFile) (int, []int, bool) {
+		t, ok, _ := resolveImportFile(f, has, order, anime, scene)
+		return t.season, t.episodes, ok
+	}
+}
+
+// importTarget is where one file's episodes sit in the show's own episode list.
+type importTarget struct {
+	season   int
+	episodes []int
+}
+
+// resolveImportFile says which episodes of the show a file is. A file whose
+// season and episode the show lists is taken as named. A file of an anime
+// whose season and episode the show does not list (TheTVDB counts One Piece
+// in 23 seasons, the movie database in one) is looked up by the number counted
+// from the first episode that its name carries, against the show's episode
+// order, or else through the show's other numbering. Nothing is guessed:
+// an episode that no rule names for certain stays unresolved.
+func resolveImportFile(f ImportFile, has func(season, episode int) bool, order []Episode, anime bool, scene func(season, episode int) (int, int, bool)) (importTarget, bool, bool) {
+	listed := false
+	for _, n := range f.Episodes {
+		listed = listed || has(f.Season, n)
+	}
+	if listed {
+		return importTarget{f.Season, f.Episodes}, true, false
+	}
+	if !anime || f.Season < 0 || (f.Season == 0 && len(f.Episodes) > 0) {
+		return importTarget{}, false, false
+	}
+	if len(f.Absolute) > 0 {
+		t := importTarget{}
+		for _, n := range f.Absolute {
+			if n < 1 || n > len(order) {
+				t = importTarget{}
+				break
+			}
+			e := order[n-1]
+			if t.season != 0 && e.Season != t.season {
+				t = importTarget{}
+				break
+			}
+			t.season = e.Season
+			t.episodes = append(t.episodes, e.Episode)
+		}
+		if t.season > 0 && len(t.episodes) > 0 {
+			return t, true, true
+		}
+	}
+	if scene != nil && f.Season > 0 {
+		t := importTarget{}
+		for _, n := range f.Episodes {
+			s, e, ok := scene(f.Season, n)
+			if !ok || !has(s, e) || (t.season != 0 && s != t.season) {
+				t = importTarget{}
+				break
+			}
+			t.season = s
+			t.episodes = append(t.episodes, e)
+		}
+		if t.season > 0 && len(t.episodes) > 0 {
+			return t, true, true
+		}
+	}
+	return importTarget{}, false, false
 }
 
 // CompleteSeriesImport stores a show's details and full episode list and
@@ -611,10 +701,10 @@ func (r *Repo) CompleteSeriesImport(item ImportItem, d SeriesDetails, episodes [
 	// details are stored, which clear the show's "pending" mark.
 	var (
 		monitored, wantMissing, watch bool
-		state                         string
+		state, seriesType             string
 	)
-	err = tx.QueryRow(`SELECT s.monitored, s.details_state, b.monitor_missing, b.monitor FROM series s, import_batches b WHERE s.id = ? AND b.id = ?`,
-		item.TitleID, item.BatchID).Scan(&monitored, &state, &wantMissing, &watch)
+	err = tx.QueryRow(`SELECT s.monitored, s.details_state, b.monitor_missing, b.monitor, s.series_type FROM series s, import_batches b WHERE s.id = ? AND b.id = ?`,
+		item.TitleID, item.BatchID).Scan(&monitored, &state, &wantMissing, &watch, &seriesType)
 	if errors.Is(err, sql.ErrNoRows) {
 		if err := markItemDone(tx, item, "This title was removed from your library.", 0, 0); err != nil {
 			return out, err
@@ -635,6 +725,14 @@ func (r *Repo) CompleteSeriesImport(item ImportItem, d SeriesDetails, episodes [
 	}
 
 	newShow := state != ""
+	// A show this import adds is an anime when the movie database says so, so
+	// that files named by their number from the first episode can be placed.
+	if newShow && seriesType != SeriesAnime && d.GuessedType == SeriesAnime {
+		if _, err := tx.Exec(`UPDATE series SET series_type = ? WHERE id = ? OR copy_of = ?`, SeriesAnime, item.TitleID, item.TitleID); err != nil {
+			return out, fmt.Errorf("set show type: %w", err)
+		}
+		seriesType = SeriesAnime
+	}
 	monitorNew := monitored
 	if newShow {
 		monitorNew = wantMissing
@@ -681,12 +779,37 @@ func (r *Repo) CompleteSeriesImport(item ImportItem, d SeriesDetails, episodes [
 		return out, fmt.Errorf("prepare mark episode: %w", err)
 	}
 	defer mark.Close()
+	anime := seriesType == SeriesAnime
+	listed := make([]Episode, 0, len(byNumber))
+	for key := range byNumber {
+		listed = append(listed, Episode{Season: key[0], Episode: key[1]})
+	}
+	order := AbsoluteOrder(listed)
+	has := func(season, episode int) bool { _, ok := byNumber[[2]int{season, episode}]; return ok }
+	// What the files left out were numbered by, to tell the person what to do.
+	var leftByNumber, leftByAbsolute int
 	for _, f := range item.Files {
-		for _, n := range f.Episodes {
-			k, ok := byNumber[[2]int{f.Season, n}]
+		target, resolved, remapped := resolveImportFile(f, has, order, anime, d.SceneMap)
+		if !resolved {
+			left := len(f.Episodes)
+			if left == 0 {
+				left = len(f.Absolute)
+			}
+			out.Unknown += left // specials, or numbering that differs from the movie database
+			if f.Season > 0 || len(f.Absolute) > 0 {
+				if len(f.Absolute) > 0 {
+					leftByAbsolute += left
+				} else {
+					leftByNumber += left
+				}
+			}
+			continue
+		}
+		for _, n := range target.episodes {
+			k, ok := byNumber[[2]int{target.season, n}]
 			switch {
 			case !ok:
-				out.Unknown++ // specials, or numbering that differs from the movie database
+				out.Unknown++
 			case Status(k.status) == StatusDownloaded:
 				out.Skipped++
 			default:
@@ -694,8 +817,11 @@ func (r *Repo) CompleteSeriesImport(item ImportItem, d SeriesDetails, episodes [
 					return out, fmt.Errorf("mark episode downloaded: %w", err)
 				}
 				k.status = string(StatusDownloaded)
-				byNumber[[2]int{f.Season, n}] = k
+				byNumber[[2]int{target.season, n}] = k
 				out.Imported++
+				if remapped {
+					out.Remapped++
+				}
 			}
 		}
 	}
@@ -703,6 +829,12 @@ func (r *Repo) CompleteSeriesImport(item ImportItem, d SeriesDetails, episodes [
 	note := ""
 	if out.Unknown > 0 {
 		note = fmt.Sprintf("Left out %s that the movie database doesn't list for this show.", countOf(out.Unknown, "episode"))
+		switch {
+		case leftByAbsolute > 0 && !anime:
+			note += " Their names carry the episode number counted from the start of the show, so set this show's Episode numbering to Anime and import the folder again."
+		case leftByAbsolute > 0 || (leftByNumber > 0 && anime):
+			note += " Their numbers don't match the movie database's list, so nothing was guessed. Rename the files to the season and episode shown on the show's page and import the folder again."
+		}
 	}
 	if _, err := tx.Exec(`INSERT INTO activity (series_id, event_type, message) VALUES (?, 'imported', ?)`,
 		item.TitleID, fmt.Sprintf("%s: registered %s that were already on disk", d.Title, countOf(out.Imported, "episode"))); err != nil {

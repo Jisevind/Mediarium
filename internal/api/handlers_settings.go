@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -158,6 +159,10 @@ type settingsPayload struct {
 	// The audio language wanted, as a name like "English" (the default). A
 	// release clearly in another language only is not picked automatically.
 	QualityLanguage string `json:"qualityLanguage,omitempty"`
+	// QualityLanguageOnly takes only releases that say they are in one of
+	// those languages. Off (the default) also accepts, behind them, releases
+	// with no language tag and releases tagged English only.
+	QualityLanguageOnly *bool `json:"qualityLanguageOnly,omitempty"`
 
 	// The language titles, plots, genres and posters are shown in, as a TMDB
 	// tag like "de-DE" (English by default), and the choices. File and folder
@@ -315,6 +320,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	sources := s.subtitleSources()
 	osEnabled, subdlEnabled, addonsEnabled := sources.OpenSubtitles.Switch, sources.SubDL.Switch, sources.Addons.Switch
 	unmonitorDownloaded, unmonitorFinished := s.unmonitorDownloaded(), s.unmonitorFinished()
+	qualityLanguageOnly := s.languageOnly()
 	showAdvanced := s.showAdvanced()
 	trailerBackground := s.trailerBackground()
 	trailerSound := s.trailerSound()
@@ -418,6 +424,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		IllegalCharMode:          illegalCharMode,
 		IllegalCharReplacement:   illegalCharReplacement,
 		QualityLanguage:          s.preferredLanguage(),
+		QualityLanguageOnly:      &qualityLanguageOnly,
 		InfoLanguage:             s.infoLanguage(),
 		InfoLanguages:            metadata.InfoLanguages,
 		RequireVPNForTorrents:    &requireVPNForTorrents,
@@ -546,6 +553,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	languagesBefore := s.audioLanguageList()
 	sets := []struct {
 		key, value string
 	}{
@@ -574,6 +582,13 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if err := s.Settings.Set(set.key, set.value, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
+		}
+	}
+	// The other titles kept for each movie and show were picked for the old
+	// languages: they are picked again as titles are searched for.
+	if s.audioLanguageList() != languagesBefore {
+		if err := s.MovieRepo.ClearTitleNames(); err != nil {
+			slog.Warn("settings: couldn't forget the other titles after the audio languages changed", "err", err)
 		}
 	}
 
@@ -670,6 +685,12 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.ShowAdvanced != nil {
 		if err := setBool(s.Settings, settings.KeyShowAdvanced, *req.ShowAdvanced); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if req.QualityLanguageOnly != nil {
+		if err := setBool(s.Settings, settings.KeyQualityLanguageOnly, *req.QualityLanguageOnly); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}

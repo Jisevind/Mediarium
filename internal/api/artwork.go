@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -124,8 +125,15 @@ func (s *Server) artworkJob(ctx context.Context) {
 		fetched++
 		art, err := s.TMDB().TitleArtwork(ctx, t.kind, t.id)
 		if err != nil {
-			slog.Debug("calendar: couldn't fetch artwork", "kind", t.kind, "tmdb", t.id, "err", err)
-			continue // asked again on the next run
+			var se *metadata.StatusError
+			if errors.As(err, &se) && se.Code == 404 {
+				// TMDB does not have the title (removed or merged). Remember an empty answer,
+				// or titles like this fill every batch and the others are never reached.
+				art = metadata.Artwork{}
+			} else {
+				slog.Debug("calendar: couldn't fetch artwork", "kind", t.kind, "tmdb", t.id, "err", err)
+				continue // asked again on the next run
+			}
 		}
 		if err := s.MovieRepo.SaveTitleArt(t.kind, t.id, art.Backdrop, art.Logo, time.Now()); err != nil {
 			slog.Warn("calendar: couldn't save the artwork", "err", err)

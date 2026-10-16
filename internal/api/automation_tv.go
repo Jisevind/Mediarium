@@ -18,6 +18,9 @@ const (
 	// backlog of missing episodes can't hammer indexers (and their API
 	// limits) in one go; the rest is picked up on the next run.
 	maxTVSearchesPerHunt = 25
+	// tvWantsNamesTimeout is how long working out what a show wants may wait for
+	// TMDB to give its other titles.
+	tvWantsNamesTimeout = 2 * time.Second
 )
 
 // tvWant is one season of one series that automation should try to fill:
@@ -68,6 +71,20 @@ func (s *Server) tvWants(profiles profileSet, scope tvScope) (wants []tvWant, up
 			continue
 		}
 		profile := s.profileForSeries(profiles, sr)
+		// The show's other titles are looked up once it turns out something is
+		// wanted from it, so releases named by one of them are taken for it.
+		namesRead := false
+		withNames := func() {
+			if !namesRead {
+				namesRead = true
+				// This also runs on the IRC announce path, where a slow TMDB must not
+				// hold a fresh release back: saved names come at once, a fetch gets
+				// a couple of seconds.
+				ctx, cancel := context.WithTimeout(context.Background(), tvWantsNamesTimeout)
+				defer cancel()
+				sr = s.seriesWithAltTitles(ctx, sr)
+			}
+		}
 		eps, err := s.MovieRepo.ListEpisodes(sr.ID)
 		if err != nil {
 			return nil, nil, err
@@ -106,10 +123,12 @@ func (s *Server) tvWants(profiles profileSet, scope tvScope) (wants []tvWant, up
 					missing = append(missing, ep)
 				}
 				if monitored && !sr.NoUpgrade && ep.Status == library.StatusDownloaded && wantsUpgrade(profile, ep.Quality, ep.ReleaseTitle) {
+					withNames()
 					upgrades = append(upgrades, tvUpgrade{profile: profile, series: sr, episode: ep})
 				}
 			}
 			if len(missing) > 0 {
+				withNames()
 				wants = append(wants, tvWant{profile: profile, series: sr, season: season, episodes: missing, wholeSeason: whole})
 			}
 		}
@@ -279,13 +298,34 @@ func (s *Server) targetedTVSearcher(ctx context.Context, instances []indexers.In
 			return nil
 		}
 		budget--
+		series = s.seriesWithAltTitles(ctx, series)
 		outcomes := indexers.SearchAll(ctx, instances, tvSearchQuery(series.Title, season, episode), tvCategory)
-		for _, q := range s.extraTVQueries(series, season, episode) {
+		for _, q := range s.extraNumberingQueries(series, season, episode) {
+			outcomes = append(outcomes, indexers.SearchAll(ctx, instances, q, tvCategory)...)
+		}
+		// The other titles are only tried when nothing for this season or episode
+		// turned up under the main one (a person's own search tries them all).
+		mapper := s.releaseMapper(series)
+		for _, q := range altTVQueries(series, season, episode) {
+			if ctx.Err() != nil || (!force && tvTargetFound(indexers.MergeResults(outcomes), series, season, episode, mapper)) {
+				break
+			}
 			outcomes = append(outcomes, indexers.SearchAll(ctx, instances, q, tvCategory)...)
 		}
 		s.noteTVSearch(ctx, force, series, season, episode, outcomes)
 		return s.freshOnly(indexers.MergeResults(outcomes))
 	}
+}
+
+// tvTargetFound reports whether any of the releases is for this show and covers
+// the season or episode looked for.
+func tvTargetFound(results []indexers.Result, series library.Series, season, episode int, mapper func(parser.Release) parser.Release) bool {
+	for _, res := range results {
+		if matchesShowFor(res.Title, series, season) && coversTarget(parseFor(mapper, res.Title), season, episode) {
+			return true
+		}
+	}
+	return false
 }
 
 // searchSeriesInBackground runs the automatic search for a just-added show,

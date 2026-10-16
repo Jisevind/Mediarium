@@ -43,11 +43,14 @@ type bookImportResult struct {
 }
 
 type bookImportJob struct {
-	mu       sync.Mutex
-	phase    string
-	done     int
-	total    int
-	results  []bookImportResult
+	mu      sync.Mutex
+	phase   string
+	done    int
+	total   int
+	results []bookImportResult
+	// matching holds the files (kind and path) being matched by hand right now,
+	// so a second request for the same one is refused until the first is done.
+	matching map[string]bool
 	err      string
 	started  time.Time
 	finished time.Time
@@ -286,6 +289,11 @@ func (s *Server) attachOpenLibraryBook(ctx context.Context, res bookImportResult
 		}
 		if err != nil {
 			res.Status, res.Message = bookFailed, err.Error()
+			return res
+		}
+		if b.Path(res.Kind) != "" {
+			// Added by a request that ran at the same moment, and it has its file already.
+			res.Status, res.BookID, res.Message = bookAlready, b.ID, "This book already has a file: "+b.Path(res.Kind)
 			return res
 		}
 	} else if b.Path(res.Kind) != "" {

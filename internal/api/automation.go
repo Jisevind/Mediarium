@@ -50,6 +50,7 @@ func (s *Server) StartAutomation() *automation.Scheduler {
 		automation.Job{Name: "subtitle-sweep", Interval: subtitleSweepInterval, Run: s.heavy(s.subtitleSweepJob)},
 		automation.Job{Name: "genre-backfill", Interval: genreBackfillInterval, Run: s.heavy(s.backfillGenres)},
 		automation.Job{Name: "collections", Interval: collectionsInterval, Run: s.heavy(s.collectionsJob)}, // finds the collection of each movie; adds new films of followed collections
+		automation.Job{Name: "title-names", Interval: titleNamesInterval, Run: s.heavy(s.titleNamesJob)},   // picks the other titles of each movie and show, when a language besides English is wanted
 		automation.Job{Name: "cleanup", Interval: cleanupCheckInterval, Run: s.cleanupJob},
 		automation.Job{Name: "stats-snapshot", Interval: statsSnapshotEvery, Run: s.statsSnapshotJob},
 		automation.Job{Name: "backup", Interval: backupCheck, Run: s.backupJob},
@@ -179,7 +180,14 @@ func (s *Server) huntMovie(ctx context.Context, m library.Movie, instances []ind
 				return false // only in cinemas so far: wait for the digital or disc release
 			}
 		}
-		outcomes := indexers.SearchAll(ctx, instances, m.Title, movieCategory)
+		m = s.movieWithAltTitles(ctx, m)
+		var enough func([]indexers.Outcome) bool
+		if !force {
+			enough = func(o []indexers.Outcome) bool {
+				return pickBestResult(filterSources(matchingResults(dropBlocked(s.freshOnly(indexers.MergeResults(o)), blocked), m), sources), profile, m.Year) != nil
+			}
+		}
+		outcomes := s.searchMovieTitles(ctx, instances, m, enough)
 		// A title search also returns other films with similar words; only
 		// releases of this movie may be grabbed.
 		best := pickBestResult(s.limitMovieResults(ctx, m, profile, !force, filterSources(matchingResults(dropBlocked(s.freshOnly(indexers.MergeResults(outcomes)), blocked), m), sources)), profile, m.Year)
@@ -198,7 +206,14 @@ func (s *Server) huntMovie(ctx context.Context, m library.Movie, instances []ind
 			return false // left alone, upgrades off, unknown baseline, or already at/above cutoff: skip the search entirely
 		}
 		currentTier := quality.Tier(m.Quality)
-		outcomes := indexers.SearchAll(ctx, instances, m.Title, movieCategory)
+		m = s.movieWithAltTitles(ctx, m)
+		var enough func([]indexers.Outcome) bool
+		if !force {
+			enough = func(o []indexers.Outcome) bool {
+				return pickUpgradeResult(filterSources(matchingResults(dropBlocked(s.freshOnly(indexers.MergeResults(o)), blocked), m), sources), profile, currentTier, m.ReleaseTitle, m.Year) != nil
+			}
+		}
+		outcomes := s.searchMovieTitles(ctx, instances, m, enough)
 		best := pickUpgradeResult(s.limitMovieResults(ctx, m, profile, !force, filterSources(matchingResults(dropBlocked(s.freshOnly(indexers.MergeResults(outcomes)), blocked), m), sources)), profile, currentTier, m.ReleaseTitle, m.Year)
 		s.noteMovieSearch(ctx, noteMode(force), m, outcomes, blocked, sources, profile, best, currentTier)
 		if best == nil {
@@ -397,12 +412,25 @@ var nonAlnum = regexp.MustCompile(`[^a-z0-9]+`)
 // simplification, not fuzzy/edit-distance matching — a known
 // approximation worth revisiting if it mismatches often enough to matter
 // in practice.
+//
+// A release named by one of the movie's other titles (the German title of a
+// film added under its English one) is the movie too. The year rule is the
+// same for every title, and only this movie's own other titles are tried.
 func matchesMovie(releaseTitle string, movie library.Movie) bool {
 	release := parser.Parse(releaseTitle)
 	if release.Year != 0 && movie.Year != 0 && release.Year != movie.Year {
 		return false
 	}
-	return normalizeTitle(release.Title) == normalizeTitle(movie.Title)
+	if normalizeTitle(release.Title) == normalizeTitle(movie.Title) {
+		return true
+	}
+	// A release named by another title has to say its year when the movie has
+	// one: a short name that is also the name of some other film is far too
+	// easy to hit otherwise.
+	if movie.Year != 0 && release.Year == 0 {
+		return false
+	}
+	return matchingAltTitle(release.Title, movie.AltTitles) != ""
 }
 
 // normalizeTitle reduces a title to letters and digits for comparison,

@@ -97,6 +97,9 @@ type profileSet struct {
 	// language is the preferred audio language, given to every profile
 	// resolve returns.
 	language string
+	// languageOnly is the "Only take releases in these languages" switch,
+	// given to every profile the same way.
+	languageOnly bool
 }
 
 func (s *Server) loadProfiles() (profileSet, error) {
@@ -112,7 +115,7 @@ func (s *Server) loadProfiles() (profileSet, error) {
 	for i := range formats {
 		byFormat[formats[i].ID] = &formats[i]
 	}
-	ps := profileSet{byID: map[int64]quality.Profile{}, def: quality.Presets()[quality.DefaultPreset], language: s.preferredLanguage()}
+	ps := profileSet{byID: map[int64]quality.Profile{}, def: quality.Presets()[quality.DefaultPreset], language: s.preferredLanguage(), languageOnly: s.languageOnly()}
 	for _, p := range list {
 		ps.byID[p.ID] = quality.AttachFormats(p, byFormat)
 	}
@@ -148,11 +151,11 @@ func (ps profileSet) resolveWith(id int64, def quality.Profile) quality.Profile 
 		p = def
 	}
 	p.FallbackProfiles = nil
-	p.Language = ps.language
+	p.Language, p.LanguageOnly = ps.language, ps.languageOnly
 	for _, fid := range p.Fallback {
 		if f, ok := ps.byID[fid]; ok && fid != p.ID {
 			f.FallbackProfiles = nil // a fallback's own fallbacks are not followed
-			f.Language = ps.language
+			f.Language, f.LanguageOnly = ps.language, ps.languageOnly
 			p.FallbackProfiles = append(p.FallbackProfiles, f)
 		}
 	}

@@ -47,6 +47,10 @@ type seriesPayload struct {
 	Copies int   `json:"copies,omitempty"`
 	// RootPath is the library folder chosen for the show ("" = the main TV folder).
 	RootPath string `json:"rootPath,omitempty"`
+	// FolderPath is the full folder of the show (as Mediarium sees it): where
+	// its episodes are, or where they go when it has none. Only filled in for
+	// a single show.
+	FolderPath string `json:"folderPath,omitempty"`
 	// ShowStatus is where the show stands: "ended", "continuing" or "upcoming"
 	// (from TMDB); left out until the show has been refreshed once.
 	ShowStatus string `json:"showStatus,omitempty"`
@@ -193,12 +197,17 @@ func (s *Server) handleGetSeries(w http.ResponseWriter, r *http.Request) {
 		out.Tags = t
 	}
 	now := time.Now()
+	var files []string
 	for i, e := range eps {
 		out.Episodes[i] = toEpisodePayload(e)
 		if e.Status == library.StatusDownloaded {
 			out.Episodes[i].SizeBytes = cachedFileSize(e.FilePath, now)
 		}
+		if e.FilePath != "" {
+			files = append(files, e.FilePath)
+		}
 	}
+	out.FolderPath = s.seriesFolderFor(sr, files)
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -396,6 +405,7 @@ func (s *Server) refreshSeries(ctx context.Context, sr library.Series) error {
 		return err
 	}
 	s.saveSeriesIDs(&sr, detail)
+	s.refreshOtherTitles(ctx, "tv", sr.TMDBID, sr.Title)
 	s.noteSeriesNumbering(sr)
 	s.stopMonitoringIfFinished(sr.ID, detail.Status)
 	// Second copies get the same new episodes.

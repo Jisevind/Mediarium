@@ -109,6 +109,7 @@ The keys the app stores in its settings table. You normally change these from th
 | `numbering.lookup` | "0" stops Mediarium looking up scene and anime numbering (TheXEM, the anime lists, AniList) for anime on its own; on by default. The Refresh mapping button on a show's page still works |
 | `onboarding.done` | "1" once the first-run wizard completes |
 | `quality.language` | the audio language wanted, as a name like "English" (the default when unset); a release clearly in another language only is not picked automatically |
+| `quality.language_only` | "1" takes only releases that say they are in a wanted audio language (no untagged, English-only or bare multi releases unless English is wanted); unset or "0" keeps those as a lower-ranked fallback |
 | `quality.size_limits` | size limits per quality in MB per minute of runtime (JSON: enabled, limits); applied only while enabled is true |
 | `requests.options` | JSON: notifyRequester (tell people when their request or report is answered), quotaCount (requests per period, 0 = no limit), quotaPeriod (day or week), fourK (let people ask for a 4K copy), fourKProfileId (the quality profile of that copy), reports (let people report a problem with a title) |
 | `scripts.after_import` | JSON: script (a file name in /config/scripts; empty = off) and timeoutSec (default 300). Only a signed-in browser session can set it, not an API key |

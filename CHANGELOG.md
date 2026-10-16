@@ -8,6 +8,33 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.1.1] - 2026-10-16
+
+### Added
+- **More subtitle languages** (asked for by nexus4004 on GitHub, through the website idea form): Croatian, Serbian, Bosnian, Slovenian, Slovak, Bulgarian, Ukrainian, Catalan, Indonesian, Thai, Vietnamese and Hindi. A Serbian subtitle is read correctly whether it is written in Latin or Cyrillic letters. You can also choose Croatian, Serbian, Bosnian, Slovenian or Bulgarian as an audio language, and releases tagged for them are recognised.
+- **Rescan files on a movie that has no file** (asked for by nexus4004 on GitHub, through the website idea form): if you put the video in the movie's folder yourself, Rescan files finds it and adds it, and tells you which file it found or which folder it looked in.
+- **Library in the left menu** (asked for by nexus4004 on GitHub, through the website idea form): Movies, TV shows, Music, Ebooks and Audiobooks are listed under Library, so you can open a tab directly. Only the kinds that are switched on are listed.
+- **Change cover for books** (asked for by varnakube on GitHub, #68): a book with no cover, or the wrong one, can get a cover of your own from its page. Upload a picture, paste a link, or pick the cover of another edition when Open Library has one. **Remove my cover** brings the automatic one back.
+- **Only take releases in these languages** (reported by mirisbowring on GitHub, #67): a new switch under Settings > Library > Quality > Audio language, off by default. With it on, releases with no language in the name, releases tagged English only, and MULTi or DUAL releases that don't name one of your languages are skipped, so someone who wants only German no longer gets an English release as a last choice.
+- **Search under other titles** (asked for by mirisbowring on GitHub, #67): if you want audio in another language than English (German, Italian, French, Spanish and so on), Mediarium also searches your indexers under the title's other names from TMDB, such as "Der Herr der Ringe", and recognises a release named by one of them. The release list says which title it was found under. Nothing changes when English is the only language you want.
+- **Folder for its files** (asked for by nexus4004 on GitHub, #71): a movie's and a show's page now show the full folder where its files are, or will go, with a Copy button, so you can find it to put files there by hand. Under Docker it is the path inside the container, and the hint says so.
+- **Locate the file / Change folder** (reported by dxtrlws on GitHub, #71): if you renamed or moved a movie's file, **Locate the file** on the movie page lets you pick it from your library folders. If you renamed a show's folder, **Change folder** on the show page reads the episodes in the new folder and tells you how many it found and how many are still missing. Nothing is moved, renamed or deleted.
+
+### Fixed
+- When Mediarium was slow to answer, a bar kept appearing and disappearing at the top and pushed the page down. It is now a small notice in the bottom right corner that only shows after the slowness has lasted a few seconds, stays while it lasts, and goes away by itself. (Reported by nexus4004 on GitHub, through the website idea form.)
+- **Anime numbered by TheTVDB seasons** (reported by SanketBaraiya on GitHub, #69): anime that Sonarr numbers by TheTVDB seasons (such as One Piece, `S23E10 - 1100`) is now imported from an existing library, from a Sonarr move and by hand. The file is placed by the episode number counted from the first episode in its name, and a file that can't be placed says why and what to do. Import the folder again to pick up files that were left out before.
+- If the encryption key file (secret.key) is missing but the database already has saved passwords or keys, Mediarium now stops with a clear message telling you to put your old secret.key back, instead of writing a new key that cannot open anything. A saved TMDB, OpenSubtitles or Trakt key it cannot read no longer stops the app from starting.
+- Book covers under "Other editions" now show up when Mediarium is served under a sub-path (URL_BASE).
+- The calendar's backdrops and the other-language titles no longer get stuck behind titles that TMDB has removed or keeps failing on.
+- Stopping or restarting Mediarium now stops downloads and the built-in torrent client cleanly and never waits longer than a few seconds on background jobs, so downloads that were running come back as interrupted rather than failed.
+- If saving the first-run legal acknowledgement failed right after creating the admin account, setup now carries on instead of getting stuck on "An admin account already exists".
+- After closing a confirmation or notice dialog, keyboard focus goes back to the button that opened it.
+- Restore errors on the Backup page are now translated.
+- An APP_PORT that is not a valid port is now reported in the log, and `app config` finds the port from APP_PORT_FILE. URL_BASE can no longer start with help, apps, opds or kobo.
+- In the release list, the "Matched on the title" line wraps on narrow screens, and the age tooltip uses the app language. Screen readers announce error messages as alerts, and each other-edition cover button has its own label.
+- Two manual book matches of the same file at the same moment no longer leave the book pointing at a file that is not there, and Rescan files on a movie only takes a folder whose year fits the movie.
+- Fixed the YTS site failing its Test with a message about "movies-api.accel.li": public sites where you have entered no login, cookie or key can now search on another public address, while sites with a login or key still only talk to their own addresses (reported by SanketBaraiya on GitHub, #73).
+
 ## [3.1.0] - 2026-10-14
 
 ### Added
