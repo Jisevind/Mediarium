@@ -139,32 +139,29 @@ func (s *Server) handleSearchTV(w http.ResponseWriter, r *http.Request) {
 
 // handleListSeries lists the library's shows. With ?brief=1 each show's
 // overview is left out, as for movies.
+//
+// The shows with their episode totals and file sizes are the costly part on a
+// big library; they are shared between callers and kept until the library
+// changes (seriesList). Tags and copies are read fresh each time.
 func (s *Server) handleListSeries(w http.ResponseWriter, r *http.Request) {
 	brief := r.URL.Query().Get("brief") == "1"
-	list, err := s.MovieRepo.ListSeries()
+	data, err := s.seriesList(r.Context())
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	list := data.list
 	who := s.accountNames()
 	tags, _ := s.MovieRepo.AllTitleTags(library.TagSeries)
 	copies, _ := s.MovieRepo.CopyCounts("series")
-	files, err := s.MovieRepo.EpisodeFilesBySeries()
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
 	out := make([]seriesPayload, len(list))
-	now := time.Now()
 	for i, sr := range list {
 		out[i] = toSeriesPayload(sr, who)
 		if brief {
 			out[i].Overview = ""
 		}
 		out[i].Copies = copies[sr.ID]
-		for _, f := range files[sr.ID] {
-			out[i].SizeBytes += cachedFileSize(f, now)
-		}
+		out[i].SizeBytes = data.sizes[sr.ID]
 		if t := tags[sr.ID]; t != nil {
 			out[i].Tags = t
 		}
@@ -200,6 +197,7 @@ func (s *Server) handleGetSeries(w http.ResponseWriter, r *http.Request) {
 	var files []string
 	for i, e := range eps {
 		out.Episodes[i] = toEpisodePayload(e)
+		out.Episodes[i].FilePath = fileLabel(r, e.FilePath)
 		if e.Status == library.StatusDownloaded {
 			out.Episodes[i].SizeBytes = cachedFileSize(e.FilePath, now)
 		}
@@ -207,7 +205,9 @@ func (s *Server) handleGetSeries(w http.ResponseWriter, r *http.Request) {
 			files = append(files, e.FilePath)
 		}
 	}
-	out.FolderPath = s.seriesFolderFor(sr, files)
+	if isAdminRequest(r) { // only administrators see where the files lie
+		out.FolderPath = s.seriesFolderFor(sr, files)
+	}
 	writeJSON(w, http.StatusOK, out)
 }
 
@@ -404,6 +404,12 @@ func (s *Server) refreshSeries(ctx context.Context, sr library.Series) error {
 	if err := s.MovieRepo.UpsertEpisodes(sr.ID, eps, sr.Monitored); err != nil {
 		return err
 	}
+	// Episodes TMDB dropped or renumbered would stay as missing for ever.
+	if n, err := s.MovieRepo.PruneEpisodes(sr.ID, eps); err != nil {
+		log.Printf("api: refresh %q: remove dropped episodes: %v", sr.Title, err)
+	} else if n > 0 {
+		log.Printf("api: refresh %q: removed %d missing episodes TMDB no longer lists", sr.Title, n)
+	}
 	s.saveSeriesIDs(&sr, detail)
 	s.refreshOtherTitles(ctx, "tv", sr.TMDBID, sr.Title)
 	s.noteSeriesNumbering(sr)
@@ -416,6 +422,9 @@ func (s *Server) refreshSeries(ctx context.Context, sr library.Series) error {
 	for _, c := range copies {
 		if err := s.MovieRepo.UpsertEpisodes(c.ID, eps, c.Monitored); err != nil {
 			return err
+		}
+		if _, err := s.MovieRepo.PruneEpisodes(c.ID, eps); err != nil {
+			log.Printf("api: refresh %q copy: remove dropped episodes: %v", sr.Title, err)
 		}
 	}
 	return nil

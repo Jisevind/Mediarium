@@ -79,6 +79,7 @@
 .settings-content .profiles-table tr.is-default > td { background: color-mix(in srgb, var(--accent) 7%, transparent); }
 .settings-content .profiles-table tr.is-default > td:first-child { box-shadow: inset 2px 0 0 var(--accent); }
 .settings-content .profiles-table tr.profile-edit-row > td { background: none; padding: 0 0 12px; }
+.settings-content .profiles-table tr.profile-edit-row > td:last-child { text-align: left; }
 
 @media (max-width: 900px) {
   .settings-content .profiles-table td:first-child { width: 100%; min-width: 0; }

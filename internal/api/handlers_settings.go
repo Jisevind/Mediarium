@@ -37,6 +37,10 @@ type settingsPayload struct {
 	MovieNameFormat  string    `json:"movieNameFormat"`
 	// EpisodeNameFormat is the custom file name format for episodes.
 	EpisodeNameFormat string `json:"episodeNameFormat"`
+	// KeepOriginalNames keeps the file name an imported video came with
+	// (folders are still named by the preset). A pointer so an omitted field
+	// leaves it alone.
+	KeepOriginalNames *bool  `json:"keepOriginalNames,omitempty"`
 	TMDBAPIKey        string `json:"tmdbApiKey,omitempty"`
 	HasTMDBAPIKey     bool   `json:"hasTmdbApiKey"`
 	OnboardingDone    bool   `json:"onboardingDone"`
@@ -304,6 +308,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	namingPreset, _ := s.Settings.Get(settings.KeyNamingPreset)
 	movieFormat, _ := s.Settings.Get(settings.KeyMovieNameFormat)
 	episodeFormat, _ := s.Settings.Get(settings.KeyEpisodeNameFormat)
+	keepOriginalNames := s.keepOriginalNames()
 	onboardingDone, _ := s.Settings.GetBool(settings.KeyOnboardingDone)
 	torrentPort := strconv.Itoa(s.torrentListenPort()) // the port in use, 58264 unless changed
 	torrentRatio, _ := s.Settings.Get(settings.KeyTorrentSeedRatioLimit)
@@ -379,6 +384,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		NamingPreset:             namingPreset,
 		MovieNameFormat:          movieFormat,
 		EpisodeNameFormat:        episodeFormat,
+		KeepOriginalNames:        &keepOriginalNames,
 		HasTMDBAPIKey:            s.TMDB().HasAPIKey(),
 		OnboardingDone:           onboardingDone,
 		TorrentListenPort:        torrentPort,
@@ -505,6 +511,8 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		main string
 		what string
 	}{{settings.KeyMoviesExtraPaths, req.MoviesExtraPaths, moviesMain, "movies"}, {settings.KeyTVExtraPaths, req.TVExtraPaths, tvMain, "TV"}}
+	type pendingSet struct{ key, value string }
+	var folderSets []pendingSet // checked now, written below with the rest
 	for _, l := range extraLists {
 		if l.val == nil {
 			continue
@@ -518,10 +526,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if len(clean) == 0 {
 			raw = nil
 		}
-		if err := s.Settings.Set(l.key, string(raw), false); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
+		folderSets = append(folderSets, pendingSet{l.key, string(raw)})
 	}
 	for _, c := range []struct {
 		key string
@@ -538,10 +543,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if v != "" {
 			v = filepath.Clean(v)
 		}
-		if err := s.Settings.Set(c.key, v, false); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
+		folderSets = append(folderSets, pendingSet{c.key, v})
 	}
 
 	// Wanted audio languages: names separated by commas, best first.
@@ -549,6 +551,36 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		req.QualityLanguage = strings.Join(quality.ParseLanguages(req.QualityLanguage), ",")
 		if len(req.QualityLanguage) > 300 {
 			writeError(w, http.StatusBadRequest, "That is too many audio languages.")
+			return
+		}
+	}
+
+	// Subtitle profiles are checked before anything is written too.
+	var subtitleProfilesValue string
+	if req.SubtitleProfiles != nil {
+		profiles := subtitles.Profiles{}
+		for lang, p := range req.SubtitleProfiles {
+			lang = strings.TrimSpace(lang)
+			if !languageCode.MatchString(lang) {
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("%q isn't a language code Mediarium can use.", lang))
+				return
+			}
+			switch p.Full {
+			case "", subtitles.FullEither, subtitles.FullNormal, subtitles.FullSDH, subtitles.FullNone:
+			default:
+				writeError(w, http.StatusBadRequest, `The full subtitle must be "either", "normal", "sdh" or "none".`)
+				return
+			}
+			profiles[strings.ToLower(lang)] = p.Normalize()
+		}
+		subtitleProfilesValue = profiles.Encode()
+	}
+
+	// Everything that can be refused has been checked: from here on the writes
+	// only fail when the database does.
+	for _, f := range folderSets {
+		if err := s.Settings.Set(f.key, f.value, false); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
@@ -599,22 +631,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if req.SubtitleProfiles != nil {
-		profiles := subtitles.Profiles{}
-		for lang, p := range req.SubtitleProfiles {
-			lang = strings.TrimSpace(lang)
-			if !languageCode.MatchString(lang) {
-				writeError(w, http.StatusBadRequest, fmt.Sprintf("%q isn't a language code Mediarium can use.", lang))
-				return
-			}
-			switch p.Full {
-			case "", subtitles.FullEither, subtitles.FullNormal, subtitles.FullSDH, subtitles.FullNone:
-			default:
-				writeError(w, http.StatusBadRequest, `The full subtitle must be "either", "normal", "sdh" or "none".`)
-				return
-			}
-			profiles[strings.ToLower(lang)] = p.Normalize()
-		}
-		if err := s.Settings.Set(settings.KeySubtitleProfiles, profiles.Encode(), false); err != nil {
+		if err := s.Settings.Set(settings.KeySubtitleProfiles, subtitleProfilesValue, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -645,6 +662,12 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 			value = "0"
 		}
 		if err := s.Settings.Set(settings.KeySubtitleUpgrade, value, false); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if req.KeepOriginalNames != nil {
+		if err := setBool(s.Settings, settings.KeyKeepOriginalNames, *req.KeepOriginalNames); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -834,9 +857,6 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.SubDLAPIKey != nil {
 		key := strings.TrimSpace(*req.SubDLAPIKey)
-		if rejectBad(w, checkAPIKey(key)) {
-			return
-		}
 		if err := s.SetSubDLAPIKey(key); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -872,10 +892,6 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.SpeedLimitMB != nil || req.SpeedLimitHours != nil {
 		if req.SpeedLimitMB != nil {
-			if *req.SpeedLimitMB < 0 || *req.SpeedLimitMB > 10000 {
-				writeError(w, http.StatusBadRequest, "The speed limit is 0 (no limit) to 10000 MB/s.")
-				return
-			}
 			if err := s.Settings.Set(settings.KeySpeedLimitMB, strconv.Itoa(*req.SpeedLimitMB), false); err != nil {
 				writeError(w, http.StatusInternalServerError, err.Error())
 				return
@@ -883,10 +899,6 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if req.SpeedLimitHours != nil {
 			h := strings.TrimSpace(*req.SpeedLimitHours)
-			if _, _, ok := parseHours(h); h != "" && !ok {
-				writeError(w, http.StatusBadRequest, `Give the hours as "from-to", for example "8-23", or leave it empty for all day.`)
-				return
-			}
 			if err := s.Settings.Set(settings.KeySpeedLimitHours, h, false); err != nil {
 				writeError(w, http.StatusInternalServerError, err.Error())
 				return
@@ -896,15 +908,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.SpeedSchedule != nil {
 		rules := *req.SpeedSchedule
-		if len(rules) > maxSpeedRules {
-			writeError(w, http.StatusBadRequest, fmt.Sprintf("The speed schedule can have up to %d lines.", maxSpeedRules))
-			return
-		}
-		for i, r := range rules {
-			if !r.valid() {
-				writeError(w, http.StatusBadRequest, fmt.Sprintf("Line %d of the speed schedule isn't right: days are 0 (Sunday) to 6, hours 0 to 23, the limit 0 to 10000 MB/s.", i+1))
-				return
-			}
+		for i := range rules {
 			if rules[i].Days == nil {
 				rules[i].Days = []int{}
 			}
@@ -922,10 +926,6 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.DownloadHours != nil {
 		h := strings.TrimSpace(*req.DownloadHours)
-		if _, _, ok := parseHours(h); h != "" && !ok {
-			writeError(w, http.StatusBadRequest, `Give the download hours as "from-to", for example "1-7", or leave it empty for any time.`)
-			return
-		}
 		if err := s.Settings.Set(settings.KeyDownloadHours, h, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -939,10 +939,6 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		}
 		if req.DigestHour != nil {
 			hour = *req.DigestHour
-		}
-		if day < -1 || day > 6 || hour < 0 || hour > 23 {
-			writeError(w, http.StatusBadRequest, "The weekly summary day is 0 (Sunday) to 6 (Saturday), or -1 for none, and the hour is 0 to 23.")
-			return
 		}
 		dayVal := ""
 		if day >= 0 {
@@ -959,10 +955,6 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.NotifyQuietHours != nil {
 		h := strings.TrimSpace(*req.NotifyQuietHours)
-		if _, _, ok := parseHours(h); h != "" && !ok {
-			writeError(w, http.StatusBadRequest, `Give the quiet hours as "from-to", for example "23-7", or leave it empty for none.`)
-			return
-		}
 		if err := s.Settings.Set(settings.KeyNotifyQuietHours, h, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -970,10 +962,6 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.TorrentStallHours != nil {
 		h := *req.TorrentStallHours
-		if h < -1 || h > maxStallHours {
-			writeError(w, http.StatusBadRequest, "Give up after 1 to 72 hours, or 0 for never.")
-			return
-		}
 		v := strconv.Itoa(h)
 		if h < 0 {
 			v = "" // back to each client's own default
@@ -984,10 +972,6 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if req.MinFreeGB != nil {
-		if *req.MinFreeGB < 0 || *req.MinFreeGB > 10000 {
-			writeError(w, http.StatusBadRequest, "Keep 0 (off) to 10000 GB free.")
-			return
-		}
 		if err := s.Settings.Set(settings.KeyMinFreeGB, strconv.Itoa(*req.MinFreeGB), false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -1005,20 +989,12 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if req.BackupKeep != nil {
-		if *req.BackupKeep < 1 || *req.BackupKeep > 60 {
-			writeError(w, http.StatusBadRequest, "Keep between 1 and 60 backups.")
-			return
-		}
 		if err := s.Settings.Set(settings.KeyBackupKeep, strconv.Itoa(*req.BackupKeep), false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 	if req.TrashDays != nil {
-		if *req.TrashDays < 0 || *req.TrashDays > 365 {
-			writeError(w, http.StatusBadRequest, "Keep removed files for 0 to 365 days.")
-			return
-		}
 		if err := s.Settings.Set(settings.KeyTrashDays, strconv.Itoa(*req.TrashDays), false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -1121,10 +1097,12 @@ var (
 	namingMovieSample = organizer.NamingContext{
 		MovieTitle: "Example Movie", Year: 2024, Quality: "1080p", Source: "BluRay",
 		Codec: "x265", AudioCodec: "DTS", HDR: "HDR10", Edition: "Extended", ReleaseGroup: "GROUP", TMDBID: 12345,
+		OriginalTitle: "Example.Movie.2024.Extended.1080p.BluRay.DTS.x265-GROUP", OriginalFilename: "Example.Movie.2024.Extended.1080p.BluRay.DTS.x265-GROUP",
 	}
 	namingEpisodeSample = organizer.NamingContext{
 		SeriesTitle: "Example Show", Year: 2023, Season: 1, Episode: 2, EpisodeTitle: "The Second One", AirDate: "2023-03-14",
 		Quality: "1080p", Source: "WEB-DL", Codec: "x264", AudioCodec: "AAC", ReleaseGroup: "GROUP", TMDBID: 67890,
+		OriginalTitle: "Example.Show.S01.1080p.WEB-DL.AAC.x264-GROUP", OriginalFilename: "Example.Show.S01E02.1080p.WEB-DL.AAC.x264-GROUP",
 	}
 )
 
@@ -1153,6 +1131,12 @@ func (s *Server) handleNamingPreview(w http.ResponseWriter, r *http.Request) {
 	mode, replacement := s.illegalCharSettings()
 	clean := func(f string) string { return organizer.Sanitize(organizer.Render(f, sample), mode, replacement) }
 	out := namingPreviewPayload{Folder: clean(organizer.Presets["plex"]), Filename: clean(format) + ".mkv", Problem: problem}
+	if r.URL.Query().Get("keep") == "1" {
+		// "Keep the original file names": the sample file keeps its own name.
+		if name, ok := organizer.OriginalName(sample.OriginalFilename+".mkv", mode, replacement); ok {
+			out.Filename = name
+		}
+	}
 	if tv {
 		out.Folder = clean(organizer.TVSeriesFolder) + "/" + clean(organizer.TVSeasonFolder)
 	}

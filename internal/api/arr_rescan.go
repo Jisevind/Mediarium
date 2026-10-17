@@ -183,17 +183,15 @@ func (s *Server) attachBiggestVideo(m library.Movie, folder string, rep rescanRe
 		slog.Info("rescan: couldn't read a movie's folder", "movie", m.Title, "folder", folder, "err", err)
 		return rep, nil
 	}
-	taken := map[string]bool{}
-	if all, err := s.MovieRepo.ListWithCopies(); err == nil {
-		for _, o := range all {
-			if o.ID != m.ID && o.FilePath != "" {
-				taken[filepath.Clean(o.FilePath)] = true
-			}
-		}
+	paths := make([]string, len(files))
+	for i := range files {
+		paths[i] = files[i].Path
 	}
+	// not a file another movie has, nor one that is an episode of a show
+	taken := s.filesOfOtherTitles(paths, 0, m.ID)
 	var best *libimport.File
 	for i := range files {
-		if taken[filepath.Clean(files[i].Path)] {
+		if taken[filepath.Clean(files[i].Path)] || !s.insideLibrary(files[i].Path) {
 			continue
 		}
 		if best == nil || files[i].SizeBytes > best.SizeBytes {
@@ -203,8 +201,10 @@ func (s *Server) attachBiggestVideo(m library.Movie, folder string, rep rescanRe
 	if best == nil {
 		return rep, nil
 	}
+	// Another file is read again: its own name says its quality, and when it
+	// says nothing the movie's quality is Not stated, not the old file's.
 	tier := best.Quality
-	if tier == string(quality.TierUnknown) {
+	if tier == string(quality.TierUnknown) && sameFile(best.Path, m.FilePath) {
 		tier = ""
 	}
 	if err := s.MovieRepo.SetStatus(m.ID, library.StatusDownloaded, tier, best.Path); err != nil {

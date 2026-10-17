@@ -101,8 +101,10 @@ func (s *Server) handleTMDBMovieDetail(w http.ResponseWriter, r *http.Request) {
 		payload.LibraryID = libMovie.ID
 		payload.Status = string(libMovie.Status)
 		payload.Quality = libMovie.Quality
-		payload.FilePath = libMovie.FilePath
-		payload.FolderPath = s.movieFolderFor(libMovie)
+		payload.FilePath = fileLabel(r, libMovie.FilePath)
+		if isAdminRequest(r) { // only administrators see where the files lie
+			payload.FolderPath = s.movieFolderFor(libMovie)
+		}
 	}
 
 	writeJSON(w, http.StatusOK, payload)
@@ -230,7 +232,7 @@ func (s *Server) handleTMDBTVDetail(w http.ResponseWriter, r *http.Request) {
 // downloaded vocabulary movies use: downloading while anything for it is in
 // flight, downloaded once every episode has a file.
 func (s *Server) seriesLibraryState(series library.Series) string {
-	if items, err := s.QueueRepo.List(); err == nil {
+	if items, err := s.QueueRepo.ListActive(); err == nil {
 		for _, it := range items {
 			if it.SeriesID == series.ID && (it.Status == queue.StatusQueued || it.Status == queue.StatusDownloading || it.Status == queue.StatusImporting) {
 				return string(library.StatusDownloading)

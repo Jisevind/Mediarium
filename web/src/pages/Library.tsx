@@ -163,12 +163,16 @@ export default function Library() {
   // a kind that is switched off cannot be shown, so the first that is on opens instead.
   const active: Tab = activeLibraryTab(kinds, ui.kind)
   const kind: Kind = active === 'tv' ? 'tv' : 'movie'
+  const onMovies = active === 'movie'
+  const onTV = active === 'tv'
   const [bookList, setBookList] = useState<Book[] | null>(null)
   const [queueNow, setQueueNow] = useState<QueueItem[]>([])
   const [artists, setArtists] = useState<MusicArtist[] | null>(null)
   const [view, setView] = useState<View>(() => (recall(STORAGE.view) === 'list' ? 'list' : 'grid'))
   const [movies, setMovies] = useState<Item[] | null>(null)
   const [shows, setShows] = useState<Item[] | null>(null)
+  // How many movies and shows there are, for the tab whose list is not loaded.
+  const [titleCounts, setTitleCounts] = useState<{ movies: number; shows: number } | null>(null)
   const [profiles, setProfiles] = useState<QualityProfile[]>([])
   const [defaultProfile, setDefaultProfile] = useState(0)
   const [defaultTvProfile, setDefaultTvProfile] = useState(0)
@@ -231,22 +235,27 @@ export default function Library() {
     const failed = (e: unknown) => setError(e instanceof Error ? e.message : String(e))
     // The server answers "nothing changed" with the very same objects as last time. Then neither the titles nor the
     // queue are new, and there is nothing to build, compare or draw.
-    Promise.all([queue, api.listMovies()]).then(([q, m]) => {
-      setError('')
-      if (seen.current.movies?.[0] === q && seen.current.movies[1] === m) return
-      seen.current.movies = [q, m]
-      setMovies(same(m.map((x) => fromMovie(x, q))))
-    }).catch(failed)
-    Promise.all([queue, api.listSeries()]).then(([q, s]) => {
-      setError('')
-      if (seen.current.shows?.[0] === q && seen.current.shows[1] === s) return
-      seen.current.shows = [q, s]
-      setShows(same(s.map((x) => fromSeries(x, q))))
-    }).catch(failed)
+    // Only the open tab's list is read (on a big TV library the show list takes a while); the other tab's number
+    // comes from the counts.
+    if (onMovies)
+      Promise.all([queue, api.listMovies()]).then(([q, m]) => {
+        setError('')
+        if (seen.current.movies?.[0] === q && seen.current.movies[1] === m) return
+        seen.current.movies = [q, m]
+        setMovies(same(m.map((x) => fromMovie(x, q))))
+      }).catch(failed)
+    if (onTV)
+      Promise.all([queue, api.listSeries()]).then(([q, s]) => {
+        setError('')
+        if (seen.current.shows?.[0] === q && seen.current.shows[1] === s) return
+        seen.current.shows = [q, s]
+        setShows(same(s.map((x) => fromSeries(x, q))))
+      }).catch(failed)
+    api.libraryCounts().then((c) => setTitleCounts((prev) => (prev && prev.movies === c.movies && prev.shows === c.shows ? prev : c))).catch(() => undefined)
     if (musicOn) api.listArtists().then((a) => { setArtists(same(a)); setError('') }).catch(failed)
     if (booksOn) api.listBooks().then((b) => { setBookList(same(b)); setError('') }).catch(failed)
     queue.then((q) => setQueueNow(same(q)))
-  }, [musicOn, booksOn])
+  }, [musicOn, booksOn, onMovies, onTV])
   useEffect(() => {
     load()
   }, [load])
@@ -542,11 +551,17 @@ export default function Library() {
 
   // Only the kinds of media that are switched on get a tab.
   const bookCount = (f: BookFormat) => bookList?.filter((b) => b[f].wanted || b[f].status === 'downloaded').length
-  const counts: Record<Tab, number | undefined> = { movie: movies?.length, tv: shows?.length, music: artists?.length, ebook: bookCount('ebook'), audiobook: bookCount('audiobook') }
+  const counts: Record<Tab, number | undefined> = {
+    movie: active === 'movie' && movies ? movies.length : titleCounts?.movies,
+    tv: active === 'tv' && shows ? shows.length : titleCounts?.shows,
+    music: artists?.length,
+    ebook: bookCount('ebook'),
+    audiobook: bookCount('audiobook'),
+  }
   const kindSwitch = (
     <div className="seg kind-tabs">
       {kinds.map((k) => (
-        <button key={k} className={active === k ? 'active' : ''} style={{ ['--kc' as string]: TAB_COLOR[k] }} onClick={() => chooseKind(k)}>
+        <button key={k} aria-pressed={active === k} className={active === k ? 'active' : ''} style={{ ['--kc' as string]: TAB_COLOR[k] }} onClick={() => chooseKind(k)}>
           <KindGlyph kind={k === 'ebook' ? 'book' : k} size={17} />
           {TAB_LABEL[k]} {counts[k] !== undefined ? <small className="mono">{counts[k]}</small> : null}
         </button>
@@ -612,10 +627,10 @@ export default function Library() {
             </label>
           )}
           <div className="seg">
-            <button className={view === 'grid' ? 'active' : ''} onClick={() => chooseView('grid')} aria-label={t('Grid view')}>
+            <button aria-pressed={view === 'grid'} className={view === 'grid' ? 'active' : ''} onClick={() => chooseView('grid')} aria-label={t('Grid view')}>
               <Icon name="grid" size={16} />
             </button>
-            <button className={view === 'list' ? 'active' : ''} onClick={() => chooseView('list')} aria-label={t('List view')}>
+            <button aria-pressed={view === 'list'} className={view === 'list' ? 'active' : ''} onClick={() => chooseView('list')} aria-label={t('List view')}>
               <Icon name="list" size={16} />
             </button>
           </div>

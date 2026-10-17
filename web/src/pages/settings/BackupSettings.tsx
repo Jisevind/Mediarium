@@ -8,6 +8,7 @@ import { FieldError, useValidation } from '../../useValidation'
 import { st, t, tx } from '../../i18n'
 import { withBase } from '../../base'
 import TipLabel from '../../components/TipLabel'
+import { forgetRestored, markRestored } from '../../restoreNotice'
 
 // Saved copies of everything, the cloud copies, and putting one back.
 export default function BackupSettings() {
@@ -48,6 +49,9 @@ export default function BackupSettings() {
       }
       if (data?.needPassphrase) setAskPassphrase(true)
       if (!res.ok) throw new Error(data?.error ? st(data.error) : t('The restore failed (error {status}). If the backup is big, make sure any proxy in front of Mediarium allows large uploads.', { status: String(res.status) }))
+      // The restored database doesn't know this browser's session, so the
+      // sign-in page usually comes next; it says the restore worked.
+      markRestored()
       toast.success(t('Backup accepted. Restarting…'))
       setWaiting(true)
       // Wait for the app to come back, then reload onto the restored data.
@@ -65,6 +69,7 @@ export default function BackupSettings() {
         }
         if (Date.now() - started > 90000) {
           clearInterval(poll)
+          forgetRestored()
           setWaiting(false)
           setRestoring(false)
           toast.info(t("Mediarium didn't come back. Start it again and reload this page."))

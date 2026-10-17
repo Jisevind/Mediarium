@@ -11,7 +11,7 @@ import Loading from '../components/Loading'
 import PosterCard, { PosterFallback } from '../components/PosterCard'
 import { describeState, type ItemStateKey } from '../components/state'
 import { formatBytes, qualityText, timeAgo } from '../format'
-import { locale, plural, t, tx } from '../i18n'
+import { locale, plural, st, t, tx } from '../i18n'
 import { linePlace } from '../queueView'
 import { ServerInfoCard, useServerStats } from '../components/ServerStats'
 import { useModules } from '../ModulesContext'
@@ -102,12 +102,12 @@ function Health({ items, showOptional, errors = 0 }: { items: HealthItem[]; show
         <Icon name={LEVEL_ICON[it.level]} size={18} />
       </span>
       <div className="health-text">
-        <strong>{it.title}</strong>
-        <span>{it.impact}</span>
+        <strong>{st(it.title)}</strong>
+        <span>{st(it.impact)}</span>
       </div>
       {it.action && (
         <Link to={it.action.path} className="health-action">
-          {it.action.label} <Icon name="open" size={14} />
+          {st(it.action.label)} <Icon name="open" size={14} />
         </Link>
       )}
     </li>
@@ -150,26 +150,45 @@ function Health({ items, showOptional, errors = 0 }: { items: HealthItem[]; show
   )
 }
 
+// A folder's name and what it holds, in the language in use. A folder the
+// page doesn't know keeps what the server calls it.
+function folderLabel(f: DashFolder): string {
+  switch (f.key) {
+    case 'movies':
+      return t('Movies')
+    case 'tv':
+      return t('TV shows')
+    case 'music':
+      return t('Music')
+    case 'ebooks':
+      return t('Ebooks')
+    case 'audiobooks':
+      return t('Audiobooks')
+    case 'downloads':
+      return t('Downloads')
+  }
+  return f.label
+}
+
+function folderItems(f: DashFolder): string {
+  switch (f.key) {
+    case 'movies':
+      return plural(f.items, '{n} movie', '{n} movies')
+    case 'tv':
+      return plural(f.items, '{n} episode', '{n} episodes')
+    case 'music':
+      return plural(f.items, '{n} album', '{n} albums')
+    case 'ebooks':
+    case 'audiobooks':
+      return plural(f.items, '{n} book', '{n} books')
+  }
+  return `${f.items.toLocaleString(locale())} ${f.itemsLabel}`
+}
+
 function FolderCard({ f }: { f: DashFolder }) {
   const used = f.totalBytes > 0 ? 1 - f.freeBytes / f.totalBytes : 0
   const tone = !f.exists || !f.writable ? 'bad' : used > 0.95 ? 'bad' : used > 0.85 ? 'warn' : ''
   const icon: IconName = f.key === 'movies' ? 'film' : f.key === 'tv' ? 'tv' : f.key === 'music' ? 'music' : f.key === 'ebooks' ? 'book' : f.key === 'audiobooks' ? 'headphones' : 'download'
-  if (f.off) {
-    return (
-      <div className="folder-card is-off" title={t('Switched off in Settings > Media types')}>
-        <div className="folder-head">
-          <span className="stat-icon">
-            <Icon name={icon} size={18} />
-          </span>
-          <div style={{ minWidth: 0 }}>
-            <strong>{f.label}</strong>
-            {f.path && <code title={f.path}>{f.path}</code>}
-          </div>
-          <span className="badge">{t('Off')}</span>
-        </div>
-      </div>
-    )
-  }
   return (
     <div className={`folder-card${!f.exists || !f.writable ? ' broken' : ''}`}>
       <div className="folder-head">
@@ -177,7 +196,7 @@ function FolderCard({ f }: { f: DashFolder }) {
           <Icon name={icon} size={18} />
         </span>
         <div style={{ minWidth: 0 }}>
-          <strong>{f.label}</strong>
+          <strong>{folderLabel(f)}</strong>
           {f.path && <code title={f.path}>{f.path}</code>}
         </div>
       </div>
@@ -205,7 +224,7 @@ function FolderCard({ f }: { f: DashFolder }) {
             <span>{t('{free} free of {total}', { free: formatBytes(f.freeBytes), total: formatBytes(f.totalBytes) })}</span>
             {f.key !== 'downloads' && (
               <span>
-                {f.items.toLocaleString(locale())} {f.itemsLabel}
+                {folderItems(f)}
                 {f.libraryBytes > 0 ? ` · ${formatBytes(f.libraryBytes)}` : ''}
               </span>
             )}
@@ -215,7 +234,7 @@ function FolderCard({ f }: { f: DashFolder }) {
       )}
       {f.warnings.map((w) => (
         <p key={w} className="folder-warn">
-          {w}
+          {st(w)}
         </p>
       ))}
     </div>
@@ -343,8 +362,8 @@ function Tile({ tone, icon, title, link, to, tip, children }: { tone?: string; i
 }
 
 export default function Dashboard() {
-  const server = useServerStats()
   const { user } = useAuth()
+  const server = useServerStats(10000, isAdmin(user))
   const { on } = useModules()
   const [data, setData] = useState<DashboardData | null>(null)
   const [active, setActive] = useState<QueueItem[]>([])
@@ -472,7 +491,9 @@ export default function Dashboard() {
                   ? plural(inLine, '{n} download is waiting in line.', '{n} downloads are waiting in line.')
                 : wanted > 0
                   ? plural(wanted, 'Nothing is downloading right now. {n} item is still missing.', 'Nothing is downloading right now. {n} items are still missing.')
-                  : t('Everything is up to date.')}
+                  : admin && problems > 0
+                    ? t('Nothing is downloading and nothing is missing.')
+                    : t('Everything is up to date.')}
           </p>
         </div>
           {server.denied && heroPills}
@@ -623,10 +644,21 @@ export default function Dashboard() {
           )}
         </div>
         <div className="folder-grid">
-          {data.folders.map((f) => (
+          {data.folders.filter((f) => !f.off).map((f) => (
             <FolderCard key={f.key} f={f} />
           ))}
         </div>
+        {data.folders.some((f) => f.off) && (
+          <p className="folders-off">
+            {t('Switched off: {names}', { names: data.folders.filter((f) => f.off).map((f) => f.label).join(', ') })}
+            {admin && (
+              <>
+                {' · '}
+                <Link to="/settings/media">{t('Media types')}</Link>
+              </>
+            )}
+          </p>
+        )}
       </section>
 
       <section className="tile tone-calendar wide-tile">

@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -20,16 +21,31 @@ type pipelineRegistry struct {
 // stopped taking requests and before the database is closed. It ends the running
 // download pipelines and the torrent engine without marking anything failed:
 // what was downloading stays as it is, and the next start finds it interrupted.
-func (s *Server) Shutdown() {
+//
+// wait is all the time it may take, torrents and pipelines together: the stop
+// has to fit in the 10 seconds Docker gives before it kills the container.
+// Closing a torrent engine can hang on a bad connection, so it gets half of
+// it at most and is left behind after that; the program is exiting anyway.
+func (s *Server) Shutdown(wait time.Duration) {
+	deadline := time.Now().Add(wait)
+	// Nothing new starts, and a download that ends while the rest wind down
+	// does not look for the next one in a database that is about to close.
+	if s.dispatch != nil {
+		s.dispatch.Stop()
+	}
 	s.pipelines.shutdown(0) // flag and cancel them first, so stopping the torrents is not read as a failure
-	s.torrents.stopAll()
-	s.pipelines.shutdown(shutdownWait)
+	stopped := make(chan struct{})
+	go func() {
+		s.torrents.stopAll()
+		close(stopped)
+	}()
+	select {
+	case <-stopped:
+	case <-time.After(wait / 2):
+		slog.Warn("shutdown: the torrent engine was slow to stop; closing anyway")
+	}
+	s.pipelines.shutdown(max(time.Until(deadline), 0))
 }
-
-// shutdownWait is how long Shutdown waits for the pipelines to wind down. The
-// whole stop has to fit in the 10 seconds Docker gives before it kills the
-// container.
-const shutdownWait = 3 * time.Second
 
 // shutdown tells every running pipeline that Mediarium is stopping, cancels
 // them, and waits up to wait for them to wind down. Items they were working on

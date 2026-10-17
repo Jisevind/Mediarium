@@ -143,7 +143,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	outcomes := indexers.SearchAll(indexers.AsManual(r.Context()), list, query, mediaCategories)
 	merged := indexers.MergeResults(outcomes)
 
-	blocked := s.blockedKeys()
+	blocked := s.searchSkipKeys()
 	out := make([]searchResultPayload, len(merged))
 	for i, res := range merged {
 		out[i] = s.toSearchResultPayload(res)
@@ -223,6 +223,7 @@ func (s *Server) handleListMovies(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	for i, m := range list {
 		out[i] = toMoviePayload(m, who)
+		out[i].FilePath = fileLabel(r, m.FilePath)
 		if brief {
 			out[i].Overview = ""
 		}
@@ -251,8 +252,11 @@ func (s *Server) handleGetMovie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	out := toMoviePayload(m, s.accountNames())
+	out.FilePath = fileLabel(r, m.FilePath)
 	out.SizeBytes = fileSize(m.FilePath)
-	out.FolderPath = s.movieFolderFor(m)
+	if isAdminRequest(r) { // only administrators see where the files lie
+		out.FolderPath = s.movieFolderFor(m)
+	}
 	if t, err := s.MovieRepo.TitleTags(library.TagMovie, m.ID); err == nil {
 		out.Tags = t
 	}
@@ -454,7 +458,7 @@ func (s *Server) searchMovieInBackground(movieID int64) {
 		s.noteHomeHold(m, note) // still only in cinemas: the "Search now" button looks anyway
 		return
 	}
-	s.huntMovie(context.Background(), m, instances, profiles, s.blockedKeys(), true)
+	s.huntMovie(context.Background(), m, instances, profiles, s.searchSkipKeys(), true)
 }
 
 // discoverPayload mirrors moviePayload's shape but for titles not yet in

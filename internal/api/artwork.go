@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"sort"
 	"time"
 
 	"github.com/rdborg/mediarium/internal/metadata"
@@ -78,6 +79,20 @@ func (s *Server) artworkJob(ctx context.Context) {
 		kind string
 		id   int
 	}
+	// Nearest to today first, so the titles on screen get their pictures
+	// before the far past and future of a big library.
+	today := time.Now()
+	distance := func(date string) time.Duration {
+		d, err := time.Parse("2006-01-02", date)
+		if err != nil {
+			return 1<<63 - 1
+		}
+		if d.Before(today) {
+			return today.Sub(d)
+		}
+		return d.Sub(today)
+	}
+	sort.SliceStable(entries, func(i, j int) bool { return distance(entries[i].ReleaseDate) < distance(entries[j].ReleaseDate) })
 	seen := map[title]bool{}
 	byKind := map[string][]int{}
 	var order []title

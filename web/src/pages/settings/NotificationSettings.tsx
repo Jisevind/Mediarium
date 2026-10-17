@@ -417,7 +417,7 @@ function TargetRow({
                   <button onClick={() => setEditing(false)}>{t('Cancel')}</button>
                 </div>
                 <TestLog note={note} running={busy === 'test'} />
-                <FormProblem v={v} verb={t('save')} />
+                <FormProblem v={v} action="save" />
               </>
             )}
           </MethodForm>
@@ -691,7 +691,7 @@ export default function NotificationSettings() {
                       </button>
                     </div>
                     <TestLog note={notes[current.type] ?? null} running={busy === 'test'} />
-                    <FormProblem v={v} verb={t('add this notification')} />
+                    <FormProblem v={v} action="notification" />
                   </>
                 )}
               </MethodForm>

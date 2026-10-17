@@ -44,8 +44,9 @@ import (
 )
 
 type Server struct {
-	streamPause streamPauseState // pause while someone is watching (stream_pause.go)
-	appFrames   atomic.Value     // []string: the origins of add-ons shown in a frame, kept in memory so the security headers never wait for the database (app_links.go)
+	streamPause streamPauseState  // pause while someone is watching (stream_pause.go)
+	libStats    libraryStatsCache // the Statistics page's answer, kept for a few minutes (stats_library.go)
+	appFrames   atomic.Value      // []string: the origins of add-ons shown in a frame, kept in memory so the security headers never wait for the database (app_links.go)
 	cfg         config.Config
 	db          *sql.DB // for backups (VACUUM INTO); repos hold their own handles
 
@@ -119,9 +120,15 @@ type Server struct {
 	mb    *musicbrainz.Client // one client, so its one-request-per-second limit is shared
 	music musicState          // music hunt position and library scan jobs (music*.go)
 
+	huntAt huntPosition // where the next scheduled movie and book searches start (automation.go, books_api.go)
+
 	statsCache   statsCache
 	metricsCache metricsCache // slow-to-count numbers the metrics page reuses between scrapes (handlers_metrics.go)
-	builtin      BuiltinKeys  // app-wide keys baked into official releases (see keys.go)
+	// The library's totals and the TV list's per-show numbers, kept until the
+	// library changes (library_overview.go).
+	overviewCache   sharedCache[libraryOverview]
+	seriesListCache sharedCache[seriesListData]
+	builtin         BuiltinKeys // app-wide keys baked into official releases (see keys.go)
 
 	importMu         sync.Mutex
 	importJobs       map[string]*importJob
@@ -396,7 +403,7 @@ func (s *Server) Routes() http.Handler {
 	s.koboRoutes(root)
 	root.HandleFunc("GET /robots.txt", robotsTxt)
 	root.Handle("/", frontendHandlerBase(s.cfg.URLBase))
-	return s.harden(withURLBase(s.cfg.URLBase, root))
+	return withBodyDeadline(s.harden(withURLBase(s.cfg.URLBase, root)))
 }
 
 // protectedRoutes is the one table of every signed-in route and who may call
@@ -423,6 +430,8 @@ func (s *Server) protectedRoutes() *routeTable {
 	member.HandleFunc("GET /api/auth/me", s.handleMe)
 	member.HandleFunc("PUT /api/auth/profile", s.handleUpdateUserProfile)
 	member.HandleFunc("POST /api/auth/change-password", s.handleChangePassword)
+	member.HandleFunc("GET /api/auth/sessions", s.handleListSessions)
+	member.HandleFunc("DELETE /api/auth/sessions", s.handleEndOtherSessions)
 	member.HandleFunc("GET /api/auth/api-keys", s.handleListAPIKeys)
 	member.HandleFunc("POST /api/auth/api-keys", s.handleCreateAPIKey)
 	member.HandleFunc("DELETE /api/auth/api-keys/{id}", s.handleRevokeAPIKey)
@@ -504,6 +513,7 @@ func (s *Server) protectedRoutes() *routeTable {
 	manage.HandleFunc("PUT /api/movies/{id}/folder", s.handleSetMovieFolder)
 	manage.HandleFunc("PUT /api/series/{id}/folder", s.handleSetSeriesFolder)
 	member.HandleFunc("GET /api/library/folders", s.handleLibraryFolders)
+	member.HandleFunc("GET /api/library/counts", s.handleLibraryCounts)
 
 	// Shows: the same.
 	member.HandleFunc("GET /api/series", revalidated(s.handleListSeries))
@@ -733,7 +743,9 @@ func (s *Server) protectedRoutes() *routeTable {
 	admin.HandleFunc("PUT /api/music/profiles/{id}", s.handleUpdateMusicProfile)
 	admin.HandleFunc("DELETE /api/music/profiles/{id}", s.handleDeleteMusicProfile)
 	admin.HandleFunc("POST /api/music/import/scan", s.handleMusicImportScan)
+	admin.HandleFunc("GET /api/music/import/scan", s.handleMusicImportLatest)
 	admin.HandleFunc("GET /api/music/import/scan/{id}", s.handleMusicImportResults)
+	admin.HandleFunc("DELETE /api/music/import/scan/{id}", s.handleMusicImportCancel)
 
 	// Moving over from Radarr, Sonarr, Prowlarr and SABnzbd (read-only on their side).
 	admin.HandleFunc("GET /api/system/backups", s.handleListSavedBackups)

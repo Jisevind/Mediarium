@@ -217,7 +217,9 @@ func (r *Repo) scan(sc scanner) (Instance, error) {
 	if encAPIKey.Valid && encAPIKey.String != "" {
 		plain, err := r.box.Decrypt(encAPIKey.String)
 		if err != nil {
-			return Instance{}, fmt.Errorf("decrypt api key for indexer %d: %w", inst.ID, err)
+			// One unreadable key must not take the other indexers down with
+			// it: this one is marked and left out of searches.
+			inst.markUnreadable()
 		}
 		inst.APIKey = plain
 	}
@@ -230,12 +232,11 @@ func (r *Repo) scan(sc scanner) (Instance, error) {
 		}
 		if encSecrets.Valid && encSecrets.String != "" {
 			plain, err := r.box.Decrypt(encSecrets.String)
-			if err != nil {
-				return Instance{}, fmt.Errorf("decrypt settings for indexer %d: %w", inst.ID, err)
-			}
 			var secrets map[string]string
-			if err := json.Unmarshal([]byte(plain), &secrets); err != nil {
-				return Instance{}, fmt.Errorf("read secret settings for indexer %d: %w", inst.ID, err)
+			if err != nil {
+				inst.markUnreadable()
+			} else if err := json.Unmarshal([]byte(plain), &secrets); err != nil {
+				inst.markUnreadable()
 			}
 			for k, v := range secrets {
 				inst.Settings[k] = v

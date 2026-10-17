@@ -1,7 +1,9 @@
 package api
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -57,6 +59,48 @@ func pathInside(roots []string, p string) (string, bool) {
 	return clean, true
 }
 
+// insideLibrary says whether the file is still inside a library folder once
+// links are resolved. A folder scan follows links, so a link inside a title's
+// folder can lead anywhere.
+func (s *Server) insideLibrary(path string) bool {
+	real, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return false
+	}
+	for _, root := range s.videoRoots() {
+		if root == "" {
+			continue
+		}
+		if realRoot, err := filepath.EvalSymlinks(root); err == nil && rootContaining([]string{realRoot}, real) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+// filesOfOtherTitles returns, from paths, the cleaned ones that belong to a
+// title other than the one being worked on: a file of any movie but movieID
+// (0 = every movie), or of an episode of any show but seriesID (0 = every
+// show).
+func (s *Server) filesOfOtherTitles(paths []string, seriesID, movieID int64) map[string]bool {
+	taken := map[string]bool{}
+	if all, err := s.MovieRepo.ListWithCopies(); err == nil {
+		for _, o := range all {
+			if o.ID != movieID && o.FilePath != "" {
+				taken[filepath.Clean(o.FilePath)] = true
+			}
+		}
+	}
+	if eps, err := s.MovieRepo.EpisodesByFiles(paths); err == nil {
+		for _, e := range eps {
+			if e.SeriesID != seriesID && e.FilePath != "" {
+				taken[filepath.Clean(e.FilePath)] = true
+			}
+		}
+	}
+	return taken
+}
+
 // locateProblem is a refusal with the status to send and a sentence for the person.
 type locateProblem struct {
 	status int
@@ -92,6 +136,11 @@ func (s *Server) checkLocateFile(movieID int64, path string) (string, *locatePro
 		return "", &locateProblem{http.StatusConflict, "That file already belongs to an episode of a show."}
 	}
 	return clean, nil
+}
+
+// sameFile reports whether two paths name the same file (old may be empty).
+func sameFile(path, old string) bool {
+	return old != "" && filepath.Clean(path) == filepath.Clean(old)
 }
 
 // locateRequest is the body of the locate routes: one full path.
@@ -133,9 +182,11 @@ func (s *Server) handleLocateMovieFile(w http.ResponseWriter, r *http.Request) {
 		writeError(w, problem.status, problem.msg)
 		return
 	}
+	// The quality is read from the new file's name. A different file whose
+	// name says nothing is Not stated, rather than keeping the old file's.
 	tier := libimport.TierFromPath(file)
 	tierName := string(tier)
-	if tier == quality.TierUnknown {
+	if tier == quality.TierUnknown && sameFile(file, m.FilePath) {
 		tierName = ""
 	}
 	if err := s.MovieRepo.SetStatus(m.ID, library.StatusDownloaded, tierName, file); err != nil {
@@ -220,6 +271,18 @@ func (s *Server) handleChangeSeriesFolder(w http.ResponseWriter, r *http.Request
 		writeError(w, http.StatusNotFound, "That show isn't in your library.")
 		return
 	}
+	items, err := s.QueueRepo.ListUnfinished()
+	if err != nil {
+		slog.Warn("locate: couldn't check the downloads of a show", "series", sr.Title, "err", err)
+		writeError(w, http.StatusInternalServerError, "Couldn't check your downloads. Check the Mediarium log for details.")
+		return
+	}
+	for _, it := range items {
+		if it.SeriesID == sr.ID && downloadOpen(it.Status) {
+			writeError(w, http.StatusConflict, "This show is being downloaded right now. Wait for the downloads to finish, or cancel them, and try again.")
+			return
+		}
+	}
 	dir, problem := s.checkLocateFolder(req.Path)
 	if problem != nil {
 		writeError(w, problem.status, problem.msg)
@@ -257,8 +320,32 @@ func (s *Server) rereadSeriesFolder(sr library.Series, dir string, today time.Ti
 	place := library.ImportPlacer(eps, sr.SeriesType == library.SeriesAnime, nil)
 	var attached []string
 	rep.NotPlaced = len(skipped)
+
+	// Files that a link leads out of the library with, and files that belong to
+	// another title (a movie, or an episode of another show), are not used.
+	paths := make([]string, len(files))
+	for i, f := range files {
+		paths[i] = f.Path
+	}
+	taken := s.filesOfOtherTitles(paths, sr.ID, 0)
+
+	// An episode two files map to (an S01E02 file and a "- 02" file) gets the
+	// bigger one, the same way every time; when they are the same size, the
+	// first name.
+	type pick struct {
+		file   libimport.File
+		tier   string
+		season int
+		number int
+	}
+	chosen := map[[2]int]pick{}
+	var candidates []string // files that were placed on episode numbers
 	for _, f := range files {
-		season, numbers, placed := place(library.ImportFile{Path: f.Path, Quality: f.Quality, Season: f.Season, Episodes: f.Episodes, Absolute: f.Absolute})
+		if taken[filepath.Clean(f.Path)] || !s.insideLibrary(f.Path) {
+			rep.NotPlaced++
+			continue
+		}
+		season, numbers, placed := place(library.ImportFile{Path: f.Path, Quality: f.Quality, Season: f.Season, Episodes: f.Episodes, Absolute: f.Absolute, AirDate: f.AirDate, DailyPart: f.DailyPart})
 		if !placed {
 			rep.NotPlaced++
 			continue
@@ -267,27 +354,47 @@ func (s *Server) rereadSeriesFolder(sr library.Series, dir string, today time.Ti
 		if tier == string(quality.TierUnknown) {
 			tier = ""
 		}
-		hit := false
+		candidates = append(candidates, f.Path)
 		for _, n := range numbers {
-			ep, ok := byNumber[[2]int{season, n}]
-			if !ok {
+			key := [2]int{season, n}
+			if _, ok := byNumber[key]; !ok {
 				continue
 			}
-			hit = true
-			if ep.FilePath == f.Path && ep.Status == library.StatusDownloaded {
+			if old, ok := chosen[key]; ok && (old.file.SizeBytes > f.SizeBytes || (old.file.SizeBytes == f.SizeBytes && old.file.Path < f.Path)) {
 				continue
 			}
-			if ep.Status == library.StatusDownloaded && ep.FilePath != "" && rootContaining([]string{dir}, ep.FilePath) == "" {
-				if _, err := os.Stat(ep.FilePath); err == nil {
-					continue // its own file is still where it was
-				}
-			}
-			if err := s.MovieRepo.SetEpisodeStatus(ep.ID, library.StatusDownloaded, tier, f.Path); err != nil {
-				return rep, fmt.Errorf("save the file of season %d episode %d: %w", season, n, err)
-			}
-			attached = append(attached, f.Path)
+			chosen[key] = pick{file: f, tier: tier, season: season, number: n}
 		}
-		if !hit {
+	}
+	won := map[string]bool{}
+	keys := make([][2]int, 0, len(chosen))
+	for k := range chosen {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return keys[i][0] < keys[j][0] || (keys[i][0] == keys[j][0] && keys[i][1] < keys[j][1])
+	})
+	for _, k := range keys {
+		c := chosen[k]
+		won[c.file.Path] = true
+		ep := byNumber[k]
+		if ep.FilePath == c.file.Path && ep.Status == library.StatusDownloaded {
+			continue
+		}
+		if ep.Status == library.StatusDownloaded && ep.FilePath != "" && rootContaining([]string{dir}, ep.FilePath) == "" {
+			if _, err := os.Stat(ep.FilePath); err == nil {
+				continue // its own file is still where it was
+			}
+		}
+		if err := s.MovieRepo.SetEpisodeStatus(ep.ID, library.StatusDownloaded, c.tier, c.file.Path); err != nil {
+			return rep, fmt.Errorf("save the file of season %d episode %d: %w", c.season, c.number, err)
+		}
+		attached = append(attached, c.file.Path)
+	}
+	// a file that matched no episode, or lost every one it matched to a bigger
+	// file, was not placed
+	for _, p := range candidates {
+		if !won[p] {
 			rep.NotPlaced++
 		}
 	}
@@ -322,24 +429,33 @@ func (s *Server) rereadSeriesFolder(sr library.Series, dir string, today time.Ti
 
 // seriesFolderMessage says what changing a show's folder found, in plain words.
 func seriesFolderMessage(rep seriesFolderReport) string {
-	var msg string
+	// One whole sentence for every case, so each can be translated as it is.
+	f, t, d, m, n := rep.Found, rep.Total, rep.Folder, rep.Missing, rep.NotPlaced
 	switch {
-	case rep.Found == 0:
-		msg = fmt.Sprintf("Found no episode files for this show in %s. Nothing was changed.", rep.Folder)
-	case rep.Missing == 0:
-		msg = fmt.Sprintf("Found %d of %d episodes in %s.", rep.Found, rep.Total, rep.Folder)
-	case rep.Missing == 1:
-		msg = fmt.Sprintf("Found %d of %d episodes in %s. 1 is still missing.", rep.Found, rep.Total, rep.Folder)
-	default:
-		msg = fmt.Sprintf("Found %d of %d episodes in %s. %d are still missing.", rep.Found, rep.Total, rep.Folder, rep.Missing)
+	case f == 0 && n == 0:
+		return fmt.Sprintf("Found no episode files for this show in %s. Nothing was changed.", d)
+	case f == 0 && n == 1:
+		return fmt.Sprintf("Found no episode files for this show in %s. Nothing was changed. 1 video file there wasn't placed on an episode.", d)
+	case f == 0:
+		return fmt.Sprintf("Found no episode files for this show in %s. Nothing was changed. %d video files there weren't placed on an episode.", d, n)
+	case m == 0 && n == 0:
+		return fmt.Sprintf("Found %d of %d episodes in %s.", f, t, d)
+	case m == 0 && n == 1:
+		return fmt.Sprintf("Found %d of %d episodes in %s. 1 video file there wasn't placed on an episode.", f, t, d)
+	case m == 0:
+		return fmt.Sprintf("Found %d of %d episodes in %s. %d video files there weren't placed on an episode.", f, t, d, n)
+	case m == 1 && n == 0:
+		return fmt.Sprintf("Found %d of %d episodes in %s. 1 is still missing.", f, t, d)
+	case m == 1 && n == 1:
+		return fmt.Sprintf("Found %d of %d episodes in %s. 1 is still missing. 1 video file there wasn't placed on an episode.", f, t, d)
+	case m == 1:
+		return fmt.Sprintf("Found %d of %d episodes in %s. 1 is still missing. %d video files there weren't placed on an episode.", f, t, d, n)
+	case n == 0:
+		return fmt.Sprintf("Found %d of %d episodes in %s. %d are still missing.", f, t, d, m)
+	case n == 1:
+		return fmt.Sprintf("Found %d of %d episodes in %s. %d are still missing. 1 video file there wasn't placed on an episode.", f, t, d, m)
 	}
-	switch {
-	case rep.NotPlaced == 1:
-		msg += " 1 video file there wasn't placed on an episode."
-	case rep.NotPlaced > 1:
-		msg += fmt.Sprintf(" %d video files there weren't placed on an episode.", rep.NotPlaced)
-	}
-	return msg
+	return fmt.Sprintf("Found %d of %d episodes in %s. %d are still missing. %d video files there weren't placed on an episode.", f, t, d, m, n)
 }
 
 // browseEntry is one folder or video file in the file picker.
@@ -381,6 +497,17 @@ func (s *Server) handleBrowse(w http.ResponseWriter, r *http.Request) {
 		}
 		writeJSON(w, http.StatusOK, answer)
 		return
+	}
+	// A folder that is gone (a show's old folder, when its folder is being
+	// changed) opens at the nearest folder above it that is still there. It
+	// still has to be inside the library folders.
+	if _, err := os.Stat(want); errors.Is(err, fs.ErrNotExist) {
+		for p := filepath.Dir(filepath.Clean(want)); p != filepath.Dir(p); p = filepath.Dir(p) {
+			if info, err := os.Stat(p); err == nil && info.IsDir() {
+				want = p
+				break
+			}
+		}
 	}
 	clean, ok := pathInside(roots, want)
 	if !ok {

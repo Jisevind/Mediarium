@@ -220,7 +220,7 @@ function SeriesPage() {
     setError('')
     setRescanning(true)
     try {
-      setMessage(rescanMessage(await api.rescanSeries(seriesId)))
+      setMessage(rescanMessage(await api.rescanSeries(seriesId), series?.monitored !== false))
       load()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
@@ -365,7 +365,7 @@ function SeriesPage() {
         }
       >
         <div className="title-controls">
-          <Switch checked={series.monitored} onChange={toggleSeries} disabled={!canManage} label={<span className="has-tip">{t('Monitored')}<InfoTip text={t('Mediarium keeps searching for the episodes of this show that are monitored and missing. Switch it off to leave the show alone; files you already have stay where they are.')} /></span>} description={t('Keeps looking for missing episodes.')} />
+          <Switch checked={series.monitored} onChange={toggleSeries} disabled={!canManage} label={<span className="has-tip">{t('Monitored')}<InfoTip text={t('Mediarium keeps searching for the episodes of this show that are monitored and missing. Switch it off to leave the show alone; files you already have stay where they are.')} /></span>} description={series.monitored ? t('Keeps looking for missing episodes.') : t('Not looking for missing episodes. Files you already have stay where they are.')} />
           <ProfilePicker kind="series" itemId={seriesId}>
             <TitleTags kind="tv" id={seriesId} />
           </ProfilePicker>

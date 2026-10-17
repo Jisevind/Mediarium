@@ -62,6 +62,9 @@ const ArtistName = createContext('')
 // One artist: their albums, EPs and singles as cards. Each album can be
 // searched for now, chosen by hand from the releases found, and opened for its
 // tracklist and its own activity log.
+// Above this many missing albums, ask before searching them all.
+const ASK_ABOVE_ALBUMS = 10
+
 export default function MusicArtist() {
   // Another artist starts clean, so nothing of the last one stays on the page.
   return <ArtistPage key={useParams<{ id: string }>().id} />
@@ -186,14 +189,32 @@ function ArtistPage() {
   async function searchMissing() {
     const todo = albums.filter((a) => a.monitored && a.status === 'missing')
     if (todo.length === 0) return
+    if (todo.length > ASK_ABOVE_ALBUMS) {
+      const ok = await confirm({
+        title: plural(todo.length, 'Search for {n} album now?', 'Search for {n} albums now?'),
+        body: <p>{t("Each album is one search on every indexer. Many indexers allow only so many searches a day, so this may use up today's limit. The automatic searches go on as usual either way.")}</p>,
+        confirmLabel: plural(todo.length, 'Search {n} album', 'Search {n} albums'),
+      })
+      if (!ok) return
+    }
     setSearchingAll(true)
     let grabbed = 0
+    let failed = 0
     try {
-      for (const a of todo) grabbed += (await api.searchNowAlbum(a.id)).grabbed
-      toast.success(grabbed > 0 ? plural(grabbed, 'Started {n} download. Follow it in Activity.', 'Started {n} downloads. Follow them in Activity.') : t('Nothing suitable found yet. Mediarium keeps looking.'))
+      for (const a of todo) {
+        // One failed search does not stop the rest.
+        try {
+          grabbed += (await api.searchNowAlbum(a.id)).grabbed
+        } catch {
+          failed++
+        }
+      }
+      if (failed === todo.length) toast.error(t("Couldn't search for the missing albums. Try again in a moment."))
+      else {
+        toast.success(grabbed > 0 ? plural(grabbed, 'Started {n} download. Follow it in Activity.', 'Started {n} downloads. Follow them in Activity.') : t('Nothing suitable found yet. Mediarium keeps looking.'))
+        if (failed > 0) toast.error(plural(failed, "{n} album couldn't be searched.", "{n} albums couldn't be searched."))
+      }
       load()
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e))
     } finally {
       setSearchingAll(false)
     }
@@ -499,16 +520,16 @@ function AlbumPanel({ album, tab, onTab, onChanged }: { album: MusicAlbum; tab: 
   return (
     <div className="album-panel">
       <div className="seg">
-        <button className={tab === 'tracks' ? 'active' : ''} onClick={() => onTab('tracks')}>
+        <button aria-pressed={tab === 'tracks'} className={tab === 'tracks' ? 'active' : ''} onClick={() => onTab('tracks')}>
           {t('Tracks')}
         </button>
-        <button className={tab === 'releases' ? 'active' : ''} onClick={() => onTab('releases')}>
+        <button aria-pressed={tab === 'releases'} className={tab === 'releases' ? 'active' : ''} onClick={() => onTab('releases')}>
           {t('Releases')}
         </button>
-        <button className={tab === 'events' ? 'active' : ''} onClick={() => onTab('events')}>
+        <button aria-pressed={tab === 'events'} className={tab === 'events' ? 'active' : ''} onClick={() => onTab('events')}>
           {t('What happened')}
         </button>
-        <button className={tab === 'files' ? 'active' : ''} onClick={() => onTab('files')}>
+        <button aria-pressed={tab === 'files'} className={tab === 'files' ? 'active' : ''} onClick={() => onTab('files')}>
           {t('Files')}
         </button>
       </div>

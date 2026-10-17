@@ -81,7 +81,7 @@ function MoviePage() {
     setRescanning(true)
     try {
       const found = await api.rescanMovie(movie.libraryId)
-      const text = rescanMessage(found)
+      const text = rescanMessage(found, monitored !== false)
       if (found.looked || found.busy) toast.info(text)
       else toast.success(text)
       reload()
@@ -328,7 +328,7 @@ function MoviePage() {
         {inLibrary && movie.status === 'missing' && movie.libraryId && <SearchStatus kind="movie" id={movie.libraryId} />}
         {inLibrary && (
           <div className="title-controls">
-            <Switch checked={monitored ?? true} onChange={toggleMonitored} disabled={!can(me, 'manage')} label={<span className="has-tip">{t('Monitored')}<InfoTip text={t('Mediarium keeps searching and downloads a release when one turns up. Switch it off to leave this movie alone; files you already have stay where they are.')} /></span>} description={t('Keeps looking until it finds this movie.')} />
+            <Switch checked={monitored ?? true} onChange={toggleMonitored} disabled={!can(me, 'manage')} label={<span className="has-tip">{t('Monitored')}<InfoTip text={t('Mediarium keeps searching and downloads a release when one turns up. Switch it off to leave this movie alone; files you already have stay where they are.')} /></span>} description={monitored ?? true ? t('Keeps looking until it finds this movie.') : t('Not looking for this movie. Files you already have stay where they are.')} />
             <ProfilePicker kind="movie" itemId={movie.libraryId!}>
               {movie.libraryId && <TitleTags kind="movie" id={movie.libraryId} />}
             </ProfilePicker>

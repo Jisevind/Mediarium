@@ -3,13 +3,13 @@ package api
 import (
 	"context"
 	"log"
-	"regexp"
 	"strings"
 	"time"
 
 	"github.com/rdborg/mediarium/internal/automation"
 	"github.com/rdborg/mediarium/internal/indexers"
 	"github.com/rdborg/mediarium/internal/library"
+	"github.com/rdborg/mediarium/internal/metadata"
 	"github.com/rdborg/mediarium/internal/parser"
 	"github.com/rdborg/mediarium/internal/quality"
 	"github.com/rdborg/mediarium/internal/settings"
@@ -143,20 +143,62 @@ func (s *Server) hunt(ctx context.Context) {
 		return
 	}
 
-	blocked := s.blockedKeys()
+	if !anyIndexerAvailable(instances) {
+		return // all paused or out of searches for today: nothing would be asked
+	}
+
+	blocked := s.searchSkipKeys()
 	if s.moviesEnabled() {
+		// Only so many movies per run, each run going on where the last one
+		// stopped, so a big library neither empties an indexer's daily limit in
+		// one go nor leaves the same movies for last.
+		var todo []library.Movie
 		for _, m := range movies {
-			if s.huntMovie(ctx, m, instances, profiles, blocked, false) && !s.autoGrabRoom() {
+			if huntWantsMovie(m, s.profileForMovie(profiles, m)) {
+				todo = append(todo, m)
+			}
+		}
+		s.huntAt.mu.Lock()
+		start, n := huntWindow(len(todo), s.huntAt.movies, maxMovieSearchesPerHunt)
+		s.huntAt.movies = start + n
+		s.huntAt.mu.Unlock()
+		for i := 0; i < n; i++ {
+			if ctx.Err() != nil {
+				return // shutting down: not a search that failed
+			}
+			if s.huntMovie(ctx, todo[(start+i)%len(todo)], instances, profiles, blocked, false) && !s.autoGrabRoom() {
 				holdBack("hunt")
 				return
 			}
 		}
+	}
+	if ctx.Err() != nil {
+		return
 	}
 	if s.tvEnabled() {
 		s.huntTV(ctx, instances, profiles)
 	}
 	s.huntMusic(ctx, instances) // only while the music module is on
 	s.huntBooks(ctx)            // only while ebooks or audiobooks are on
+}
+
+// maxMovieSearchesPerHunt is how many movies one scheduled run searches for
+// (each is one search, and up to two more under other titles).
+const maxMovieSearchesPerHunt = 50
+
+// huntWantsMovie reports whether a scheduled run would search for the movie at
+// all: it is monitored and either missing and out, or below what its profile wants.
+func huntWantsMovie(m library.Movie, profile quality.Profile) bool {
+	if !m.Monitored {
+		return false
+	}
+	switch m.Status {
+	case library.StatusMissing:
+		return !unreleased(m.ReleaseDate)
+	case library.StatusDownloaded:
+		return !m.NoUpgrade && wantsUpgrade(profile, m.Quality, m.ReleaseTitle)
+	}
+	return false
 }
 
 // huntMovie searches for one movie if it is monitored (or force is set, for
@@ -288,7 +330,7 @@ func (s *Server) rssSync(ctx context.Context) {
 	}
 
 	outcomes := indexers.SearchAll(ctx, instances, "", movieCategory)
-	results := dropBlocked(s.freshOnly(indexers.MergeResults(outcomes)), s.blockedKeys())
+	results := dropBlocked(s.freshOnly(indexers.MergeResults(outcomes)), s.searchSkipKeys())
 
 	for _, m := range missing {
 		best := pickBestResult(s.limitMovieResults(ctx, m, s.profileForMovie(profiles, m), true, filterSources(matchingResults(results, m), s.sourcesFor(m.SourcePref))), s.profileForMovie(profiles, m), m.Year)
@@ -405,8 +447,6 @@ func pickUpgradeResult(results []indexers.Result, profile quality.Profile, curre
 	return best
 }
 
-var nonAlnum = regexp.MustCompile(`[^a-z0-9]+`)
-
 // matchesMovie does a normalized (lowercased, punctuation-stripped) title
 // comparison plus a year check when both sides have one. This is a
 // simplification, not fuzzy/edit-distance matching — a known
@@ -421,7 +461,7 @@ func matchesMovie(releaseTitle string, movie library.Movie) bool {
 	if release.Year != 0 && movie.Year != 0 && release.Year != movie.Year {
 		return false
 	}
-	if normalizeTitle(release.Title) == normalizeTitle(movie.Title) {
+	if sameTitle(release.Title, movie.Title) {
 		return true
 	}
 	// A release named by another title has to say its year when the movie has
@@ -437,14 +477,19 @@ func matchesMovie(releaseTitle string, movie library.Movie) bool {
 // treating "&" as "and" and ignoring a leading "The", "A" or "An", so
 // "The Lord of the Rings" matches "Lord.of.the.Rings" and "Fast & Furious"
 // matches "Fast.and.Furious".
+//
+// Accents are folded ("Pokémon" is "pokemon", the way release names write it)
+// and letters of other alphabets stay, so a title in Japanese or Cyrillic
+// compares as real text. It is "" only for a title with no letter or digit at
+// all; sameTitle never calls two such titles the same.
 func normalizeTitle(s string) string {
-	s = strings.ReplaceAll(strings.ToLower(s), "&", " and ")
-	s = strings.TrimSpace(nonAlnum.ReplaceAllString(s, " ")) // dots, dashes and the like count as spaces
-	for _, article := range []string{"the ", "a ", "an "} {
-		if strings.HasPrefix(s, article) {
-			s = s[len(article):]
-			break
-		}
-	}
-	return nonAlnum.ReplaceAllString(s, "")
+	return strings.ReplaceAll(metadata.TitleKey(s), " ", "")
+}
+
+// sameTitle reports whether two titles are the same by normalizeTitle. An
+// empty key (a title with nothing to compare) matches nothing, not even
+// another empty one.
+func sameTitle(a, b string) bool {
+	key := normalizeTitle(a)
+	return key != "" && key == normalizeTitle(b)
 }

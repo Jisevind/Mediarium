@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { api, can, isAdmin, type ActivityEntry, type BlocklistEntry, type QueueItem, type TitleEvent, type WantedItem } from '../api'
+import { api, can, isAdmin, type ActivityEntry, type BlocklistEntry, type QueueItem, type TitleEvent, type WantedRow } from '../api'
 import { useAuth } from '../AuthContext'
 import Cover from '../components/Cover'
 import Icon, { type IconName } from '../components/Icon'
@@ -70,11 +70,27 @@ interface Waiting {
 }
 
 // The titles automation is still looking for: a movie is one entry, and a show
-// is one entry however many of its episodes are missing.
-function groupWanted(wanted: WantedItem[]): Waiting[] {
+// is one entry however many of its episodes are missing. The server already
+// groups them like that (one row per show), a page at a time.
+function groupWanted(wanted: WantedRow[]): Waiting[] {
   const out: Waiting[] = []
   const shows = new Map<number, Waiting>()
   for (const w of wanted) {
+    if (w.kind === 'show') {
+      out.push({
+        key: `show-${w.seriesId}`,
+        kind: 'tv',
+        to: `/series/${w.seriesId}`,
+        title: w.title,
+        subtitle: w.subtitle,
+        lastSearch: w.lastSearch,
+        lastSearchAt: w.lastSearchAt,
+        posterUrl: w.posterUrl,
+        year: w.year,
+        episodes: w.episodes ?? 1,
+      })
+      continue
+    }
     if (w.kind === 'movie') {
       out.push({
         key: `movie-${w.id}`,
@@ -112,6 +128,10 @@ function groupWanted(wanted: WantedItem[]): Waiting[] {
   }
   return out
 }
+
+// How many waiting titles Activity reads: enough for the 20 it lists, with
+// room for the ones that are downloading already and so are left out.
+const WAITING_READ = 60
 
 const itemLink = (q: QueueItem) => (q.bookId ? `/book/${q.bookId}` : q.albumId ? `/music/album/${q.albumId}` : q.seriesId ? `/series/${q.seriesId}` : q.tmdbId ? `/title/${q.tmdbId}` : undefined)
 
@@ -322,14 +342,17 @@ function QueueRow({ q, admin, busy, act, stop, remove, picked, onPick }: RowProp
           </div>
         )}
         {note && <div className="qnote">{note}</div>}
-        {q.error && <div className="error-text qerror">{q.error}</div>}
+        {q.note && <div className="qnote">{st(q.note)}</div>}
+        {q.error && (q.status === 'completed' ? <div className="qnote">{st(q.error)}</div> : <div className="error-text qerror">{st(q.error)}</div>)}
         {q.status === 'failed' && <FailureTips q={q} link={link} />}
         {q.status === 'conflict' && q.destPath && <div className="qrelease">{t('A file already exists at {path}', { path: q.destPath })}</div>}
         <QueueDetails q={q} admin={admin} />
         {(q.status === 'completed' || q.status === 'failed' || q.status === 'stopped') && (
           <small className="qwhen">
             {q.status === 'completed'
-              ? t('Imported {when}', { when: timeAgo(q.completedAt || q.addedAt) })
+              ? q.error
+                ? t('Finished {when}', { when: timeAgo(q.completedAt || q.addedAt) })
+                : t('Imported {when}', { when: timeAgo(q.completedAt || q.addedAt) })
               : q.status === 'stopped'
                 ? t('Stopped {when}', { when: timeAgo(q.completedAt || q.addedAt) })
                 : t('Failed {when}', { when: timeAgo(q.completedAt || q.addedAt) })}
@@ -426,7 +449,9 @@ export default function Queue() {
   const admin = isAdmin(useAuth().user)
   // The tab, the history group and the history search live in the address, so Back returns to them.
   const [ui, patchUi] = useUrlState({ tab: 'queue', group: 'All', q: '' })
-  const tab: Tab = (['queue', 'clients', 'history', 'requests', 'reports', 'blocklist', 'bin'] as const).find((x) => x === ui.tab) ?? 'queue'
+  // A link to a tab this account cannot see (the administrator's tabs) opens the queue.
+  const tabsHere = admin ? (['queue', 'clients', 'history', 'requests', 'reports', 'blocklist', 'bin'] as const) : (['queue', 'history', 'requests', 'reports'] as const)
+  const tab: Tab = tabsHere.find((x) => x === ui.tab) ?? 'queue'
   const setTab = (v: Tab) => patchUi({ tab: v })
   const [pendingRequests, setPendingRequests] = useState(0)
   const [addingByHand, setAddingByHand] = useState(false)
@@ -453,13 +478,16 @@ export default function Queue() {
   // Titles still waiting for a release, with why, so an empty queue explains itself.
   const musicOn = useModules().on('music')
   const [allWaiting, setWaiting] = useState<Waiting[]>([])
+  // Only the first titles are read (the list shows 20); waitingMore is how many more there are.
+  const [waitingMore, setWaitingMore] = useState(0)
   const loadWaiting = useCallback(() => {
     Promise.all([
-      api.getWanted('missing').catch(() => []),
+      api.getWantedPage('missing', { limit: WAITING_READ }).catch(() => null),
       musicOn ? api.musicWanted('missing').catch(() => []) : Promise.resolve([]),
-    ]).then(([wanted, albums]) =>
+    ]).then(([wanted, albums]) => {
+      setWaitingMore(wanted ? wanted.total - wanted.rows.length : 0)
       setWaiting([
-        ...groupWanted(wanted),
+        ...groupWanted(wanted?.rows ?? []),
         ...albums.map((a) => ({
           key: `album-${a.id}`,
           kind: 'music' as const,
@@ -471,8 +499,8 @@ export default function Queue() {
           posterUrl: a.coverUrl,
           year: a.year || undefined,
         })),
-      ]),
-    )
+      ])
+    })
   }, [musicOn])
   useEffect(loadWaiting, [loadWaiting])
   // The Reports tab shows once reports are on (or the account already made some).
@@ -497,24 +525,41 @@ export default function Queue() {
   const load = useCallback(async () => {
     const mine = ++latest.current
     try {
-      const [q, a, b] = await Promise.all([api.listQueue(), api.listActivity({ limit: actLimit, q: searchedQ.trim() }), admin ? api.listBlocklist(blLimit) : Promise.resolve({ items: [] as BlocklistEntry[], total: 0 })])
+      // Only the queue needs the fast clock; the history and the blocklist
+      // are read while their own tab is open (the blocklist count is kept
+      // fresh more slowly by loadBlocklistCount below).
+      const [q, a, b] = await Promise.all([
+        api.listQueue(),
+        tab === 'history' ? api.listActivity({ limit: actLimit, q: searchedQ.trim() }) : Promise.resolve(null),
+        admin && tab === 'blocklist' ? api.listBlocklist(blLimit) : Promise.resolve(null),
+      ])
       if (mine !== latest.current) return
       setQueue(q)
-      setActivity(a)
-      setBlocklist((cur) => (JSON.stringify(cur) === JSON.stringify(b.items) ? cur : b.items)) // an unchanged list is not drawn again
-      setBlocklistTotal(b.total)
+      if (a) setActivity(a)
+      if (b) {
+        setBlocklist((cur) => (JSON.stringify(cur) === JSON.stringify(b.items) ? cur : b.items)) // an unchanged list is not drawn again
+        setBlocklistTotal(b.total)
+      }
       setError('')
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setLoaded(true)
     }
-  }, [admin, actLimit, blLimit, searchedQ])
+  }, [admin, tab, actLimit, blLimit, searchedQ])
 
   useEffect(() => {
     void load()
   }, [load])
   useLive(load, 3000)
+
+  // The number next to the Blocklist tab.
+  const loadBlocklistCount = useCallback(() => {
+    if (!admin) return
+    api.listBlocklist(1).then((b) => setBlocklistTotal(b.total)).catch(() => undefined)
+  }, [admin])
+  useEffect(loadBlocklistCount, [loadBlocklistCount])
+  useLive(loadBlocklistCount, 30000)
 
   const act = useCallback(
     async (item: QueueItem, fn: () => Promise<unknown>, done: string, doing: Doing = 'other') => {
@@ -623,6 +668,7 @@ export default function Queue() {
 
   const sections = useMemo(() => groupQueue(queue), [queue])
   const waiting = useMemo(() => stillWaiting(allWaiting, queue), [allWaiting, queue])
+  const waitingCount = waiting.length + waitingMore
   const bulk = useMemo(() => bulkState(queue), [queue])
   const { inProgress, failed, decision, stopped, finished: completed } = sections
   const needsAttention = inProgress.length + decision.length + failed.length + stopped.length
@@ -714,43 +760,50 @@ export default function Queue() {
           </div>
         )}
         <div className="seg">
-          <button className={tab === 'queue' ? 'active' : ''} onClick={() => setTab('queue')}>
+          <button aria-pressed={tab === 'queue'} className={tab === 'queue' ? 'active' : ''} onClick={() => setTab('queue')}>
             {t('Queue')} <small>({needsAttention})</small>
           </button>
           {admin && (
-            <button className={tab === 'clients' ? 'active' : ''} onClick={() => setTab('clients')} title={t('The built-in Usenet downloader and torrent client, and any download client or debrid account you connected')}>
+            <button aria-pressed={tab === 'clients'} className={tab === 'clients' ? 'active' : ''} onClick={() => setTab('clients')} title={t('The built-in Usenet downloader and torrent client, and any download client or debrid account you connected')}>
               {t('Download clients')}
             </button>
           )}
-          <button className={tab === 'history' ? 'active' : ''} onClick={() => setTab('history')}>
+          <button aria-pressed={tab === 'history'} className={tab === 'history' ? 'active' : ''} onClick={() => setTab('history')}>
             {t('History')} {completed.length > 0 && <small>({completed.length})</small>}
           </button>
-          <button className={tab === 'requests' ? 'active' : ''} onClick={() => setTab('requests')}>
+          <button aria-pressed={tab === 'requests'} className={tab === 'requests' ? 'active' : ''} onClick={() => setTab('requests')}>
             {t('Requests')} {pendingRequests > 0 && <small>({pendingRequests})</small>}
           </button>
           {(admin || reportsOn || openReports > 0) && (
-            <button className={tab === 'reports' ? 'active' : ''} onClick={() => setTab('reports')}>
+            <button aria-pressed={tab === 'reports'} className={tab === 'reports' ? 'active' : ''} onClick={() => setTab('reports')}>
               {t('Reports')} {openReports > 0 && <small>({openReports})</small>}
             </button>
           )}
           {admin && (
-            <button className={tab === 'blocklist' ? 'active' : ''} onClick={() => setTab('blocklist')}>
+            <button aria-pressed={tab === 'blocklist'} className={tab === 'blocklist' ? 'active' : ''} onClick={() => setTab('blocklist')}>
               {t('Blocklist')} <small>({blocklistTotal})</small>
             </button>
           )}
           {admin && (
-            <button className={tab === 'bin' ? 'active' : ''} onClick={() => setTab('bin')}>
+            <button aria-pressed={tab === 'bin'} className={tab === 'bin' ? 'active' : ''} onClick={() => setTab('bin')}>
               {t('Recycle bin')}
             </button>
           )}
         </div>
       </div>
-      {error && <p className="error-text">{error}</p>}
+      {error && (
+        <p className="error-text">
+          {error}{' '}
+          <button type="button" className="link-btn" onClick={() => void load()}>
+            {t('Try again')}
+          </button>
+        </p>
+      )}
 
       {tab === 'queue' && (
         <>
           {!loaded && <Loading height={96} onRetry={() => void load()} />}
-          {loaded && (
+          {loaded && !error && (
             <div className="act-board">
               <div className="ab-cell">
                 <a href="#act-progress" className={`ab-slot ab-live${downloading.length ? ' on' : ''}`}>
@@ -775,8 +828,8 @@ export default function Queue() {
                 <InfoTip className="ab-tip" text={t('Downloads that failed, were stopped, or need you to decide something, such as a file that already exists. Open one to retry it or remove it.')} />
               </div>
               <div className="ab-cell">
-                <a href="#act-waiting" className={`ab-slot ab-want${waiting.length ? ' on' : ''}`}>
-                  <b>{waiting.length}</b>
+                <a href="#act-waiting" className={`ab-slot ab-want${waitingCount ? ' on' : ''}`}>
+                  <b>{waitingCount}</b>
                   <span>{t('Waiting for a release')}</span>
                 </a>
                 <InfoTip className="ab-tip" text={t('Titles you are monitoring that have no release yet. Mediarium keeps searching and starts a download when one turns up.')} />
@@ -790,11 +843,11 @@ export default function Queue() {
               </div>
             </div>
           )}
-          {loaded && needsAttention === 0 && (
+          {loaded && !error && needsAttention === 0 && (
             <div className="act-quiet">
               <Icon name="download" size={20} />
               <p>
-                {t('Nothing is downloading right now.')} {waiting.length > 0 ? t('The titles below are waiting for a release.') : t('Add something and it shows up here.')}
+                {t('Nothing is downloading right now.')} {waitingCount > 0 ? t('The titles below are waiting for a release.') : t('Add something and it shows up here.')}
                 {completed.length > 0 && (
                   <>
                     {' '}
@@ -890,7 +943,7 @@ export default function Queue() {
           {waiting.length > 0 && (
             <section id="act-waiting" className="waiting-list">
               <h2>
-                {t('Waiting for a release')} <small>({waiting.length})</small>
+                {t('Waiting for a release')} <small>({waitingCount})</small>
               </h2>
               <ul>
                 {waiting.slice(0, 20).map((w) => {
@@ -914,9 +967,9 @@ export default function Queue() {
                   )
                 })}
               </ul>
-              {waiting.length > 20 && (
+              {waitingCount > 20 && (
                 <Link to="/wanted" className="btn btn-sm">
-                  {t('See all {n} in Upcoming → Wanted', { n: waiting.length })}
+                  {t('See all {n} in Upcoming → Wanted', { n: waitingCount })}
                 </Link>
               )}
             </section>
@@ -942,7 +995,7 @@ export default function Queue() {
           <div className="act-tools">
             <div className="seg">
               {groups.map((g) => (
-                <button key={g} className={group === g ? 'active' : ''} onClick={() => setGroup(g)}>
+                <button key={g} aria-pressed={group === g} className={group === g ? 'active' : ''} onClick={() => setGroup(g)}>
                   {GROUP_LABEL[g] ?? g}
                 </button>
               ))}
@@ -963,7 +1016,7 @@ export default function Queue() {
                     <span className={`tl-icon tone-${e.tone}`}>
                       <Icon name={e.icon} size={16} />
                     </span>
-                    <span className="tl-msg">{a.link ? <Link to={a.link}>{st(a.message)}</Link> : a.message}</span>
+                    <span className="tl-msg">{a.link ? <Link to={a.link}>{st(a.message)}</Link> : st(a.message)}</span>
                     <time className="tl-time" title={new Date(a.createdAt).toLocaleString(locale())}>
                       {timeAgo(a.createdAt)}
                     </time>
@@ -1042,7 +1095,7 @@ export default function Queue() {
                   {blocklist.map((b) => (
                     <tr key={b.id}>
                       <td className="mono-cell">{b.releaseTitle}</td>
-                      <td style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>{b.reason}</td>
+                      <td style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>{st(b.reason)}</td>
                       <td>
                         <button
                           className="btn-sm"

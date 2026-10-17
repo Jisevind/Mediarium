@@ -21,8 +21,8 @@ func onePieceEpisodes() []library.Episode {
 func TestCompleteSeriesImportPlacesFilesByAbsoluteNumber(t *testing.T) {
 	const (
 		leftOut       = "Left out 1 episode that the movie database doesn't list for this show."
-		noMatch       = leftOut + " Their numbers don't match the movie database's list, so nothing was guessed. Rename the files to the season and episode shown on the show's page and import the folder again."
-		switchToAnime = leftOut + " Their names carry the episode number counted from the start of the show, so set this show's Episode numbering to Anime and import the folder again."
+		noMatch       = leftOut + " Its number doesn't match the movie database's list, so nothing was guessed. Rename the file to the season and episode shown on the show's page and import the folder again."
+		switchToAnime = leftOut + " Its name carries the episode number counted from the start of the show, so set this show's Episode numbering to Anime and import the folder again."
 	)
 	tests := []struct {
 		name         string

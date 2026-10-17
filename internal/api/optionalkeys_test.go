@@ -8,7 +8,6 @@ import (
 	"github.com/rdborg/mediarium/internal/config"
 	"github.com/rdborg/mediarium/internal/crypto"
 	"github.com/rdborg/mediarium/internal/settings"
-	"github.com/rdborg/mediarium/internal/store"
 )
 
 // With a secret.key that does not match the database, the saved API keys
@@ -17,7 +16,7 @@ import (
 func TestNewStartsWhenSavedAPIKeysCannotBeDecrypted(t *testing.T) {
 	dir := t.TempDir()
 	cfg := config.Config{ConfigDir: dir, DownloadsDir: dir, DownloadsIncomplete: dir, DownloadsComplete: dir, MoviesDir: dir}
-	db, err := store.Open(filepath.Join(dir, "app.db"))
+	db, err := api.OpenTestDB(filepath.Join(dir, "app.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

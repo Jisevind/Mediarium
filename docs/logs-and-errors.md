@@ -19,6 +19,8 @@ It's not a copy of the log file. Normal activity (a movie was added, a download 
 | Notifications | a message could not be delivered |
 | Updates and system | a check for updates or an update failed, Mediarium restarted itself |
 
+If the database is busy with a long write when a problem happens, the problem waits and is saved a few seconds later (it tries up to five times), so a busy moment does not lose it.
+
 Every kind has a fixed name (a code, such as `usenet.too_many_connections`). The names, what each one means and what to try are in the [list of problem codes](reference/problem-codes.md).
 
 ## The page

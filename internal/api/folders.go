@@ -269,7 +269,10 @@ func (s *Server) folderPayloadFor(path string) folderPayload {
 
 // insideWarning says which folders inside a library folder can't be written to.
 func insideWarning(bad []string) string {
-	return fmt.Sprintf("%s inside can't be written to, such as %s. Mediarium can't add or upgrade files there. Give the user Mediarium runs as (its PUID and PGID) write access to them, for example by changing their owner.", plural(len(bad), "folder"), bad[0])
+	if len(bad) == 1 {
+		return fmt.Sprintf("A folder inside can't be written to: %s. Mediarium can't add or upgrade files there. Give the user Mediarium runs as (its PUID and PGID) write access to it, for example by changing its owner.", bad[0])
+	}
+	return fmt.Sprintf("There are %d folders inside that can't be written to, such as %s. Mediarium can't add or upgrade files there. Give the user Mediarium runs as (its PUID and PGID) write access to them, for example by changing their owner.", len(bad), bad[0])
 }
 
 // insideWorthChecking is false for the root of the filesystem and the

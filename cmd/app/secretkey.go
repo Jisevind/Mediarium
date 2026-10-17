@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/rdborg/mediarium/internal/crypto"
 )
@@ -20,20 +21,25 @@ func loadSecretKey(db *sql.DB, path string) (*crypto.Box, error) {
 			return nil, fmt.Errorf("check the database for stored secrets: %w", err)
 		}
 		if used {
-			return nil, errors.New("app.db has stored secrets but secret.key is missing: put your old secret.key back in /config")
+			return nil, fmt.Errorf("app.db has saved passwords and keys but there is no secret.key in %s: put your old secret.key back in that folder, or if it is gone for good, move app.db away to start again", filepath.Dir(path))
 		}
 	}
 	return crypto.LoadOrCreateKey(path)
 }
 
 // databaseHoldsSecrets reports whether the database already has encrypted
-// settings, indexers or download clients, or any user.
+// settings, indexers, download clients (Usenet servers among them), VPN
+// connections, notification targets with a secret or media servers with a
+// token, or any user.
 func databaseHoldsSecrets(db *sql.DB) (bool, error) {
 	for _, q := range []string{
 		`SELECT EXISTS(SELECT 1 FROM settings WHERE encrypted = 1)`,
 		`SELECT EXISTS(SELECT 1 FROM users)`,
 		`SELECT EXISTS(SELECT 1 FROM indexers)`,
 		`SELECT EXISTS(SELECT 1 FROM download_clients)`,
+		`SELECT EXISTS(SELECT 1 FROM vpn_configs)`,
+		`SELECT EXISTS(SELECT 1 FROM notification_targets WHERE secrets_encrypted <> '' OR COALESCE(bot_token_encrypted, '') <> '')`,
+		`SELECT EXISTS(SELECT 1 FROM media_servers WHERE token_encrypted <> '')`,
 	} {
 		var found bool
 		if err := db.QueryRow(q).Scan(&found); err != nil {

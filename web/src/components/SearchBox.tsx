@@ -5,6 +5,7 @@ import { useModules } from '../ModulesContext'
 import AddMusicDialog from './AddMusicDialog'
 import { BookAddDialog } from './BookDiscover'
 import { artistKind } from './artistKind'
+import { libraryFirst } from '../searchOrder'
 import Icon from './Icon'
 import { MusicFallback, PosterFallback } from './PosterCard'
 import { resultState } from './state'
@@ -58,7 +59,8 @@ export default function SearchBox() {
       api
         .discoverSearch(term, ctl.signal)
         .then((r) => {
-          setResults(r.slice(0, 8))
+          // Library titles are drawn first, so the arrow keys step in that order too.
+          setResults(libraryFirst(r.slice(0, 8)))
           setError('')
           setActive(-1)
         })
@@ -204,6 +206,7 @@ export default function SearchBox() {
     return (
       <div
         key={`${r.kind}-${r.tmdbId}`}
+        id={`searchbox-opt-${i}`}
         className={`searchbox-row${i === active ? ' active' : ''}`}
         role="option"
         aria-selected={i === active}
@@ -255,6 +258,7 @@ export default function SearchBox() {
         role="combobox"
         aria-expanded={showPanel}
         aria-controls="searchbox-results"
+        aria-activedescendant={showPanel && active >= 0 ? `searchbox-opt-${active}` : undefined}
         placeholder={placeholder}
         value={q}
         onChange={(e) => {
@@ -291,6 +295,7 @@ export default function SearchBox() {
           {artists?.map((a, i) => (
             <div
               key={a.mbid}
+              id={`searchbox-opt-${titleCount + i}`}
               className={`searchbox-row${titleCount + i === active ? ' active' : ''}`}
               role="option"
               aria-selected={titleCount + i === active}
@@ -326,6 +331,7 @@ export default function SearchBox() {
           {bookHits?.map((b, i) => (
             <div
               key={b.key}
+              id={`searchbox-opt-${artistEnd + i}`}
               className={`searchbox-row${artistEnd + i === active ? ' active' : ''}`}
               role="option"
               aria-selected={artistEnd + i === active}

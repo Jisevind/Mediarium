@@ -121,6 +121,7 @@ func (s *Server) handleUploadBookCover(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	allowLongUpload(w)
 	r.Body = http.MaxBytesReader(w, r.Body, books.MaxOwnCoverBytes+(1<<20))
 	if err := r.ParseMultipartForm(1 << 20); err != nil {
 		var tooBig *http.MaxBytesError

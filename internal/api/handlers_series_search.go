@@ -35,6 +35,9 @@ func matchesShow(releaseTitle string, series library.Series) bool {
 		return false
 	}
 	want := normalizeTitle(rel.Title)
+	if want == "" {
+		return false // nothing to compare: a name with no readable title is nobody's
+	}
 	if want == normalizeTitle(series.Title) {
 		return true
 	}
@@ -85,7 +88,7 @@ func matchesShowFor(releaseTitle string, series library.Series, season int) bool
 	if season != 0 {
 		return false
 	}
-	words := strings.Fields(nonAlnum.ReplaceAllString(strings.ToLower(parser.Parse(releaseTitle).Title), " "))
+	words := strings.Fields(metadata.TitleKey(parser.Parse(releaseTitle).Title))
 	if startsWithWords(words, series.Title) {
 		return true
 	}
@@ -102,7 +105,7 @@ func matchesShowFor(releaseTitle string, series library.Series, season int) bool
 // startsWithWords reports whether words (lower case, already split) begin with
 // all the words of title and go on after them.
 func startsWithWords(words []string, title string) bool {
-	show := strings.Fields(nonAlnum.ReplaceAllString(strings.ToLower(title), " "))
+	show := strings.Fields(metadata.TitleKey(title))
 	if len(show) == 0 || len(words) <= len(show) {
 		return false
 	}
@@ -203,7 +206,7 @@ func (s *Server) handleSeriesSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	profile := s.profileForSeries(profiles, series)
-	blocked := s.blockedKeys()
+	blocked := s.searchSkipKeys()
 	sizeReasons := s.tvSizeRejections(r.Context(), series, profile)
 	out := []searchResultPayload{}
 	for _, res := range merged {
@@ -295,16 +298,14 @@ func (s *Server) grabFromSearchTV(w http.ResponseWriter, r *http.Request, req gr
 
 // bestTVMatch picks the TMDB show for a parsed release title: an exact
 // normalized-title match wins (preferring the release's year when it has
-// one), falling back to TMDB's own top result — same spirit as
-// bestTMDBMatch for movies.
+// one). When no show is named like the release it returns nil rather than
+// take TMDB's top result, the same as bestTMDBMatch for movies.
 func bestTVMatch(shows []metadata.Show, release parser.Release) *metadata.Show {
-	if len(shows) == 0 {
-		return nil
-	}
-	want := normalizeTitle(release.Title)
 	var exact *metadata.Show
+	want := normalizeTitle(release.Title)
 	for i := range shows {
-		if normalizeTitle(shows[i].Name) != want {
+		name := normalizeTitle(shows[i].Name)
+		if want == "" || (want != name && !withCountryTag(want, name, release.Year, shows[i].Year())) {
 			continue
 		}
 		if release.Year != 0 && shows[i].Year() == release.Year {
@@ -314,8 +315,5 @@ func bestTVMatch(shows []metadata.Show, release parser.Release) *metadata.Show {
 			exact = &shows[i]
 		}
 	}
-	if exact != nil {
-		return exact
-	}
-	return &shows[0]
+	return exact // none named like the release: no guess, the person picks
 }

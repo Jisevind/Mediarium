@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strings"
 	"unicode"
+
+	"golang.org/x/text/unicode/norm"
 )
 
 // Release names are written with the title a film or show has where the release
@@ -321,7 +323,17 @@ func titleKeyWith(s string, spelled map[rune]string) string {
 			continue
 		}
 		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			// Any other letter with a mark on it ("ǎ", "ṽ") loses the mark; a letter
+			// of another alphabet stays as it is.
+			if r > unicode.MaxASCII {
+				if base := stripMarks(r); base != "" {
+					b.WriteString(base)
+					continue
+				}
+			}
 			b.WriteRune(r)
+		} else if unicode.Is(unicode.Mn, r) {
+			// A mark on its own (the title was typed in decomposed form): drop it.
 		} else {
 			b.WriteByte(' ') // dots, dashes and the like count as spaces
 		}
@@ -333,6 +345,25 @@ func titleKeyWith(s string, spelled map[rune]string) string {
 		}
 	}
 	return key
+}
+
+// stripMarks gives a Latin or Greek letter without its accent marks ("ǎ" as "a",
+// "ά" as "α"), or "" when it has none or is a letter of another alphabet (a
+// mark can change the letter there: "й" is not "и").
+func stripMarks(r rune) string {
+	if !unicode.Is(unicode.Latin, r) && !unicode.Is(unicode.Greek, r) {
+		return ""
+	}
+	var b strings.Builder
+	for _, d := range norm.NFD.String(string(r)) {
+		if !unicode.Is(unicode.Mn, d) {
+			b.WriteRune(d)
+		}
+	}
+	if b.String() == string(r) {
+		return ""
+	}
+	return b.String()
 }
 
 // TitleKey reduces a title to what is compared when two titles are said to be

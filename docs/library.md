@@ -31,6 +31,8 @@ A rescan won't believe that everything is gone when the library folder itself is
 
 ## Where a title's files are
 
+Only administrators see where files lie on the server: everyone else sees a title's file by name only (`Heat (1995).mkv`), not its folder.
+
 On a movie's page and on a show's page, administrators see a line **Folder for its files** with the full folder and a **Copy** button. It is where you put files by hand. For a movie it is the folder its file is in; when it has no file yet, it is the folder Mediarium would create for it (such as `/movies/The Matrix (1999)`), or the one folder in your movies folder that is named like the movie. For a show it is the show folder above the season folders where its episodes are, or the one Mediarium would create (such as `/tv/Show Name (2008)`). A title kept in another folder, or a second copy, shows the folder it really uses.
 
 The path is the one Mediarium sees inside its container. With Docker it can differ from the path on your computer or NAS: the volume mapping in your compose file says which host folder is behind it (for example `/mnt/media/movies:/movies` makes `/movies/The Matrix (1999)` the folder `/mnt/media/movies/The Matrix (1999)` on the host). Put a video file there and press **Rescan files** on the movie's page to add it to the movie. For episodes you pasted in by hand, use **Import existing** on the Library page.
@@ -39,8 +41,8 @@ The path is the one Mediarium sees inside its container. With Docker it can diff
 
 If you renamed or moved files yourself and the title now shows as missing, you can point it at the new place. Next to the **Folder for its files** line (administrators only):
 
-- **Locate the file** on a movie's page opens a small browser of your library folders. Click through the folders and pick the video file, and the movie gets that file and counts as downloaded. **Look in a different folder** in the same window reads a folder you pick instead and gives the movie the biggest video in it (trailers, extras and samples don't count). The file has to be inside one of your movie or TV folders, has to be a real video file, and can't already belong to another title. A movie that is being downloaded is left alone.
-- **Change folder** on a show's page lets you pick the show's new folder, inside one of your TV folders. Mediarium reads the episode files in it the same way **Import existing** reads a show folder (season and episode in the name, and for an anime also the number counted from the first episode), attaches the files it can place to the episodes the show has, and tells you how many it found, for example "Found 22 of 24 episodes in /tv/New Folder. 2 are still missing." Files it couldn't place are counted in the message. An episode whose old file is gone takes the file from the new folder; an episode whose old file is still there, and every episode the new folder has no file for, stays as it is. A show doesn't keep a folder of its own: it lives where its episodes' files are, so the folder shown on the page follows the files that were attached. If nothing in the folder can be placed, nothing changes.
+- **Locate the file** on a movie's page opens a small browser of your library folders. Click through the folders and pick the video file, and the movie gets that file and counts as downloaded. **Look in a different folder** in the same window reads a folder you pick instead and gives the movie the biggest video in it (trailers, extras and samples don't count). The file has to be inside one of your movie or TV folders, has to be a real video file, and can't already belong to another title (a movie, or an episode of a show). The same goes for the files **Look in a different folder** finds: ones that belong to another title, or that are links leading out of your library, are skipped. A movie that is being downloaded is left alone. The quality is read again from the new file's name (and its folders): a name that doesn't say leaves the movie **Not stated** rather than keeping the old file's quality. If the folder Mediarium remembers for a title is gone, the browser opens at the nearest folder above it.
+- **Change folder** on a show's page lets you pick the show's new folder, inside one of your TV folders. Mediarium reads the episode files in it the same way **Import existing** reads a show folder (season and episode in the name, and for an anime also the number counted from the first episode), attaches the files it can place to the episodes the show has, and tells you how many it found, for example "Found 22 of 24 episodes in /tv/New Folder. 2 are still missing." Files it couldn't place are counted in the message. An episode whose old file is gone takes the file from the new folder; an episode whose old file is still there, and every episode the new folder has no file for, stays as it is. A show doesn't keep a folder of its own: it lives where its episodes' files are, so the folder shown on the page follows the files that were attached. Files that already belong to a movie or to an episode of another show, and files that are links leading out of your library folders, are left out and counted with the ones it could not place. When two files in the folder are the same episode, the bigger one is used. A show that is being downloaded right now is left alone: wait for the downloads or cancel them first. If nothing in the folder can be placed, nothing changes.
 
 Neither button moves, renames or deletes anything, and the browser only shows your library folders and the downloads folder (never anything outside them, and a link that leads out of them is not followed). Scripts: `GET /api/library/browse?path=`, `POST /api/movies/{id}/locate-file`, `POST /api/movies/{id}/locate-folder` and `POST /api/series/{id}/change-folder`, each taking a full `path`.
 
@@ -155,6 +157,8 @@ Scripts: `GET /api/series/{id}/numbering` answers with `anilist`, `anidb`, `mal`
 
 ## Specials
 
+When TMDB drops or renumbers an episode (two parts merged, a placeholder removed), the daily refresh removes the old entry if it is still missing and has no file. An episode that has a file, or is being downloaded, is never removed. If TMDB sends a list that looks wrong (empty, or less than half of what you have), nothing is removed.
+
 A show's specials (TMDB's season 0: behind-the-scenes episodes, Christmas specials, OVAs) are listed on its page as **Specials**, below the other seasons. They start **unmonitored** and don't count towards how much of the show you have until you ask for them. Switching a whole show on or off, or searching the whole show, leaves them alone. Shows already in your library pick up their specials at the next refresh.
 
 To get a special, tick its box: from then on it's looked for like any other episode. **Search** on a special looks for it straight away, ticked or not. Specials are looked for one at a time, never as a pack, and in two ways:
@@ -244,6 +248,21 @@ Scripts: `GET /api/settings/file-permissions` and `PUT /api/settings/file-permis
 
 **Settings > Library > File names and importing** picks how imported files are named. Plex, Jellyfin / Emby, Kodi and Simple each name movies and episodes the way that media player likes. **Custom** lets you write your own. The page shows a preview of a made-up movie and episode as you type.
 
+### Keep the original file names
+
+Tick **Keep the original file names** if you'd rather not have files renamed. Files keep the name they came with. Folders are still named after the movie or show, so media servers find them. A movie lands in `/movies/Example Movie (2024)/Example.Movie.2024.1080p.BluRay-GROUP.mkv`, and an episode in `/tv/Example Show (2023)/Season 01/` under its own file name. In a season pack, each episode keeps its own file name.
+
+- Subtitles that come with the release get the same name as the video, with the language added (`Example.Movie.2024.1080p.BluRay-GROUP.en.srt`).
+- Characters that aren't allowed in file names are still removed or replaced, as set under **Illegal characters in names**.
+- If a file with that name is already in the folder, **If a file already exists** decides what happens, the same as for any other import.
+- Some Usenet posts come with random names, like `a8f7d6e5c4b3.mkv`, or names too short to mean anything, like `abc.mkv`. Those files are named by the naming preset instead, so you never end up with a library full of gibberish.
+- **Rename existing files** renames nothing while this is on.
+- The preset still matters: it names files with random names, and Custom formats can use `{Original Filename}` to put the original name inside a name of your own.
+
+The switch is off unless you turn it on. In the settings file and with `PUT /api/settings` it is `keepOriginalNames` (`true` or `false`); the stored setting is `library.keep_original_names`.
+
+### Custom formats
+
 With **Custom** you can:
 
 - **Start from** a ready-made format (Plex, Jellyfin / Emby, Kodi, *Detailed, like Radarr and Sonarr*, or *Plex with editions*) and change it.
@@ -263,7 +282,9 @@ A title with no name gets a folder and file called `tmdb-` and its TMDB number, 
 | Ids | `{TmdbId}`, `{ImdbId}`, `{TvdbId}` |
 | Quality | `{Quality Full}` (for example `Bluray-1080p Proper`), `{Quality Title}`, `{Quality Proper}`, `{Quality}`, `{Source}` |
 | Media info | `{MediaInfo Simple}`, `{MediaInfo Full}`, `{MediaInfo VideoCodec}`, `{MediaInfo AudioCodec}`, `{MediaInfo AudioLanguages}`, `{MediaInfo VideoDynamicRange}`, `{MediaInfo VideoDynamicRangeType}`, `{MediaInfo 3D}`, `{Codec}` |
-| Release | `{Release Group}`, `{Custom Formats}` |
+| Release | `{Release Group}`, `{Custom Formats}`, `{Original Title}`, `{Original Filename}` |
+
+`{Original Filename}` is the name the file came with, without its folder or extension: `Example.Movie.2024.1080p.BluRay-GROUP`. `{Original Title}` is the name of the whole release, which for a season pack is the pack's name rather than the episode file's. `{Movie Title} ({Year}) - {Original Filename}` gives `Example Movie (2024) - Example.Movie.2024.1080p.BluRay-GROUP.mkv`.
 
 **Text around a token.** Anything inside the braces next to the token name is only written when the token has a value. `{ - Edition Tags}` adds " - Extended" for an extended cut and nothing otherwise; `{[Quality Full]}` adds the brackets only with a quality. For Plex's edition tag, `{edition-{Edition Tags}}` gives `{edition-Extended}`.
 
@@ -271,11 +292,11 @@ A title with no name gets a folder and file called `tmdb-` and its TMDB number, 
 
 **What Mediarium doesn't know yet.** The media info comes from the release name, not from reading the file, so audio channels, bit depth and subtitle languages are left out (those tokens are accepted and write nothing). Mediarium doesn't have custom formats yet, so `{Custom Formats}` holds the edition; when the format also has `{Edition Tags}`, the edition is written once. `{Preferred Words}` is accepted and writes nothing.
 
-Scripts: `GET /api/settings/naming-tokens` lists the tokens and ready-made formats, and `GET /api/settings/naming-preview?kind=movie|tv&format=...` returns the preview and, for a format with a mistake, what's wrong in `problem`. The formats are saved as `movieNameFormat` and `episodeNameFormat` with `PUT /api/settings`.
+Scripts: `GET /api/settings/naming-tokens` lists the tokens and ready-made formats, and `GET /api/settings/naming-preview?kind=movie|tv&format=...` returns the preview and, for a format with a mistake, what's wrong in `problem`; add `&keep=1` to see the name a file keeps with **Keep the original file names**. The formats are saved as `movieNameFormat` and `episodeNameFormat` with `PUT /api/settings`.
 
 ## Renaming existing files
 
-Files keep the name they had when they arrived. After you change the naming preset (Settings > Library > File names and importing), **Rename existing files** on the same page lists every movie and episode whose name would change, as "old name → new name". Untick any you want to leave alone and press **Rename**. Subtitles, `.nfo` and artwork named after a video move with it, empty folders left behind are removed, and your media server is told. A file is never moved outside the library folder or onto another file; those are listed as not renamed. Scripts: `GET /api/rename?kind=movie|tv` (the preview) and `POST /api/rename` with `{"items": [{"kind": "movie", "id": 12}]}`.
+Files keep the name they had when they arrived. After you change the naming preset (Settings > Library > File names and importing), **Rename existing files** on the same page lists every movie and episode whose name would change, as "old name → new name". Untick any you want to leave alone and press **Rename**. Subtitles, `.nfo` and artwork named after a video move with it, empty folders left behind are removed, and your media server is told. A file is never moved outside the library folder or onto another file; those are listed as not renamed. While **Keep the original file names** is on, nothing is renamed and the card says so. Scripts: `GET /api/rename?kind=movie|tv` (the preview) and `POST /api/rename` with `{"items": [{"kind": "movie", "id": 12}]}`.
 
 ## Statistics
 
@@ -314,7 +335,7 @@ Every answer except search-now is `{updated, failed: [{kind, id, title?, reason}
 
 `GET /api/movies` and `GET /api/series` are the two biggest answers, and the Library page asks for them every few seconds. They're sent compressed (gzip) when the client accepts it, and carry an `ETag`. A client that sends it back in `If-None-Match` gets `304 Not Modified` with no body while nothing has changed. These two answers are marked `Cache-Control: private, no-cache` (the browser may keep a copy but has to ask first). The books, artists, Wanted, calendar, dashboard, Activity and download lists work the same way. Every other answer in the API is `no-store`.
 
-Add `?brief=1` to `GET /api/movies`, `GET /api/series` and `GET /api/books` to leave out each title's `overview` (a book's `description`). That is most of the answer for a big library, and the Library page doesn't need it. Without it the answers are as they were. `GET /api/queue?active=1` lists only the downloads that are waiting, downloading or importing, which is what the number next to Activity in the menu counts.
+Add `?brief=1` to `GET /api/movies`, `GET /api/series` and `GET /api/books` to leave out each title's `overview` (a book's `description`). That is most of the answer for a big library, and the Library page doesn't need it. Without it the answers are as they were. The Library reads only the list of the tab that is open; the numbers on the other tabs come from `GET /api/library/counts` (`{"movies": 5237, "shows": 536}`). The shows' episode totals and file sizes in `GET /api/series` are worked out once and kept until a title changes (at most 30 seconds), so opening the TV tab again on a big library is quick. `GET /api/queue?active=1` lists only the downloads that are waiting, downloading or importing, which is what the number next to Activity in the menu counts.
 
 The Library page itself only draws the posters (or rows) near the screen, however long the list is, so a library of thousands of titles opens quickly and scrolls the same as a short one. Select all, search and the filters still work on the whole list.
 

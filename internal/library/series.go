@@ -149,6 +149,62 @@ func (r *Repo) UpsertEpisodes(seriesID int64, episodes []Episode, monitorNew boo
 	return tx.Commit()
 }
 
+// PruneEpisodes removes the episodes of a show that TMDB no longer lists
+// (merged, renumbered or dropped) and that never got anything: still missing,
+// with no file. keep is TMDB's current list. An episode with a file or being
+// downloaded stays whatever TMDB says. An empty list, or one that covers
+// less than half of what is stored, is treated as a bad answer and prunes
+// nothing. It returns how many rows went.
+func (r *Repo) PruneEpisodes(seriesID int64, keep []Episode) (int, error) {
+	if len(keep) == 0 {
+		return 0, nil
+	}
+	listed := make(map[[2]int]bool, len(keep))
+	for _, e := range keep {
+		listed[[2]int{e.Season, e.Episode}] = true
+	}
+	rows, err := r.db.Query(`SELECT id, season, episode, status, COALESCE(file_path, '') FROM episodes WHERE series_id = ?`, seriesID)
+	if err != nil {
+		return 0, fmt.Errorf("prune episodes: %w", err)
+	}
+	var stale []int64
+	total := 0
+	for rows.Next() {
+		var id int64
+		var season, episode int
+		var status, file string
+		if err := rows.Scan(&id, &season, &episode, &status, &file); err != nil {
+			rows.Close()
+			return 0, fmt.Errorf("prune episodes: %w", err)
+		}
+		total++
+		if !listed[[2]int{season, episode}] && status == string(StatusMissing) && file == "" {
+			stale = append(stale, id)
+		}
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return 0, fmt.Errorf("prune episodes: %w", err)
+	}
+	if len(stale) == 0 || len(keep)*2 < total {
+		return 0, nil
+	}
+	tx, err := r.db.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("prune episodes: %w", err)
+	}
+	defer tx.Rollback()
+	for _, id := range stale {
+		if _, err := tx.Exec(`DELETE FROM episodes WHERE id = ? AND status = 'missing' AND COALESCE(file_path, '') = ''`, id); err != nil {
+			return 0, fmt.Errorf("prune episode %d: %w", id, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("prune episodes: %w", err)
+	}
+	return len(stale), nil
+}
+
 func upsertEpisodes(tx *sql.Tx, seriesID int64, episodes []Episode, monitorNew bool) error {
 	stmt, err := tx.Prepare(`
 		INSERT INTO episodes (series_id, season, episode, title, overview, air_date, monitored)
@@ -428,10 +484,14 @@ func (r *Repo) SetEpisodeReleaseTitle(id int64, release string) error {
 	return nil
 }
 
+// episodeFilesQuery is answered from the episodes_with_file index alone, which
+// holds only the episodes that name a file.
+const episodeFilesQuery = `SELECT DISTINCT series_id, file_path FROM episodes WHERE file_path IS NOT NULL AND file_path != ''`
+
 // EpisodeFilesBySeries lists each show's episode files, every file once
 // (a file holding two episodes is listed once).
 func (r *Repo) EpisodeFilesBySeries() (map[int64][]string, error) {
-	rows, err := r.db.Query(`SELECT DISTINCT series_id, file_path FROM episodes WHERE file_path IS NOT NULL AND file_path != ''`)
+	rows, err := r.db.Query(episodeFilesQuery)
 	if err != nil {
 		return nil, fmt.Errorf("list episode files: %w", err)
 	}

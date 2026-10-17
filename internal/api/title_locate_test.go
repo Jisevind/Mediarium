@@ -52,6 +52,31 @@ func (e *locateEnv) addMovie(t *testing.T, tmdb int, title string) library.Movie
 	return m
 }
 
+// A different file is read again: a name that says nothing about the
+// quality leaves the movie Not stated, not with the old file's quality.
+func TestLocateMovieFileReadsTheNewFilesQuality(t *testing.T) {
+	e := newLocateEnv(t)
+	m := e.addMovie(t, 603, "The Matrix")
+	old := filepath.Join(e.movies, "The.Matrix.1999.720p.BluRay.x264-GRP.mkv")
+	writeBody(t, old, "video")
+	if err := e.server.MovieRepo.SetStatus(m.ID, library.StatusDownloaded, "Bluray-720p", old); err != nil {
+		t.Fatal(err)
+	}
+	renamed := filepath.Join(e.movies, "Old drive", "matrix by me.mkv")
+	writeBody(t, renamed, "video")
+	postJSON[map[string]any](t, e.admin, fmt.Sprintf("%s/api/movies/%d/locate-file", e.base, m.ID), map[string]string{"path": renamed}, http.StatusOK)
+	got, err := e.server.MovieRepo.Get(m.ID)
+	if err != nil || got.FilePath != renamed || got.Quality != "Unknown" {
+		t.Fatalf("after locate: %+v %v", got, err)
+	}
+	hd := filepath.Join(e.movies, "The Matrix (1999)", "The.Matrix.1999.1080p.WEB-DL.mkv")
+	writeBody(t, hd, "video")
+	postJSON[map[string]any](t, e.admin, fmt.Sprintf("%s/api/movies/%d/locate-file", e.base, m.ID), map[string]string{"path": hd}, http.StatusOK)
+	if got, _ := e.server.MovieRepo.Get(m.ID); got.Quality != "WEBDL-1080p" {
+		t.Fatalf("the new name's quality: %q", got.Quality)
+	}
+}
+
 func TestLocateMovieFilePathChecks(t *testing.T) {
 	tests := []struct {
 		name string
@@ -300,7 +325,13 @@ func TestBrowseStaysInsideTheLibraryFolders(t *testing.T) {
 		t.Fatalf("title folder = %+v", inner)
 	}
 
-	for _, bad := range []string{e.outside, e.movies + "/../outside", filepath.Join(e.movies, "elsewhere"), "relative/path"} {
+	// A folder that is gone opens at the nearest one above it.
+	gone := getJSON[browseReply](t, e.admin, e.base+"/api/library/browse?path="+url.QueryEscape(filepath.Join(e.movies, "Film (2000)", "Gone", "Deeper")))
+	if len(gone.Entries) != 1 || gone.Entries[0].Name != "film.mkv" {
+		t.Fatalf("a gone folder = %+v", gone)
+	}
+
+	for _, bad := range []string{e.outside, e.movies + "/../outside", filepath.Join(e.movies, "elsewhere"), "relative/path", filepath.Join(e.outside, "gone")} {
 		if status, _ := doStatus(t, e.admin, http.MethodGet, e.base+"/api/library/browse?path="+url.QueryEscape(bad)); status != http.StatusBadRequest {
 			t.Errorf("browse of %q = %d, want 400", bad, status)
 		}

@@ -10,6 +10,8 @@ import type { Diagnostics } from './supportReport'
 import type { ProblemCounts, ProblemList } from './problemsView'
 import { BASE_PATH, rebasePictures, withBase } from './base'
 import { noteSessionEnded, sessionEnded } from './sessionEnd'
+import { wantedPagePath } from './wantedPage'
+import { namingPreviewPath } from './namingPreview'
 
 const BASE = withBase('/api')
 
@@ -603,6 +605,8 @@ export interface Settings {
   namingPreset: string
   movieNameFormat: string
   episodeNameFormat?: string
+  // Imported videos keep the file name they came with (folders are named as usual).
+  keepOriginalNames?: boolean
   hasTmdbApiKey: boolean
   traktClientId?: string
   hasTraktClientId: boolean
@@ -1281,6 +1285,28 @@ export interface WantedItem {
   lastSearchAt?: string
   year?: number
   posterUrl?: string
+  copy?: boolean
+}
+
+// A row of the grouped Wanted list: a movie, an episode (the only one of its
+// show), or a show with how many of its episodes are listed.
+export type WantedRow = Omit<WantedItem, 'kind'> & { kind: WantedItem['kind'] | 'show'; episodes?: number }
+
+// One page of the grouped Wanted list, with the totals of the whole list.
+export interface WantedPage {
+  rows: WantedRow[]
+  total: number // rows on all pages
+  movies: number
+  episodes: number
+  offset: number
+  limit: number
+}
+
+export interface WantedPageQuery {
+  limit?: number // 0: the totals only
+  offset?: number
+  media?: 'movie' | 'tv'
+  q?: string
 }
 
 export interface Movie {
@@ -1340,6 +1366,7 @@ export interface QueueItem {
   source?: string // WEB-DL, BluRay...
   codec?: string // x264, x265...
   language?: string // the audio languages the release names
+  note?: string // a sentence from the server the status alone does not say (low disk space, a held-back release)
 }
 
 // One folder of the file picker: the folders and video files inside the
@@ -1963,7 +1990,8 @@ export interface ImportBatch {
 export interface ImportBatchItem {
   title: string
   kind: 'movie' | 'series'
-  outcome: 'added' | 'already' | 'failed'
+  // duplicate: the same film as another folder of this import, which is the copy used
+  outcome: 'added' | 'already' | 'duplicate' | 'failed'
   state: 'pending' | 'done' | 'problem'
   note?: string
   imported: number // shows: episodes found on disk and marked as downloaded
@@ -2176,6 +2204,8 @@ export interface BookImportResult {
 }
 export interface BookImportState {
   phase: '' | 'running' | 'done' | 'failed'
+  // What the run in phase is about; results of the other kind are kept from its own last run.
+  kinds?: BookFormat[]
   done: number
   total: number
   summary: Record<string, number>
@@ -2458,14 +2488,16 @@ export interface MusicImportResult {
   albumId?: number
   quality?: string
   tracks?: number
+  note?: string
 }
 
 export interface MusicImportJob {
   id: string
   root: string
-  phase: 'scanning' | 'matching' | 'done' | 'failed'
+  phase: 'scanning' | 'matching' | 'done' | 'failed' | 'stopped'
   done: number
   total: number
+  current?: string
   summary: { artists: number; albums: number; imported: number; already: number; unmatched: number; failed: number }
   results: MusicImportResult[]
   error?: string
@@ -2600,6 +2632,13 @@ export interface TwoStepChallenge {
 }
 export function isTwoStepChallenge(v: unknown): v is TwoStepChallenge {
   return typeof v === 'object' && v !== null && (v as TwoStepChallenge).twoStep === true
+}
+// One place the account is signed in (Settings > Security > Signed-in devices).
+export interface SessionInfo {
+  createdAt: string
+  expiresAt: string
+  method: 'password' | 'oidc' | 'ldap' | 'passkey' | 'proxy' | string
+  current: boolean
 }
 export interface TwoStepStatus {
   enabled: boolean
@@ -2847,6 +2886,8 @@ export const api = {
   twoStepRecovery: (password: string) => post<{ recoveryCodes: string[] }>('/auth/two-step/recovery', { password }),
   userTwoStepOff: (id: number) => del<null>(`/users/${id}/two-step`),
   logout: () => post<null>('/auth/logout'),
+  sessions: () => get<SessionInfo[]>('/auth/sessions'),
+  endOtherSessions: () => del<{ ended: number }>('/auth/sessions'),
   me: () => get<User>('/auth/me'),
   changePassword: (currentPassword: string, newPassword: string) =>
     post<null>('/auth/change-password', { currentPassword, newPassword }),
@@ -2986,7 +3027,7 @@ export const api = {
   downloadSubtitle: (movieId: number, pick: Pick<SubtitleResult, 'fileId' | 'source' | 'link' | 'variant'>, language = 'en') =>
     post<{ path: string }>(`/movies/${movieId}/subtitles/download`, { fileId: pick.fileId, source: pick.source ?? '', link: pick.link ?? '', language, variant: pick.variant ?? '' }),
 
-  listProfiles: () => get<{ profiles: QualityProfile[]; tiers: string[]; defaultId: number; defaultTvId: number }>('/quality-profiles'),
+  listProfiles: () => get<{ profiles: QualityProfile[]; tiers: string[]; defaultId: number; defaultTvId: number; defaultSources?: SourcePref }>('/quality-profiles'),
   createProfile: (data: QualityProfileInput) =>
     post<QualityProfile>('/quality-profiles', data),
   updateProfile: (id: number, data: QualityProfileInput) =>
@@ -3027,6 +3068,10 @@ export const api = {
   clearFinishedQueue: () => del<{ removed: number }>('/queue'),
   resolveConflict: (id: number, overwrite: boolean) => post<null>(`/queue/${id}/resolve-conflict`, { overwrite }),
   getWanted: (kind: 'missing' | 'cutoff') => request<WantedItem[]>(`/wanted?kind=${kind}`, { revalidate: true }),
+  // One page of the list, one row per movie and per show; a show's episodes come from getWantedShow.
+  getWantedPage: (kind: 'missing' | 'cutoff', query: WantedPageQuery = {}) => request<WantedPage>(wantedPagePath(kind, query), { revalidate: true }),
+  getWantedShow: (kind: 'missing' | 'cutoff', seriesId: number) => request<WantedItem[]>(`/wanted?kind=${kind}&series=${seriesId}`, { revalidate: true }),
+  libraryCounts: () => get<{ movies: number; shows: number }>('/library/counts'),
   searchNowMovie: (id: number) => post<{ grabbed: number; message: string }>(`/movies/${id}/search-now`),
   replaceMovieSmaller: (id: number) => post<{ grabbed: number; message: string }>(`/movies/${id}/replace-smaller`),
   searchNowSeries: (id: number, scope: { season?: number; episode?: number } = {}) =>
@@ -3097,7 +3142,9 @@ export const api = {
   deleteMusicProfile: (id: number) => del<null>(`/music/profiles/${id}`),
   listBooks: () => request<Book[]>('/books?brief=1', { revalidate: true }),
   getBook: (id: number) => get<Book>(`/books/${id}`),
-  searchBooks: (q: string) => get<BookFound[]>(`/books/search?q=${encodeURIComponent(q)}`),
+  // With an author, the books by that author come first.
+  searchBooks: (q: string, author = '') =>
+    get<BookFound[]>(`/books/search?q=${encodeURIComponent(q)}${author ? `&author=${encodeURIComponent(author)}` : ''}`),
   bookDiscover: (p: { list: 'trending' | 'browse'; period?: string; subject?: string; from?: string; to?: string; sort?: string; page?: number }) => {
     const q = new URLSearchParams()
     for (const [k, v] of Object.entries(p)) if (v !== undefined && v !== '') q.set(k, String(v))
@@ -3184,6 +3231,9 @@ export const api = {
   scrobbleListen: (trackId: number, listenedAt: number) => post<{ sent: boolean }>('/music/listenbrainz/listen', { trackId, listenedAt }),
   startMusicScan: () => post<{ id: string }>('/music/import/scan'),
   musicScan: (id: string) => get<MusicImportJob>(`/music/import/scan/${id}`),
+  // The latest scan, running or finished; id is empty when none has run.
+  latestMusicScan: () => get<MusicImportJob | { id: '' }>('/music/import/scan'),
+  stopMusicScan: (id: string) => del<MusicImportJob>(`/music/import/scan/${id}`),
 
   searchTV: (q: string) => get<DiscoverMovie[]>(`/tv/search?q=${encodeURIComponent(q)}`),
   listSeries: () => request<Series[]>('/series?brief=1', { revalidate: true }),
@@ -3278,7 +3328,8 @@ export const api = {
   putWatchedSettings: (body: { sync?: boolean; cleanup?: CleanupRules }) => put<WatchedSettings>('/watched/settings', body),
   syncWatched: () => post<WatchedStatus>('/watched/sync', {}),
   cleanupPreview: (rules: CleanupRules) => get<{ items: LibraryCleanupItem[]; limit: number }>(`/watched/cleanup/preview?${new URLSearchParams({ rules: JSON.stringify(rules) })}`),
-  runLibraryCleanup: () => post<{ removed: LibraryCleanupItem[]; failed: LibraryCleanupItem[]; more: number }>('/watched/cleanup/run', {}),
+  runLibraryCleanup: (items?: LibraryCleanupItem[]) =>
+    post<{ removed: LibraryCleanupItem[]; failed: LibraryCleanupItem[]; more: number }>('/watched/cleanup/run', items ? { items: items.map((i) => ({ kind: i.kind, id: i.id })) } : {}),
   watched: () => get<{ movies: Record<string, WatchedTitle>; series: Record<string, WatchedTitle> }>('/watched'),
   putProxySignIn: (header: string, addresses: string) => put<ProxySignIn>('/auth/proxy-signin', { header, addresses }),
   restartApp: (safe = false) => post<{ ok: boolean; restarting: boolean; safe: boolean }>(`/system/restart${safe ? '?safe=true' : ''}`),
@@ -3393,10 +3444,8 @@ export const api = {
       `/settings/filesystem-check?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`,
     ),
 
-  namingPreview: (preset: string, format?: string, kind: 'movie' | 'tv' = 'movie') =>
-    get<{ folder: string; filename: string; problem?: string }>(
-      `/settings/naming-preview?preset=${encodeURIComponent(preset)}&kind=${kind}${format ? `&format=${encodeURIComponent(format)}` : ''}`,
-    ),
+  namingPreview: (preset: string, format?: string, kind: 'movie' | 'tv' = 'movie', keep = false) =>
+    get<{ folder: string; filename: string; problem?: string }>(namingPreviewPath(preset, format, kind, keep)),
 
   namingTokens: () => get<NamingTokens>('/settings/naming-tokens'),
 

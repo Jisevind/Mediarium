@@ -40,8 +40,9 @@ const (
 
 // handleCalendar is the unified calendar (releases and
 // episode airs in one list). Monitored movies with a known release date are
-// always included; episodes only within a window around today, so a long-
-// running show's whole back catalogue doesn't drown out what's coming up.
+// included from 30 days back on, and episodes only within a window around
+// today, so a long-running show's whole back catalogue and a big movie
+// library's old releases don't drown out what's coming up.
 func (s *Server) handleCalendar(w http.ResponseWriter, r *http.Request) {
 	entries, err := s.calendarEntries()
 	if err != nil {
@@ -185,7 +186,16 @@ func (s *Server) calendarEntries() ([]calendarEntryPayload, error) {
 // what is still to come, and asking the database for just that is much
 // cheaper than building the whole list and cutting it down.
 func (s *Server) calendarEntriesSince(since string) ([]calendarEntryPayload, error) {
-	movies, err := s.MovieRepo.CalendarMovies(since)
+	now := time.Now().UTC()
+	from := now.Add(-calendarEpisodeLookback).Format("2006-01-02")
+	to := now.Add(calendarEpisodeLookahead).Format("2006-01-02")
+	if since > from {
+		from = since
+	}
+	// Movies start at the same date as episodes: a library of thousands of
+	// films would otherwise put every old release in each calendar answer.
+	// Releases further ahead are all kept.
+	movies, err := s.MovieRepo.CalendarMovies(from)
 	if err != nil {
 		return nil, err
 	}
@@ -198,12 +208,6 @@ func (s *Server) calendarEntriesSince(since string) ([]calendarEntryPayload, err
 		})
 	}
 
-	now := time.Now().UTC()
-	from := now.Add(-calendarEpisodeLookback).Format("2006-01-02")
-	to := now.Add(calendarEpisodeLookahead).Format("2006-01-02")
-	if since > from {
-		from = since
-	}
 	eps, err := s.MovieRepo.CalendarEpisodes(from, to)
 	if err != nil {
 		return nil, err

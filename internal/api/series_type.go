@@ -219,7 +219,7 @@ func mapSpecial(rel parser.Release, showTitle string, episodes []library.Episode
 	}
 	name := titleWords(rel.Name)
 	show := titleWords(showTitle)
-	phrase := " " + strings.Join(strings.Fields(nonAlnum.ReplaceAllString(strings.ToLower(rel.Name), " ")), " ") + " "
+	phrase := " " + metadata.TitleKey(rel.Name) + " "
 	best, bestScore, tie := -1, 0, false
 	for i, e := range specials {
 		need := 0
@@ -241,7 +241,7 @@ func mapSpecial(rel parser.Release, showTitle string, episodes []library.Episode
 		// The whole title, small words and order included, beats the same
 		// words scattered: "Planet of the Dead" over "Dead Planet".
 		score := need * 2
-		if title := strings.Join(strings.Fields(nonAlnum.ReplaceAllString(strings.ToLower(e.Title), " ")), " "); title != "" && strings.Contains(phrase, " "+title+" ") {
+		if title := metadata.TitleKey(e.Title); title != "" && strings.Contains(phrase, " "+title+" ") {
 			score++
 		}
 		switch {

@@ -285,7 +285,7 @@ func matchedOtherTitle(releaseTitle, mainTitle string, alts []string) string {
 		return ""
 	}
 	parsed := parser.Parse(releaseTitle).Title
-	if normalizeTitle(parsed) == normalizeTitle(mainTitle) {
+	if sameTitle(parsed, mainTitle) {
 		return ""
 	}
 	return matchingAltTitle(parsed, alts)

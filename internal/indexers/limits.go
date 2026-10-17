@@ -17,6 +17,20 @@ import (
 // day, learns the limit from those answers, and automation leaves the indexer
 // alone before it is used up.
 
+const (
+	// maxDailyLimit is the largest daily limit taken from an indexer's answer
+	// (the same as the largest a person can set). A bigger number is nonsense.
+	maxDailyLimit = 100000
+	// maxRetryWait is the longest "Retry in N" wait that is believed.
+	maxRetryWait = 48 * time.Hour
+	// learnedLimitKeep is how long a limit learned from an answer is trusted
+	// without hearing it again.
+	learnedLimitKeep = 7 * 24 * time.Hour
+	// learnedLimitFloor is the smallest limit taken at the first answer. A
+	// smaller one has to be heard twice.
+	learnedLimitFloor = 5
+)
+
 // ProbeInterval is the least time between two connection checks of one
 // indexer, whatever the schedule of the monitor is.
 const ProbeInterval = 6 * time.Hour
@@ -43,12 +57,17 @@ func ParseDailyLimit(msg string, now time.Time) (DailyLimit, bool) {
 	}
 	var dl DailyLimit
 	if m := limitCountRe.FindStringSubmatch(msg); m != nil {
-		dl.Used, _ = strconv.Atoi(m[1])
-		dl.Limit, _ = strconv.Atoi(m[2])
+		// numbers that do not fit, or that no daily limit could be, are left out
+		if n, err := strconv.ParseInt(m[1], 10, 32); err == nil && n <= maxDailyLimit {
+			dl.Used = int(n)
+		}
+		if n, err := strconv.ParseInt(m[2], 10, 32); err == nil && n <= maxDailyLimit {
+			dl.Limit = int(n)
+		}
 	}
 	dl.BackAt = nextMidnight(now)
 	if m := limitRetryRe.FindStringSubmatch(msg); m != nil {
-		n, _ := strconv.Atoi(m[1])
+		n, _ := strconv.ParseInt(m[1], 10, 32)
 		unit := time.Minute
 		switch strings.ToLower(m[2]) {
 		case "second", "sec":
@@ -57,7 +76,7 @@ func ParseDailyLimit(msg string, now time.Time) (DailyLimit, bool) {
 			unit = time.Hour
 		}
 		if n > 0 && n < 100000 {
-			dl.BackAt = now.Add(time.Duration(n) * unit)
+			dl.BackAt = now.Add(min(time.Duration(n)*unit, maxRetryWait))
 		}
 	}
 	return dl, true
@@ -95,6 +114,7 @@ func limitMargin(limit int) int {
 // Quota is where an indexer stands against its daily limit.
 type Quota struct {
 	Limit   int       // requests allowed a day; 0 = no limit known
+	Told    bool      // the indexer said its requests are used up, and when they are back
 	Learned bool      // the limit came from the indexer's own answers, not from a setting
 	Used    int       // requests made today (UTC)
 	Reached bool      // no more requests are allowed today
@@ -108,17 +128,19 @@ func (q Quota) Message(loc *time.Location) string {
 	if !q.Blocked {
 		return ""
 	}
-	limit := "Daily limit reached."
-	if q.Limit > 0 {
-		limit = fmt.Sprintf("Daily limit of %d reached.", q.Limit)
-	}
 	if loc == nil {
 		loc = time.Local
 	}
-	if isMidnight(q.BackAt) {
-		return limit + " It is used again after midnight (UTC)."
+	midnight := isMidnight(q.BackAt)
+	switch {
+	case q.Limit > 0 && midnight:
+		return fmt.Sprintf("Daily limit of %d reached. It is used again after midnight (UTC).", q.Limit)
+	case q.Limit > 0:
+		return fmt.Sprintf("Daily limit of %d reached. It is used again at %s.", q.Limit, q.BackAt.In(loc).Format("15:04"))
+	case midnight:
+		return "Daily limit reached. It is used again after midnight (UTC)."
 	}
-	return fmt.Sprintf("%s It is used again at %s.", limit, q.BackAt.In(loc).Format("15:04"))
+	return fmt.Sprintf("Daily limit reached. It is used again at %s.", q.BackAt.In(loc).Format("15:04"))
 }
 
 // limitState is everything the tracker keeps for daily limits, guarded by
@@ -128,11 +150,14 @@ type limitState struct {
 	used      map[int64]*usedNote
 	lastOK    map[int64]time.Time // when a real search or feed read last worked
 	lastProbe map[int64]time.Time // when a connection check last ran
+	lastFail  map[int64]time.Time // when a real search or feed read last failed
 }
 
 type quotaNote struct {
-	limit  int
-	backAt time.Time
+	limit     int
+	backAt    time.Time
+	learnedAt time.Time // when the indexer last told the limit
+	pending   int       // a small limit heard once, not believed yet
 }
 
 type usedNote struct {
@@ -146,6 +171,7 @@ func (ls *limitState) init() {
 		ls.used = map[int64]*usedNote{}
 		ls.lastOK = map[int64]time.Time{}
 		ls.lastProbe = map[int64]time.Time{}
+		ls.lastFail = map[int64]time.Time{}
 	}
 }
 
@@ -158,9 +184,17 @@ func (t *Tracker) quotaNoteLocked(id int64) *quotaNote {
 	}
 	q := &quotaNote{}
 	if t.db != nil {
-		var back string
-		if err := t.db.QueryRow(`SELECT learned_limit, quota_back_at FROM indexers WHERE id = ?`, id).Scan(&q.limit, &back); err == nil {
+		var back, learned string
+		if err := t.db.QueryRow(`SELECT learned_limit, quota_back_at, learned_at FROM indexers WHERE id = ?`, id).Scan(&q.limit, &back, &learned); err == nil {
 			q.backAt, _ = time.Parse(timeFmt, back)
+			q.learnedAt, _ = time.Parse(timeFmt, learned)
+			if q.limit > 0 && q.learnedAt.IsZero() {
+				// a limit learned before the time was kept: its week starts now
+				q.learnedAt = t.now()
+				if _, err := t.db.Exec(`UPDATE indexers SET learned_at = ? WHERE id = ?`, q.learnedAt.UTC().Format(timeFmt), id); err != nil {
+					slog.Warn("indexers: save indexer daily limit time", "indexer", id, "err", err)
+				}
+			}
 		}
 	}
 	t.limits.quota[id] = q
@@ -192,7 +226,7 @@ func (t *Tracker) CountRequest(id int64, n int) {
 	}
 	t.mu.Lock()
 	u := t.usedNoteLocked(id)
-	u.n += n
+	u.n = min(u.n+n, 4*maxDailyLimit) // the count of a day cannot run away
 	day := u.day
 	t.mu.Unlock()
 	if t.db == nil {
@@ -218,10 +252,12 @@ func (t *Tracker) Quota(id int64, setLimit int) Quota {
 	t.mu.Unlock()
 
 	q := Quota{Used: used, Limit: setLimit}
-	if q.Limit <= 0 {
-		q.Limit, q.Learned = qn.limit, qn.limit > 0
+	if q.Limit <= 0 && qn.limit > 0 && now.Sub(qn.learnedAt) < learnedLimitKeep {
+		// a learned limit is trusted for a week without hearing it again
+		q.Limit, q.Learned = qn.limit, true
 	}
 	told := now.Before(qn.backAt)
+	q.Told = told
 	atLimit := q.Limit > 0 && used >= q.Limit
 	q.Reached = told || atLimit
 	q.Blocked = told || (q.Limit > 0 && used >= q.Limit-limitMargin(q.Limit))
@@ -250,10 +286,18 @@ func (t *Tracker) LearnLimit(id int64, msg string) bool {
 	t.mu.Lock()
 	qn := t.quotaNoteLocked(id)
 	if dl.Limit > 0 {
-		qn.limit = dl.Limit
+		switch {
+		case dl.Limit >= learnedLimitFloor || dl.Limit == qn.limit || dl.Limit == qn.pending:
+			// a very small limit is only believed when it is heard twice
+			qn.limit, qn.pending = dl.Limit, 0
+			qn.learnedAt = now
+		default:
+			qn.pending = dl.Limit
+			dl.Limit, dl.Used = 0, 0
+		}
 	}
 	qn.backAt = dl.BackAt
-	limit, backAt := qn.limit, qn.backAt
+	limit, backAt, learnedAt := qn.limit, qn.backAt, qn.learnedAt
 	u := t.usedNoteLocked(id)
 	raise := 0
 	if floor := max(dl.Used, dl.Limit); floor > u.n {
@@ -264,7 +308,7 @@ func (t *Tracker) LearnLimit(id int64, msg string) bool {
 		t.CountRequest(id, raise)
 	}
 	if t.db != nil {
-		_, err := t.db.Exec(`UPDATE indexers SET learned_limit = ?, quota_back_at = ? WHERE id = ?`, limit, backAt.UTC().Format(timeFmt), id)
+		_, err := t.db.Exec(`UPDATE indexers SET learned_limit = ?, quota_back_at = ?, learned_at = ? WHERE id = ?`, limit, backAt.UTC().Format(timeFmt), formatTime(learnedAt), id)
 		if err != nil {
 			slog.Warn("indexers: save indexer daily limit", "indexer", id, "err", err)
 		}
@@ -294,8 +338,36 @@ func (t *Tracker) noteAnswered(id int64) {
 	t.mu.Lock()
 	t.limits.init()
 	t.limits.lastOK[id] = now
+	qn := t.quotaNoteLocked(id)
+	wrong := qn.limit > 0 && t.usedNoteLocked(id).n > qn.limit
+	if wrong {
+		// the search was counted over the learned limit and still worked, so
+		// the limit is not what it was
+		qn.limit, qn.pending, qn.learnedAt = 0, 0, time.Time{}
+	}
 	t.mu.Unlock()
 	t.clearQuotaWait(id)
+	if wrong && t.db != nil {
+		if _, err := t.db.Exec(`UPDATE indexers SET learned_limit = 0, learned_at = '' WHERE id = ?`, id); err != nil {
+			slog.Warn("indexers: forget indexer daily limit", "indexer", id, "err", err)
+		}
+	}
+}
+
+// noteFailed remembers that a real search or feed read failed.
+func (t *Tracker) noteFailed(id int64) {
+	now := t.now()
+	t.mu.Lock()
+	t.limits.init()
+	t.limits.lastFail[id] = now
+	t.mu.Unlock()
+}
+
+func formatTime(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	return t.UTC().Format(timeFmt)
 }
 
 // Probe says what a connection check of the indexer should do now.
@@ -305,7 +377,8 @@ const (
 	// ProbeNow: ask the indexer.
 	ProbeNow Probe = iota
 	// ProbeSkipWorks: a real search or feed read worked since the last check,
-	// so the indexer is known to work and costs no request.
+	// and none has failed since, so the indexer is known to work and costs no
+	// request.
 	ProbeSkipWorks
 	// ProbeSkipWait: the last check was less than ProbeInterval ago, or the
 	// daily limit is used up. Keep the earlier result.
@@ -320,15 +393,18 @@ func (t *Tracker) ProbeAdvice(id int64, setLimit int) Probe {
 	if t == nil {
 		return ProbeNow
 	}
-	if t.Quota(id, setLimit).Blocked {
+	// Only what the indexer itself said, or a limit a person set, keeps the
+	// check away. A limit learned from earlier answers may be out of date, and
+	// must not hide an indexer that is broken.
+	if q := t.Quota(id, setLimit); q.Told || (q.Blocked && !q.Learned) {
 		return ProbeSkipWait
 	}
 	now := t.now()
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.limits.init()
-	ok, probed := t.limits.lastOK[id], t.limits.lastProbe[id]
-	if !ok.IsZero() && ok.After(probed) && now.Sub(ok) < ProbeInterval {
+	ok, probed, failed := t.limits.lastOK[id], t.limits.lastProbe[id], t.limits.lastFail[id]
+	if !ok.IsZero() && ok.After(probed) && !failed.After(ok) && now.Sub(ok) < ProbeInterval {
 		return ProbeSkipWorks
 	}
 	if !probed.IsZero() && now.Sub(probed) < ProbeInterval {

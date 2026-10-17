@@ -65,6 +65,17 @@ type Instance struct {
 	// RequestsPerDay is the daily limit a person set for the indexer; 0 = none
 	// set, so what the indexer itself reported (if anything) is used.
 	RequestsPerDay int
+	// SecretError is set when the saved key or password of this indexer could
+	// not be read (usually a secret.key that does not belong to the database).
+	// The indexer is still listed, so it can be fixed, but it is never searched.
+	SecretError string
+}
+
+// markUnreadable records that this indexer's saved secret cannot be read. The
+// message doubles as its last test result, so the Indexers page shows it.
+func (i *Instance) markUnreadable() {
+	i.SecretError = fmt.Sprintf("Mediarium can't read the saved key of %s: re-enter it.", i.Name)
+	i.LastTestError = i.SecretError
 }
 
 // Indexer priorities. Between two equally good releases the one from the
@@ -116,7 +127,7 @@ func SearchAll(ctx context.Context, instances []Instance, query string, categori
 	query = SearchText(query)
 	var enabled []Instance
 	for _, inst := range instances {
-		if inst.Enabled {
+		if inst.Enabled && inst.SecretError == "" {
 			enabled = append(enabled, inst)
 		}
 	}
@@ -226,7 +237,7 @@ func ProblemMessage(o Outcome) string {
 		return msg
 	}
 	if IsDailyLimit(o.Err) {
-		return fmt.Sprintf("%s has reached its daily limit of requests. It is used again after midnight (UTC).", o.IndexerName)
+		return fmt.Sprintf("The daily limit of requests for %s is used up. It is used again after midnight (UTC).", o.IndexerName)
 	}
 	switch problems.IndexerCode(o.Err) {
 	case problems.CodeIndexerRateLimited:

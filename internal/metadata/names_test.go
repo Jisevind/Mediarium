@@ -193,3 +193,18 @@ func TestTitleKeys(t *testing.T) {
 		}
 	}
 }
+
+func TestTitleKeyDropsAnyAccentAndKeepsOtherLetters(t *testing.T) {
+	for in, want := range map[string]string{
+		"Ǎrdal":       "ardal",
+		"Cafe\u0301":  "cafe", // typed as e plus a combining mark
+		"Ελλάδα":      "ελλαδα",
+		"Война и мир": "война и мир",
+		"千と千尋の神隠し":    "千と千尋の神隠し",
+		"!!!":         "",
+	} {
+		if got := metadata.TitleKey(in); got != want {
+			t.Errorf("TitleKey(%q) = %q, want %q", in, got, want)
+		}
+	}
+}

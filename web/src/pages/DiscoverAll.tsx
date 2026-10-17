@@ -49,7 +49,7 @@ export default function DiscoverAll() {
             {kindsOn.length > 1 && (
               <div className="seg">
                 {kindsOn.map((k) => (
-                  <button key={k} className={source.kind === k ? 'active' : ''} onClick={() => setParams({ list: 'similar', kind: k }, { replace: true })}>
+                  <button key={k} aria-pressed={source.kind === k} className={source.kind === k ? 'active' : ''} onClick={() => setParams({ list: 'similar', kind: k }, { replace: true })}>
                     {KIND_LABEL[k]}
                   </button>
                 ))}

@@ -93,6 +93,35 @@ func detectLanguages(tail string) (langs []string, multi, subbed bool) {
 	return langs, multi, subbed
 }
 
+// firstTechTokenRe finds the first resolution, source, codec or audio tag of a
+// release name: where the episode title of a TV release ends.
+var firstTechTokenRe = regexp.MustCompile(`(?i)\b(?:2160p|1080p|720p|576p|480p|4K|WEB-?DL|WEBRip|WEB|BluRay|BDRip|BRRip|HDTV|PDTV|SDTV|HD-?Rip|DVDRip|DVD|Remux|x264|x265|h[. ]?26[45]|hevc|avc|xvid|AC3|EAC3|DDP?5\.1|DTS|AAC|Atmos)\b`)
+
+// withoutEpisodeTitle takes the episode title out of the tail of a TV release
+// name ("S03E04.French.Toast.1080p.WEB-DL"): the words between the episode
+// marker and the first resolution, source or codec tag are the title, not tags.
+// Only language tags that sit right against that first tag ("S01.GERMAN.DL.720p",
+// "S01E02.FRENCH.720p") are kept. A name with no such tag is left as it was.
+func withoutEpisodeTitle(tail string) string {
+	loc := firstTechTokenRe.FindStringIndex(tail)
+	if loc == nil {
+		return tail
+	}
+	words := languageSplit.Split(tail[:loc[0]], -1)
+	keep := 0
+	for i := len(words) - 1; i >= 0; i-- {
+		w := strings.ToUpper(words[i])
+		if w == "" {
+			continue
+		}
+		if languageTags[w] == "" && !multiTags[w] && !subbedTags[w] && w != "DL" {
+			break
+		}
+		keep = len(words) - i
+	}
+	return strings.Join(words[len(words)-keep:], " ") + " " + tail[loc[0]:]
+}
+
 // LanguageNames lists every language a release tag can name, English first
 // and the rest alphabetically.
 func LanguageNames() []string {

@@ -73,6 +73,7 @@ func (t *Tracker) RecordSearch(id int64, results []Result, err error) {
 			return
 		}
 		t.Failed(id, err)
+		t.noteFailed(id)
 		t.bump(id, 1, 1, 0, 0)
 		return
 	}

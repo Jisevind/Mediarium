@@ -424,7 +424,7 @@ function DiscoverPage() {
               {importing ? t('Importing…') : t('Import')}
             </button>
           </div>
-          <FormProblem v={v} verb="import" />
+          <FormProblem v={v} action="import" />
           {importError && <p className="error-text" style={{ margin: 0 }}>{importError}</p>}
         </section>
       )}

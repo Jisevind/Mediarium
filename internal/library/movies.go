@@ -3,6 +3,7 @@
 package library
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -191,7 +192,11 @@ var (
 )
 
 func (r *Repo) listMovies(where string, args ...any) ([]Movie, error) {
-	rows, err := r.db.Query(`SELECT `+movieColumns+` FROM movies `+where, args...)
+	return r.listMoviesContext(context.Background(), where, args...)
+}
+
+func (r *Repo) listMoviesContext(ctx context.Context, where string, args ...any) ([]Movie, error) {
+	rows, err := r.db.QueryContext(ctx, `SELECT `+movieColumns+` FROM movies `+where, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list movies: %w", err)
 	}

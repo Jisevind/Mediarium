@@ -25,6 +25,10 @@ type Show struct {
 	// TMDB's kind of show ("Scripted", "Talk Show", "News", ...).
 	OriginCountry []string `json:"origin_country"`
 	Type          string   `json:"type"`
+	// OriginalName is the show's name in its own language, and Adult is
+	// TMDB's adult flag (both on search results too).
+	OriginalName string `json:"original_name"`
+	Adult        bool   `json:"adult"`
 }
 
 // Year extracts the 4-digit first-air year, or 0 if unknown.

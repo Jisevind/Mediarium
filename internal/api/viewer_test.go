@@ -20,7 +20,7 @@ func split(pattern string) (method, path string) {
 // A viewer may only look. These are the few things a viewer may do with a
 // method that changes something, all of them about their own account.
 var viewerMayWrite = map[string]bool{
-	"PUT /api/auth/profile": true, "POST /api/auth/change-password": true,
+	"PUT /api/auth/profile": true, "POST /api/auth/change-password": true, "DELETE /api/auth/sessions": true,
 	"POST /api/auth/two-step/setup": true, "POST /api/auth/two-step/enable": true,
 	"POST /api/auth/two-step/disable": true, "POST /api/auth/two-step/recovery": true,
 	"POST /api/auth/passkeys/register/begin": true, "POST /api/auth/passkeys/register/finish": true,

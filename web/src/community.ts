@@ -50,6 +50,7 @@ export function helpers(): Helper[] {
     { name: 'varnakube', where: 'GitHub', href: github('varnakube'), ideas: [t('Picking a book by hand when it is not found during an import'), t("Setting a book's cover by hand")] },
     { name: 'SanketBaraiya', where: 'GitHub', href: github('SanketBaraiya'), ideas: [t('Importing anime that is numbered by TheTVDB seasons, such as One Piece')] },
     { name: 'nexus4004', where: 'GitHub', href: github('nexus4004'), ideas: [t("Showing the folder where a title's files go"), t('Pointing a title at a file or folder you renamed'), t('Subtitles in Croatian and Serbian'), t('Rescanning a movie that has no file'), t('Library entries in the left menu'), t('The busy message as a small notice in the corner')] },
+    { name: 'Jisevind', where: 'GitHub', href: github('Jisevind'), ideas: [t('Keeping the original file names')] },
     { name: 'mirisbowring', where: 'GitHub', href: github('mirisbowring'), ideas: [t('Replacing a movie with a smaller version'), t('Searching under another title of a movie or show, such as the German one')] },
     { name: 'spamoom', where: 'GitHub', href: github('spamoom'), ideas: [t('Sending indexer traffic through the VPN, with the code to do it')] },
     { name: 'acortespr06', where: 'GitHub', href: github('acortespr06'), ideas: [t('Transmission as a download client')] },

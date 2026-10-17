@@ -1,4 +1,4 @@
-import SidebarScrollMark from './SidebarScrollMark'
+import { useMoreBelow } from './useMoreBelow'
 import { MiniPlayer, MusicPlayerProvider } from './MusicPlayer'
 import { Fragment, useCallback, useEffect, useRef, useState, Suspense } from 'react'
 import { Link, NavLink, Outlet, useLocation, useNavigate, useNavigationType } from 'react-router-dom'
@@ -190,14 +190,19 @@ function Shell() {
   // heading of its own) as the page's one <h1>.
   const heading = location.pathname.startsWith('/help') ? t('User guide') : pageTitle(location.pathname, admin)
   const parts = pageParts(location.pathname, admin)
-  const headingNode = parts.group ? (
-    <>
-      <span className="top-crumb">{parts.group}</span>
-      <span className="top-sep" aria-hidden="true"> · </span>
-      {parts.page}
-    </>
-  ) : (
-    heading
+  const headingText = parts.group ? `${parts.group} · ${parts.page}` : heading
+  const headingNode = (
+    <span className="top-text">
+      {parts.group ? (
+        <>
+          <span className="top-crumb">{parts.group}</span>
+          <span className="top-sep" aria-hidden="true"> · </span>
+          {parts.page}
+        </>
+      ) : (
+        heading
+      )}
+    </span>
   )
   useGuideShortcut()
   const specificTitle = useSpecificTitle()
@@ -206,6 +211,40 @@ function Shell() {
   }, [specificTitle, heading])
   const mainRef = useRef<HTMLElement>(null)
   const navRef = useRef<HTMLElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const moreBelow = useMoreBelow(scrollRef)
+  const menuButton = useRef<HTMLButtonElement>(null)
+  // The open drawer (phones and tablets): Escape closes it, Tab stays inside
+  // it, and focus goes back to the menu button when it closes.
+  useEffect(() => {
+    if (!menuOpen) return
+    const nav = navRef.current
+    if (!nav || !window.matchMedia('(max-width: 900px)').matches) return
+    const items = () => [...nav.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled])')].filter((el) => el.getClientRects().length > 0)
+    items()[0]?.focus({ preventScroll: true })
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setMenuOpen(false)
+        menuButton.current?.focus({ preventScroll: true })
+        return
+      }
+      if (e.key !== 'Tab') return
+      const list = items()
+      if (list.length === 0) return
+      const first = list[0]
+      const last = list[list.length - 1]
+      const at = document.activeElement
+      if (e.shiftKey && (at === first || !nav.contains(at))) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && (at === last || !nav.contains(at))) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [menuOpen])
   const [pageHasHeading, setPageHasHeading] = useState(false)
   // Title, show, book and artist pages get a Back button: it returns to
   // wherever the page was opened from, or to its section when it was opened
@@ -227,8 +266,15 @@ function Shell() {
     return () => watch.disconnect()
   }, [location.pathname])
   const [version, setVersion] = useState('')
+  // What's new goes first; the usage-numbers question waits until it is closed
+  // (or has nothing to show), so the two never open on top of each other.
+  const [notesDone, setNotesDone] = useState(false)
+  const onNotesDone = useCallback(() => setNotesDone(true), [])
   useEffect(() => {
-    api.version().then((v) => setVersion(v.version)).catch(() => undefined)
+    api
+      .version()
+      .then((v) => setVersion(v.version))
+      .catch(() => setNotesDone(true))
   }, [])
   // A dot on the version when a newer release is waiting (administrators only).
   const [updateReady, setUpdateReady] = useState(false)
@@ -265,13 +311,14 @@ function Shell() {
         {t('Skip to content')}
       </a>
       <div className={`sidebar-backdrop${menuOpen ? ' open' : ''}`} onClick={() => setMenuOpen(false)} />
-      <nav ref={navRef} className={`sidebar${menuOpen ? ' open' : ''}`} aria-label={tc('menu', 'Main')}>
+      <nav id="main-menu" ref={navRef} className={`sidebar${menuOpen ? ' open' : ''}`} aria-label={tc('menu', 'Main')}>
         <div className="brand">
           <BrandMark />
           <span className="brand-text">
             <span className="brand-name">Mediarium</span>
           </span>
         </div>
+        <div className={`side-scroll${moreBelow ? ' more-below' : ''}`} ref={scrollRef}>
         {nav.map((n) => (
           <Fragment key={n.to}>
           <NavLink to={n.to} end={n.end} style={{ ['--nc' as string]: `var(--c-${n.sec})` }} className={({ isActive }) => (n.sec === 'settings' ? (inSettings ? 'active parent-open' : '') : n.sec === 'library' ? (isActive ? 'active parent-open' : '') : isActive || (n.sec === 'calendar' && inUpcoming) ? 'active' : '')}>
@@ -372,6 +419,7 @@ function Shell() {
         <SideTools ebooksOn={ebooksOn} audiobooksOn={audiobooksOn} musicOn={musicOn} homes={homes} apps={apps} showSupport={admin && showSupport} variant="side">
           <ThemeToggle />
         </SideTools>
+        </div>
         {version && (
           <div className="side-version">
             {admin ? (
@@ -389,11 +437,10 @@ function Shell() {
           </div>
         )}
       </nav>
-      <SidebarScrollMark target={navRef} />
       <div className="main-area">
         <AmbientBackdrop />
         <header className="topbar">
-          <button className="menu-button" onClick={() => setMenuOpen((o) => !o)} aria-label={t('Open menu')} aria-expanded={menuOpen}>
+          <button ref={menuButton} className="menu-button" aria-controls="main-menu" onClick={() => setMenuOpen((o) => !o)} aria-label={t('Open menu')} aria-expanded={menuOpen}>
             <Icon name="menu" size={20} />
           </button>
           {backTo && (
@@ -402,7 +449,7 @@ function Shell() {
               <span>{t('Back')}</span>
             </button>
           )}
-          {pageHasHeading ? <p className="top-title">{headingNode}</p> : <h1 className="top-title">{headingNode}</h1>}
+          {pageHasHeading ? <p className="top-title" title={headingText}>{headingNode}</p> : <h1 className="top-title" title={headingText}>{headingNode}</h1>}
           <div className={`top-search${searchOpen ? ' open' : ''}`}>
             <SearchBox />
             <button type="button" className="icon-btn top-search-close" onClick={() => setSearchOpen(false)} aria-label={t('Close search')}>
@@ -432,8 +479,8 @@ function Shell() {
           </Suspense>
         </main>
         <MiniPlayer />
-        {!demoEnabled() && <WhatsNew version={version} />}
-        {!demoEnabled() && admin && <UsageStatsPrompt />}
+        {!demoEnabled() && <WhatsNew version={version} onDone={onNotesDone} />}
+        {!demoEnabled() && admin && notesDone && <UsageStatsPrompt />}
         <FeedbackNudge />
         <ReportHost />
       </div>

@@ -1009,7 +1009,7 @@ func (s *Server) arrSearchMissingMovies() {
 	if err != nil {
 		return
 	}
-	blocked := s.blockedKeys()
+	blocked := s.searchSkipKeys()
 	searched := 0
 	for _, m := range movies {
 		if !m.Monitored || m.Status != library.StatusMissing || (m.ReleaseDate != "" && m.ReleaseDate > today()) {
@@ -1039,7 +1039,7 @@ func (s *Server) arrSearchAlbum(albumID int64) {
 	if err != nil {
 		return
 	}
-	s.huntAlbum(context.Background(), artist, album, profile, instances, s.blockedKeys(), true)
+	s.huntAlbum(context.Background(), artist, album, profile, instances, s.searchSkipKeys(), true)
 }
 
 // arrImage is one picture of a title.

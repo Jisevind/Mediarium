@@ -122,7 +122,7 @@ func (s *Server) loadProfiles() (profileSet, error) {
 	if p, ok := ps.byID[s.defaultProfileID()]; ok {
 		ps.def = p
 	} else if len(list) > 0 {
-		ps.def = list[0]
+		ps.def = ps.byID[list[0].ID] // the one with its custom formats attached
 	}
 	if p, ok := ps.byID[s.defaultTVProfileID()]; ok {
 		ps.defTV = &p
@@ -206,6 +206,9 @@ type profileListPayload struct {
 	DefaultID int64            `json:"defaultId"`
 	// DefaultTVID is the default for shows; 0 = shows use DefaultID.
 	DefaultTVID int64 `json:"defaultTvId"`
+	// DefaultSources is the downloader choice a title follows when it has none of its own,
+	// so members can read it without the administrator-only settings.
+	DefaultSources string `json:"defaultSources"`
 }
 
 func toProfilePayload(p quality.Profile, inUse int) profilePayload {
@@ -311,7 +314,7 @@ func (s *Server) handleListProfiles(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	out := profileListPayload{Profiles: []profilePayload{}, Tiers: []string{}, DefaultID: s.defaultProfileID(), DefaultTVID: s.defaultTVProfileID()}
+	out := profileListPayload{Profiles: []profilePayload{}, Tiers: []string{}, DefaultID: s.defaultProfileID(), DefaultTVID: s.defaultTVProfileID(), DefaultSources: s.defaultSources()}
 	for _, p := range list {
 		out.Profiles = append(out.Profiles, toProfilePayload(p, usage[p.ID]))
 	}

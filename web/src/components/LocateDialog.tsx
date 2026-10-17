@@ -2,7 +2,7 @@ import { createPortal } from 'react-dom'
 import { useEffect, useRef, useState } from 'react'
 import { api, type BrowseAnswer } from '../api'
 import { formatBytes } from '../format'
-import { t } from '../i18n'
+import { st, t } from '../i18n'
 import { useFocusTrap } from '../useFocusTrap'
 import { useToast } from './Toast'
 import Icon from './Icon'
@@ -66,8 +66,8 @@ export default function LocateDialog({
     try {
       if (kind === 'series') {
         const rep = await api.changeSeriesFolder(id, target)
-        if (rep.found > 0) toast.success(rep.message)
-        else toast.info(rep.message)
+        if (rep.found > 0) toast.success(st(rep.message))
+        else toast.info(st(rep.message))
       } else if (mode === 'file') {
         const rep = await api.locateMovieFile(id, target)
         toast.success(t('Found {file} and added it.', { file: rep.added ?? '' }))

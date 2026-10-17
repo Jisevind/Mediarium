@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/rdborg/mediarium/internal/indexers"
@@ -59,7 +60,7 @@ func limitWarnings(outcomes []indexers.Outcome) []string {
 			continue
 		}
 		listed[o.IndexerName] = true
-		out = append(out, o.IndexerName+": "+o.LimitNote+" It was asked anyway, so this search may be refused.")
+		out = append(out, fmt.Sprintf("Even though its daily limit is used up, %s was asked, so this search may be refused.", o.IndexerName))
 	}
 	return out
 }

@@ -45,6 +45,7 @@ The keys the app stores in its settings table. You normally change these from th
 | `downloads.hours` | when new downloads may start, "1-7" (from 1:00 to 7:00, server time); outside it they wait in line. Unset = any time |
 | `downloads.min_free_gb` | no new download starts while the downloads folder has less free space than this many GB; unset = 5, "0" = off |
 | `downloads.newest_first` | "1": among the downloads the automatic searches added, newer releases start first; unset = in the order they were added |
+| `downloads.nzb_link_holds` | kept by Mediarium itself: JSON of releases whose NZB link answered with a web page or another answer that is not an NZB, and until when automatic searches leave each one alone |
 | `downloads.pause_while_streaming` | "1" pauses downloads while someone watches on Plex, Jellyfin or Emby |
 | `downloads.paused_for_streaming` | the ids of the downloads paused for a stream, as JSON |
 | `downloads.precheck` | "1" asks the news servers whether a sample of an NZB's articles exist before downloading it, and gives up at once on a release the PAR2 files could not repair; unset or "0" leaves it off |
@@ -71,6 +72,7 @@ The keys the app stores in its settings table. You normally change these from th
 | `library.illegal_char_replacement` | used when mode=replace, e.g. "-" |
 | `library.import_added_backfill` | "1" once it has run (set by the app, not user-editable) |
 | `library.import_conflict_policy` | "skip" \| "overwrite" \| "overwrite_if_better" \| "ask" |
+| `library.keep_original_names` | "1" keeps the file name an imported video came with (folders are still named by the preset; a random, obfuscated name falls back to the preset); unset or "0" renames as the preset says |
 | `library.metadata_files` | JSON: movies and tv, each {nfo, artwork}, and replace (true replaces files Mediarium wrote earlier); unset = nothing is written |
 | `library.movie_copies_path` | where second copies of movies go (a 4K copy next to the 1080p one); unset = second copies of movies are off |
 | `library.movie_name_format` | token string, used when preset=custom |

@@ -17,6 +17,11 @@ test('a movie that is downloading is left alone', () => {
   assert.equal(rescanMessage({ ...none, busy: true }), 'This movie is downloading right now, so nothing was changed.')
 })
 
+test('a gone file is wanted again only when the title is monitored', () => {
+  assert.equal(rescanMessage({ ...none, missing: 1 }), 'Checked the files: 0 fine, 1 gone, wanted again.')
+  assert.equal(rescanMessage({ ...none, missing: 1 }, false), 'Checked the files: 0 fine, 1 gone.')
+})
+
 test('a normal rescan still counts its files', () => {
   assert.equal(rescanMessage({ ...none, found: 2, renamed: 1 }), 'Checked the files: 2 fine, 1 found under a new name.')
 })

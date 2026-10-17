@@ -505,7 +505,7 @@ export default function Onboarding({ startStep = 0 }: { startStep?: number }) {
           <button className="primary" onClick={submitAdmin} disabled={busy}>
             {t('Continue')}
           </button>
-          <FormProblem v={adminCheck} verb={t('continue')} />
+          <FormProblem v={adminCheck} action="continue" />
         </div>
       )}
 
@@ -541,7 +541,7 @@ export default function Onboarding({ startStep = 0 }: { startStep?: number }) {
               {t('Continue')}
             </button>
           </div>
-          <FormProblem v={pathCheck} verb={t('continue')} />
+          <FormProblem v={pathCheck} action="continue" />
         </div>
       )}
 

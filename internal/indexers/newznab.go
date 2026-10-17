@@ -29,10 +29,13 @@ type Result struct {
 	SizeBytes   int64
 	PublishDate time.Time
 	Categories  []int
-	Seeders     int    // torrent-only (Torznab attr), 0 for usenet results
-	Peers       int    // torrent-only (Torznab attr), 0 for usenet results
-	InfoHash    string // torrent-only, when the indexer reports it
-	Priority    int    // the indexer's priority (1 preferred, 2 normal, 3 last resort); set by the engine
+	Seeders     int // torrent-only (Torznab attr), 0 for usenet results
+	// SeedersKnown is true when the indexer said how many seeders there are, so a
+	// 0 in Seeders is a dead torrent and not just a missing number.
+	SeedersKnown bool
+	Peers        int    // torrent-only (Torznab attr), 0 for usenet results
+	InfoHash     string // torrent-only, when the indexer reports it
+	Priority     int    // the indexer's priority (1 preferred, 2 normal, 3 last resort); set by the engine
 	// Cached is set by the search code (never by an indexer) when the debrid
 	// service in use already has this torrent. False means "not cached or not
 	// known".
@@ -69,7 +72,9 @@ const (
 	slowFeedWait   = 60 * time.Second
 )
 
-var slowFeedPath = regexp.MustCompile(`^/(\d+|api/v2\.0/indexers/[^/]+/results/(torznab|newznab))(/|$)`)
+// The path may start with a folder when they sit behind a reverse proxy
+// ("/prowlarr/5/api", "/jackett/api/v2.0/indexers/x/results/torznab").
+var slowFeedPath = regexp.MustCompile(`^/\d+(/|$)|(^|/)(\d+/api|api/v2\.0/indexers/[^/]+/results/(torznab|newznab))(/|$)`)
 
 // FeedWait is how long to wait for the feed at baseURL: longer for the feeds
 // that Prowlarr (its own address and an indexer number, usually port 9696) or
@@ -411,8 +416,9 @@ func (item newznabItem) toResult(indexerName string) Result {
 		}
 	}
 	if seeders := item.attr("seeders"); seeders != "" {
-		if n, err := strconv.Atoi(seeders); err == nil && n > 0 {
+		if n, err := strconv.Atoi(seeders); err == nil && n >= 0 {
 			r.Seeders = int(sane(int64(n)))
+			r.SeedersKnown = true
 		}
 	}
 	r.InfoHash = strings.ToLower(item.attr("infohash"))

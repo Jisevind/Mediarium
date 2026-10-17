@@ -106,13 +106,8 @@ function AddForm({
     api.listProfiles().then((r) => {
       setProfiles(sortProfiles(r.profiles))
       setDefaultProfileId(defaultProfileFor(target.kind, r))
+      setDefaultSources(r.defaultSources || 'both')
     }).catch(() => undefined)
-    api
-      .getSettings()
-      .then((s) => {
-        setDefaultSources(s.defaultSources ?? 'both')
-      })
-      .catch(() => undefined)
     api
       .libraryFolders()
       .then((f) => setFolders(target.kind === 'movie' ? f.movies : f.tv))

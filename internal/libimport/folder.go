@@ -69,6 +69,25 @@ func ScanSeriesFolder(dir string) ([]File, []string, error) {
 				out = append(out, file)
 				continue
 			}
+			// A daily show's file named by the day it aired.
+			if fr.AirDate != "" && fr.Season == 0 && !fr.Special {
+				folders := append(nearestFolders(f.rel), filepath.Base(dir))
+				tier := tierFromNames(fileBase(f.rel[len(f.rel)-1]), folders)
+				key := fmt.Sprintf("d#%s#%d", fr.AirDate, fr.DailyPart)
+				file := File{Path: f.path, SizeBytes: f.size, AirDate: fr.AirDate, DailyPart: fr.DailyPart, Quality: string(tier)}
+				if idx, dup := seen[key]; dup {
+					if out[idx].SizeBytes >= file.SizeBytes {
+						skipped = append(skipped, f.path+" - duplicate copy of the same episode")
+						continue
+					}
+					skipped = append(skipped, out[idx].Path+" - duplicate copy of the same episode")
+					out[idx] = file
+					continue
+				}
+				seen[key] = len(out)
+				out = append(out, file)
+				continue
+			}
 			skipped = append(skipped, f.path+" - couldn't read a season/episode number from the name")
 			continue
 		}

@@ -197,7 +197,10 @@ func (s *Server) fetchSeriesDetails(ctx context.Context, item library.ImportItem
 			details.SceneMap = num.MapScene
 		}
 	}
-	_, err = s.MovieRepo.CompleteSeriesImport(item, details, toLibraryEpisodes(infos))
+	episodes := toLibraryEpisodes(infos)
+	// A daily show's files named by the day they aired go on that day's episode.
+	item.Files = library.PlaceByAirDate(item.Files, episodes)
+	_, err = s.MovieRepo.CompleteSeriesImport(item, details, episodes)
 	if err == nil {
 		if sr, gerr := s.MovieRepo.GetSeries(item.TitleID); gerr == nil {
 			s.noteSeriesNumbering(sr) // an anime gets its numbering read now

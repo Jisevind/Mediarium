@@ -174,7 +174,7 @@ func (s *Server) handleManualImport(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		}
-		dest, err := s.buildTVDestPath(sr, ep, release, src)
+		dest, err := s.buildTVDestPath(sr, ep, release, guessName(src), src)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
