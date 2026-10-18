@@ -57,7 +57,7 @@ Settings has one entry in the sidebar. It always lists its groups, and one group
 
 | Group | Pages | What is there |
 |---|---|---|
-| General | General, Playback | The language of the app, light or dark, the time zone note, the address you open Mediarium at, updates and the legal notice; how the built-in player converts videos the browser cannot play. Everyone sees the first three. |
+| General | General, Playback | The language of the app, light or dark, less motion, the time zone note, the address you open Mediarium at, updates and the legal notice; how the built-in player converts videos the browser cannot play. Everyone sees the first three. |
 | Media types | Media types | Switch movies, shows, music, ebooks and audiobooks on or off. |
 | Library | Folders, File names and importing, Quality, Automatic searching | Where files live; how they are named, NFO and artwork files and the script after an import; quality profiles, size limits and the audio language you want; when Mediarium searches by itself. |
 | Indexers & Search | Indexers & Search | Indexers, FlareSolverr and IRC announce. |

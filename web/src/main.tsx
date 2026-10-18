@@ -1,4 +1,5 @@
 import { loadLanguage } from './i18n'
+import { applySavedEffects } from './motion'
 
 // Dark unless light was picked (ThemeToggle.tsx), set before anything paints.
 let theme = 'dark'
@@ -8,6 +9,10 @@ try {
   // blocked storage: dark
 }
 document.documentElement.dataset.theme = theme
+
+// The decorative motion can be switched off per browser (Settings > General),
+// also before the first paint so a reload does not flash it back on.
+applySavedEffects()
 
 // The app puts a page where it belongs when going back or forward (App shell); the browser's own guess would fight it.
 try {

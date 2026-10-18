@@ -905,6 +905,32 @@ input:focus, select:focus, textarea:focus { border-color: var(--sec, var(--accen
   *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
 }
 
+/* Settings > General > Reduce effects. Only the decorative motion stops:
+   loading spinners, progress bars and live download markers carry on, because
+   they say what the app is doing rather than just filling the background. */
+:root[data-motion='off'] .ambient-item,
+:root[data-motion='off'] .hero-drift .kind-glyph,
+:root[data-motion='off'] .drift-item,
+:root[data-motion='off'] .hero-drift::before,
+:root[data-motion='off'] .hero-welcome::before,
+:root[data-motion='off'] .hero-welcome::after,
+:root[data-motion='off'] .hero-welcome h1 span,
+:root[data-motion='off'] .main-area::before,
+:root[data-motion='off'] .sidebar::before,
+:root[data-motion='off'] .title-scene img,
+:root[data-motion='off'] .title-scene::before,
+:root[data-motion='off'] .title-scene::after,
+:root[data-motion='off'] .nav-count,
+:root[data-motion='off'] .nav-dot,
+:root[data-motion='off'] .auth-drift-item,
+:root[data-motion='off'] .auth-mark,
+:root[data-motion='off'] .splash-mark .kind-glyph,
+:root[data-motion='off'] .wizard-logo .kind-glyph,
+:root[data-motion='off'] .finish-glow,
+:root[data-motion='off'] .finish-mark,
+:root[data-motion='off'] .finish-card h1 span,
+:root[data-motion='off'] .release-sleeve .release-vinyl { animation: none !important; }
+
 /* Tiles are buttons, so let their text wrap instead of running off the edge. */
 .type-tile { white-space: normal; text-align: left; display: grid; }
 .type-tile small { white-space: normal; text-align: left; line-height: 1.35; }

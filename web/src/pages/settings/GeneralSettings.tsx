@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import { api, isAdmin } from '../../api'
 import { useAuth } from '../../AuthContext'
 import Icon from '../../components/Icon'
+import Switch from '../../components/Switch'
 import { UsageStatsCard } from '../../components/UsageStats'
 import PublicAddress from '../../components/PublicAddress'
 import ThemeToggle from '../../components/ThemeToggle'
 import { PushCard, UpdatesCard } from '../../components/UpdateCards'
+import { savedEffectsOff, setEffectsOff } from '../../motion'
 import { LANGUAGES, chooseLanguage, currentLanguage, locale, t, type Lang } from '../../i18n'
 
 // The language the app itself is shown in (not the audio or subtitle language).
@@ -42,6 +44,30 @@ function LookCard() {
         <ThemeToggle />
         <span style={{ color: 'var(--text-dim)' }}>{t('Switches Mediarium between its dark and light look. It is kept in this browser.')}</span>
       </div>
+    </fieldset>
+  )
+}
+
+// The decorative motion can be switched off per browser. Everything that
+// shows what the app is doing (spinners, progress bars, live downloads) keeps
+// moving.
+function MotionCard() {
+  const [off, setOff] = useState(savedEffectsOff)
+  return (
+    <fieldset className="group">
+      <legend>
+        <Icon name="sparkles" size={14} /> {t('Motion')}
+      </legend>
+      <Switch
+        checked={off}
+        onChange={(next) => {
+          setOff(next)
+          setEffectsOff(next)
+        }}
+        label={t('Reduce effects')}
+        description={t('Stops the decorative background motion, such as the drifting shapes, the moving grain and the film-strip edge. Loading spinners and progress bars keep moving. Kept in this browser.')}
+        showState
+      />
     </fieldset>
   )
 }
@@ -100,6 +126,7 @@ export default function GeneralSettings() {
     <div className="settings-stack">
       <LanguageCard />
       <LookCard />
+      <MotionCard />
       <TimeZoneCard />
       {admin && <PublicAddress />}
       {admin && <UpdatesCard />}
