@@ -102,6 +102,24 @@ const SERIES_SEEDS: (Seed & { episodes: number; have: number })[] = [
   { id: 106, title: 'Glass Orchard', year: 2021, genres: ['Animation', 'Fantasy'], rating: 8.8, overview: OV, state: 'downloaded', episodes: 18, have: 18 },
 ]
 
+// A long indexer list, mixed Usenet and torrent, so the Settings page shows
+// what many indexers look like.
+const demoIndexers = Array.from({ length: 15 }, (_, n) => {
+  const torrent = n % 3 === 1
+  return {
+    id: 100 + n,
+    name: ['NZBgeek', 'DrunkenSlug', 'NZBFinder', 'Tabula Rasa', 'altHUB', 'NinjaCentral', 'Abnzb', 'OZnzb', 'The Pirate Bay', '1337x', 'TorrentGalaxy', 'YTS', 'Nyaa', 'EZTV', 'LimeTorrents'][n],
+    definitionId: '',
+    baseUrl: torrent ? `https://torznab.example.org/api/v2.0/indexers/site-${n}/results/torznab/` : `https://api.indexer-${n}.example.com`,
+    protocol: torrent ? ('torrent' as const) : ('usenet' as const),
+    enabled: n !== 6,
+    kind: torrent ? ('torznab' as const) : ('newznab' as const),
+    priority: [10, 25, 25, 5, 40, 25, 15, 25, 30, 25, 20, 25, 35, 25, 50][n],
+    lastTestAt: new Date(Date.now() - (n + 1) * 3_600_000).toISOString(),
+    lastTestError: n === 4 ? 'The indexer did not answer in time.' : undefined,
+  }
+})
+
 const movies: Movie[] = MOVIE_SEEDS.map((s) => ({
   id: s.id,
   tmdbId: 9000 + s.id,
@@ -558,6 +576,8 @@ export function installDemo() {
         return json(demoBatch)
       case p === '/api/music/search':
         return json([])
+      case p === '/api/indexers':
+        return json(demoIndexers)
       default:
         return real(input, init)
     }

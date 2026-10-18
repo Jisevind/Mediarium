@@ -61,6 +61,25 @@ for (const lang of ['en', 'ru', 'de', 'fr', 'pl']) {
   }
 }
 
+// The indexer list is sorted by priority (lower first), then by name, and the
+// 15 demo indexers fit without the page scrolling sideways in either language.
+for (const lang of ['en', 'ru']) {
+  test(`/settings/indexers lists 15 demo indexers by priority (${lang})`, async ({ page }) => {
+    await page.addInitScript((l) => {
+      localStorage.setItem('mediarium-demo', '1')
+      localStorage.setItem('mediarium-lang', l)
+    }, lang)
+    await page.goto('/settings/indexers')
+    const cards = page.locator('.indexer-card')
+    await expect(cards).toHaveCount(15)
+    await expect(cards.first().locator('.indexer-title strong')).toHaveText('Tabula Rasa')
+    await expect(cards.last().locator('.indexer-title strong')).toHaveText('LimeTorrents')
+    await expect(page.locator('.indexer-filter')).toBeVisible()
+    const over = await page.locator('main.content').evaluate((el) => el.scrollWidth - el.clientWidth)
+    expect(over).toBeLessThanOrEqual(0)
+  })
+}
+
 // The header buttons are big enough for a finger on a tablet or phone.
 test('the header buttons are at least 40px on a touch screen', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'phone only')

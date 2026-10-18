@@ -8,6 +8,9 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+### Changed
+- The indexer list is sorted by priority (lowest number first) and shown as compact cards in two columns, the Add card stays in view while you scroll, and a filter box appears when you have more than eight indexers. Asked for by SanketBaraiya on GitHub, #80.
+
 ## [3.2.1] - 2026-10-18
 
 In short: new indexers and lists, and fixes for what you reported after 3.2.0.

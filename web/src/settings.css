@@ -90,7 +90,7 @@
 }
 
 /* Other apps: Radarr, Sonarr and Lidarr side by side on wide screens */
-.settings-content .other-apps { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 14px; }
+.settings-content .other-apps { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr)); gap: 14px; }
 .settings-content .other-apps > fieldset.group { margin: 0; background: color-mix(in srgb, var(--text) 3%, transparent); box-shadow: inset 0 0 0 1px var(--rim); padding: 16px 18px; }
 
 /* ---- Media types: each kind as its own shape, lit when switched on ------ */
@@ -182,6 +182,31 @@
 @media (max-width: 1100px) {
   .settings-content .indexer-cols { grid-template-columns: minmax(0, 1fr); }
   .settings-content .indexer-cols > :nth-child(n) { grid-column: 1; grid-row: auto; }
+}
+
+/* The add form stays in view on a wide screen while the list scrolls, and the
+   indexers sit in a grid of compact cards: two across when the list is wide
+   enough, one when it is narrow. */
+
+@media (min-width: 1101px) {
+.settings-content .indexer-cols { grid-template-columns: minmax(300px, 0.42fr) minmax(0, 1fr); }
+  .settings-content .indexer-cols > .indexer-add { position: sticky; top: 8px; max-height: calc(100vh - 110px); overflow-y: auto; overscroll-behavior: contain; }
+}
+.settings-content .indexer-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; }
+.settings-content .indexer-filter { flex: 1 1 200px; min-width: 0; max-width: 360px; }
+.settings-content .indexer-cards { grid-template-columns: repeat(auto-fill, minmax(min(100%, 270px), 1fr)); align-items: start; gap: 10px; }
+.settings-content .indexer-card { gap: 8px; padding: 10px 12px; align-content: start; }
+.settings-content .indexer-top { align-items: flex-start; gap: 10px; }
+.settings-content .indexer-title { flex-wrap: wrap; gap: 2px 8px; }
+.settings-content .indexer-title strong { max-width: 100%; }
+.settings-content .indexer-info small { overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.settings-content .indexer-info small.indexer-url { display: block; -webkit-line-clamp: unset; }
+.settings-content .indexer-priority { display: grid; gap: 2px; justify-items: end; font-size: 0.78rem; color: var(--text-dim); }
+.settings-content .indexer-priority input { width: 60px !important; padding: 4px 8px; text-align: center; }
+.settings-content .indexer-card .tile-ico { width: 32px; height: 32px; flex: none; }
+.settings-content .indexer-card .qdetails summary { font-size: 0.85rem; }
+@media (pointer: coarse) {
+  .settings-content .indexer-priority input, .settings-content .indexer-filter, .settings-content .indexer-card .btn-sm { min-height: 40px; }
 }
 
 /* Subtitle add-ons: one row per add-on, name and host on the left, buttons on the right. */
