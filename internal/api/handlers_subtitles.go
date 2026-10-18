@@ -13,12 +13,14 @@ import (
 )
 
 type subtitleResultPayload struct {
-	FileID   int     `json:"fileId"`
-	Source   string  `json:"source,omitempty"` // "subdl"; empty for OpenSubtitles
-	Link     string  `json:"link,omitempty"`   // SubDL's download path
-	Language string  `json:"language"`
-	Release  string  `json:"release"`
-	Rating   float64 `json:"rating"`
+	FileID int    `json:"fileId"`
+	Source string `json:"source,omitempty"` // "subdl"; empty for OpenSubtitles
+	// SourceName is the add-on's own name, for results from an add-on.
+	SourceName string  `json:"sourceName,omitempty"`
+	Link       string  `json:"link,omitempty"` // SubDL's download path
+	Language   string  `json:"language"`
+	Release    string  `json:"release"`
+	Rating     float64 `json:"rating"`
 	// Score is how well the subtitle fits the video file's release (higher
 	// is better); results are returned best-first.
 	Score float64 `json:"score"`
@@ -132,7 +134,7 @@ func (s *Server) searchSubtitles(w http.ResponseWriter, r *http.Request, kind st
 	out := make([]subtitleResultPayload, len(results))
 	for i, res := range results {
 		out[i] = subtitleResultPayload{
-			FileID: res.FileID, Source: res.Source, Link: res.Link, Language: res.Language, Release: res.Release, Rating: res.Rating,
+			FileID: res.FileID, Source: res.Source, SourceName: res.SourceName, Link: res.Link, Language: res.Language, Release: res.Release, Rating: res.Rating,
 			Score: subtitles.Score(res, videoName), HashMatch: res.HashMatch, Variant: string(res.Variant()),
 		}
 	}

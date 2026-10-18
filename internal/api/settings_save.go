@@ -82,6 +82,18 @@ func (s *Server) stageTraktClientID(t *settingsSave, id string) {
 	})
 }
 
+func (s *Server) stageSimklClientID(t *settingsSave, id string) {
+	_ = t.Set(settings.KeySimklClientID, id, true)
+	if id == "" {
+		id = s.builtin.SimklClientID
+	}
+	t.then(func() {
+		s.simklMu.Lock()
+		s.simkl.SetClientID(id)
+		s.simklMu.Unlock()
+	})
+}
+
 func (s *Server) stageTorrentsEnabled(t *settingsSave, enabled bool) {
 	value := "1"
 	if !enabled {

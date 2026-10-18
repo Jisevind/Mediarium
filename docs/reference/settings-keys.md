@@ -98,6 +98,8 @@ The keys the app stores in its settings table. You normally change these from th
 | `library.unmonitor_downloaded` | "1" stops monitoring a movie once it is downloaded; unset or "0" keeps it monitored |
 | `library.unmonitor_finished_shows` | "1" stops monitoring a show once it has ended and every monitored episode is in; unset or "0" keeps it monitored |
 | `mediaservers.client_id` | set by the app, not user-editable |
+| `metadata.simkl_client_id` | encrypted; the Client ID of a Simkl app (own, or the one a release ships with) |
+| `metadata.simkl_token` | encrypted; the access token of the connected Simkl account |
 | `metadata.tmdb_api_key` | encrypted |
 | `metadata.trakt_client_id` | encrypted |
 | `modules.audiobooks` | "1" switches it on; unset or "0" leaves it off |

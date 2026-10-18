@@ -37,6 +37,7 @@ import (
 	"github.com/rdborg/mediarium/internal/queue"
 	"github.com/rdborg/mediarium/internal/requests"
 	"github.com/rdborg/mediarium/internal/settings"
+	"github.com/rdborg/mediarium/internal/simkl"
 	"github.com/rdborg/mediarium/internal/subtitles"
 	"github.com/rdborg/mediarium/internal/torrentopts"
 	"github.com/rdborg/mediarium/internal/trakt"
@@ -119,6 +120,10 @@ type Server struct {
 
 	traktMu sync.RWMutex
 	trakt   *trakt.Client
+
+	simklMu   sync.RWMutex
+	simkl     *simkl.Client
+	simklPins *mediaservers.Pending[string] // Simkl sign-in codes handed out and not yet entered (simkl_connect.go)
 
 	proxyTestAddr string // where a proxy test connects to (tests point it elsewhere)
 
@@ -203,6 +208,7 @@ func New(db *sql.DB, cfg config.Config, box *crypto.Box, defaultTMDBAPIKey, vers
 	}
 	subsKey := optionalKey(settingsStore, settings.KeyOpenSubtitlesAPIKey)
 	traktClientID := optionalKey(settingsStore, settings.KeyTraktClientID)
+	simklClientID := optionalKey(settingsStore, settings.KeySimklClientID)
 
 	tracker, err := usage.NewTracker(db)
 	if err != nil {
@@ -235,6 +241,8 @@ func New(db *sql.DB, cfg config.Config, box *crypto.Box, defaultTMDBAPIKey, vers
 		addons:            subtitles.NewAddonClient(),
 		wizdom:            subtitles.NewWizdom(),
 		trakt:             trakt.New(traktClientID),
+		simkl:             simkl.New(simklClientID),
+		simklPins:         &mediaservers.Pending[string]{TTL: simklPinTTL},
 		// "A handful of attempts per IP/window" — 5 tries per 15
 		// minutes blunts brute-force without punishing a genuine typo.
 		LoginLimiter: auth.NewLoginLimiter(5, 15*time.Minute),
@@ -255,6 +263,7 @@ func New(db *sql.DB, cfg config.Config, box *crypto.Box, defaultTMDBAPIKey, vers
 	s.applyVPNRoutes()
 	s.setupPush()
 	s.instrumentTrakt(s.trakt)
+	s.instrumentSimkl(s.simkl)
 	s.Monitor = s.newMonitor()
 	s.MediaServers = mediaservers.NewRepo(db, box)
 	s.mediaClient = mediaservers.NewClient(version)
@@ -356,6 +365,14 @@ func (s *Server) Trakt() *trakt.Client {
 	s.traktMu.RLock()
 	defer s.traktMu.RUnlock()
 	return s.trakt
+}
+
+// Simkl returns the current Simkl client, safe to call concurrently with a
+// change of the Client ID.
+func (s *Server) Simkl() *simkl.Client {
+	s.simklMu.RLock()
+	defer s.simklMu.RUnlock()
+	return s.simkl
 }
 
 // SetTraktClientID updates both the persisted setting and the live client. An
@@ -932,6 +949,10 @@ func (s *Server) protectedRoutes() *routeTable {
 	admin.HandleFunc("POST /api/watched/cleanup/run", s.handleLibraryCleanupRun)
 	admin.HandleFunc("GET /api/settings/hardcover", s.handleGetHardcover)
 	admin.HandleFunc("PUT /api/settings/hardcover", s.handlePutHardcover)
+	admin.HandleFunc("GET /api/settings/simkl", s.handleGetSimkl)
+	admin.HandleFunc("DELETE /api/settings/simkl", s.handleDisconnectSimkl)
+	admin.HandleFunc("POST /api/settings/simkl/pin", s.handleStartSimklPin)
+	admin.HandleFunc("GET /api/settings/simkl/pin/{code}", s.handlePollSimklPin)
 	admin.HandleFunc("POST /api/system/restart", s.handleRestart)
 	admin.HandleFunc("POST /api/system/shutdown", s.handleShutdown)
 	admin.HandleFunc("GET /api/flaresolverr/status", s.handleFlareSolverrStatus)

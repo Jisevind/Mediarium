@@ -276,12 +276,22 @@ func (s *Server) runTVPipeline(queueID int64, series library.Series, season int,
 			continue
 		}
 		policy, isBetter := s.conflictPolicy(tier, !series.NoUpgrade, func() (quality.Tier, bool) {
-			return quality.Tier(eps[0].Quality), true
+			return existingTier(eps[0].Quality, eps[0].ReleaseTitle, eps[0].FilePath)
 		})
 		replaceEarlier := replacesOldFiles(policy, isBetter)
 		earlierFiles := make([]string, len(eps))
 		for i, ep := range eps {
 			earlierFiles[i] = ep.FilePath
+		}
+		keepsEarlier := false
+		for _, old := range earlierFiles {
+			keepsEarlier = keepsEarlier || keepsEarlierFile(old, destPath, replaceEarlier)
+		}
+		if keepsEarlier {
+			// An episode's file under another name stays when this release may not
+			// replace it: no second copy next to it.
+			skipped++
+			continue
 		}
 		result, err := s.importDownloaded(file, destPath, policy, isBetter)
 		if err != nil {

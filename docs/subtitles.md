@@ -96,6 +96,10 @@ While SubDL is switched on (it is as soon as you save a key), every search asks 
 
 SubDL allows about 2,000 searches a day on a free key and a few hundred downloads a day from one address. Its downloads are zip files: Mediarium takes the SRT out (for an episode, the file named for that episode) and saves only that. When you choose a subtitle by hand, the list says which site each one is from. Scripts: results from SubDL carry `"source": "subdl"` and a `link`; download one with `{"source": "subdl", "link": "...", "language": "en"}`.
 
+**How a title is looked up.** OpenSubtitles and SubDL are first asked with the TMDB id, which names the title exactly. Neither site has every title under that id, so when it finds nothing, Mediarium asks again with the IMDb id and then with the title and year, and uses the first answer that has subtitles. Up to three pages of results are read. If a site can't be reached or turns the request down while the others have nothing, the search shows that error instead of "No subtitles found", so you can tell a failed search from an empty one. A failed search is also not remembered: the next one asks again.
+
+**The list.** Each result shows the site it came from; for an add-on that is the add-on's own name. Rating and Fit are left empty when the source gives nothing to base them on (add-ons carry no rating, and Fit comes from how well the release name matches your file).
+
 ## Subtitle add-ons
 
 For a site Mediarium has no built-in support for, such as [subs.ro](https://subs.ro) or a Hebrew or Arabic subtitle site, you can add an **add-on**. An add-on is a small web service that follows the Stremio add-on protocol: Mediarium asks it for the subtitles of one title and it answers with links. A lot of sites have one, so a single feature covers them all.

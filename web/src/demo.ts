@@ -102,6 +102,24 @@ const SERIES_SEEDS: (Seed & { episodes: number; have: number })[] = [
   { id: 106, title: 'Glass Orchard', year: 2021, genres: ['Animation', 'Fantasy'], rating: 8.8, overview: OV, state: 'downloaded', episodes: 18, have: 18 },
 ]
 
+// A long indexer list, mixed Usenet and torrent, so the Settings page shows
+// what many indexers look like.
+const demoIndexers = Array.from({ length: 15 }, (_, n) => {
+  const torrent = n % 3 === 1
+  return {
+    id: 100 + n,
+    name: ['NZBgeek', 'DrunkenSlug', 'NZBFinder', 'Tabula Rasa', 'altHUB', 'NinjaCentral', 'Abnzb', 'OZnzb', 'The Pirate Bay', '1337x', 'TorrentGalaxy', 'YTS', 'Nyaa', 'EZTV', 'LimeTorrents'][n],
+    definitionId: '',
+    baseUrl: torrent ? `https://torznab.example.org/api/v2.0/indexers/site-${n}/results/torznab/` : `https://api.indexer-${n}.example.com`,
+    protocol: torrent ? ('torrent' as const) : ('usenet' as const),
+    enabled: n !== 6,
+    kind: torrent ? ('torznab' as const) : ('newznab' as const),
+    priority: [10, 25, 25, 5, 40, 25, 15, 25, 30, 25, 20, 25, 35, 25, 50][n],
+    lastTestAt: new Date(Date.now() - (n + 1) * 3_600_000).toISOString(),
+    lastTestError: n === 4 ? 'The indexer did not answer in time.' : undefined,
+  }
+})
+
 const movies: Movie[] = MOVIE_SEEDS.map((s) => ({
   id: s.id,
   tmdbId: 9000 + s.id,
@@ -210,7 +228,8 @@ const discoverPool = (offset: number, tv: boolean): DiscoverMovie[] => {
 const calendar: CalendarEntry[] = [
   { kind: 'episode', id: 1, seriesId: 102, season: 3, episode: 9, title: 'Salt & Static', subtitle: 'S03E09 · Second Service', releaseDate: day(1), status: 'missing', posterUrl: poster(102) },
   { kind: 'episode', id: 2, seriesId: 104, season: 2, episode: 5, title: 'Ember Road', subtitle: 'S02E05 · The Long Fuse', releaseDate: day(2), status: 'missing', posterUrl: poster(104) },
-  { kind: 'movie', id: 3, movieId: 10, tmdbId: 9010, title: 'Tidewalker', releaseDate: day(3), status: 'downloading', posterUrl: poster(10) },
+  { kind: 'movie', id: 3, movieId: 10, tmdbId: 9010, title: 'Tidewalker', releaseDate: day(3), release: 'cinema', status: 'downloading', posterUrl: poster(10) },
+  { kind: 'movie', id: 3, movieId: 10, tmdbId: 9010, title: 'Tidewalker', releaseDate: day(24), release: 'digital', status: 'downloading', posterUrl: poster(10) },
   { kind: 'episode', id: 4, seriesId: 101, season: 3, episode: 1, title: 'The Clean Floor', subtitle: 'S03E01 · Season premiere', releaseDate: day(5), status: 'missing', posterUrl: poster(101) },
   { kind: 'album', id: 21, albumId: 22, artistId: 2, title: 'Mira Calloway — Slow Weather', subtitle: 'Album', releaseDate: day(5), status: 'missing', posterUrl: poster(221) },
   { kind: 'episode', id: 10, seriesId: 106, season: 3, episode: 2, title: 'Glass Orchard', subtitle: 'S03E02 · Root Cellar', releaseDate: day(5), status: 'missing', posterUrl: poster(106) },
@@ -337,6 +356,8 @@ const titleDetail = (m: Movie): MovieDetail => {
     tagline: 'A sample tagline for demo mode.',
     certification: 'PG-13',
     releaseDate: `${m.year}-03-01`,
+    // Some films are still in cinemas with the digital date ahead, others have both behind them.
+    releaseDates: m.id % 2 === 0 ? { cinema: day(3), digital: day(24), region: 'US' } : { cinema: `${m.year}-03-01`, digital: `${m.year}-06-10`, region: 'US' },
     language: 'en',
     cast: DEMO_CAST,
     crew: [{ id: 9101, name: 'Director One', job: 'Director' }],
@@ -558,6 +579,8 @@ export function installDemo() {
         return json(demoBatch)
       case p === '/api/music/search':
         return json([])
+      case p === '/api/indexers':
+        return json(demoIndexers)
       default:
         return real(input, init)
     }

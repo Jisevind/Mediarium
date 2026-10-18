@@ -43,8 +43,13 @@ const KIND_LABEL: Record<GlyphKind, string> = { movie: t('Movie'), tv: t('TV epi
 const LEGEND_LABEL: Record<GlyphKind, string> = { movie: t('Movies'), tv: t('TV'), music: t('Music'), book: t('Books'), audiobook: t('Audiobooks') }
 const STATUS_LABEL: Record<CalendarEntry['status'], string> = { downloaded: t('Have it'), downloading: t('Downloading'), missing: t('Waiting') }
 
+// A movie that is on the calendar twice says which of its dates this is.
+const releaseLabel = (e: CalendarEntry) => (e.release === 'cinema' ? t('Cinema') : e.release === 'digital' ? t('Digital') : undefined)
+
 // "S03E09 · Second Service" splits into the code and the episode's name.
 function splitSubtitle(e: CalendarEntry): { code?: string; rest?: string } {
+  const label = releaseLabel(e)
+  if (label) return { rest: e.subtitle ? `${label} · ${e.subtitle}` : label }
   const m = e.subtitle?.match(/^(S\d+E\d+)(?: · (.*))?$/)
   if (m) return { code: m[1], rest: m[2] }
   if (e.season && e.episode) return { code: `S${String(e.season).padStart(2, '0')}E${String(e.episode).padStart(2, '0')}`, rest: e.subtitle }
@@ -85,7 +90,7 @@ function Entry({ e, past, card }: { e: CalendarEntry; past: boolean; card?: bool
   const { code, rest } = splitSubtitle(e)
   const late = past && e.status === 'missing'
   const cls = `${card ? 'prog-card' : 'prog-slot'} k-${g} s-${e.status}${late ? ' late' : ''}`
-  const tip = `${e.title}${e.subtitle ? ` · ${e.subtitle}` : ''} (${STATUS_LABEL[e.status] ?? e.status})`
+  const tip = `${e.title}${e.subtitle ? ` · ${e.subtitle}` : ''}${releaseLabel(e) ? ` · ${releaseLabel(e)}` : ''} (${STATUS_LABEL[e.status] ?? e.status})`
   const body = card ? (
     <>
       <Thumb e={e} g={g} />
@@ -113,7 +118,7 @@ function Entry({ e, past, card }: { e: CalendarEntry; past: boolean; card?: bool
         <span className="prog-slot-title">{e.title}</span>
         <span className="prog-slot-meta">
           <KindGlyph kind={g} size={12} />
-          {code ?? KIND_LABEL[g]}
+          {code ?? releaseLabel(e) ?? KIND_LABEL[g]}
         </span>
       </span>
       <span className="sr-only">
@@ -374,7 +379,7 @@ export default function CalendarGrid({ entries, compact }: { entries: CalendarEn
                         </div>
                         <div className="pt-pop-grid">
                           {list.map((e) => (
-                            <PosterTile key={`${e.kind}-${e.id}`} e={e} past={past} wide={view === 'backdrops'} />
+                            <PosterTile key={`${e.kind}-${e.id}-${e.release ?? ''}`} e={e} past={past} wide={view === 'backdrops'} />
                           ))}
                         </div>
                       </div>
@@ -384,7 +389,7 @@ export default function CalendarGrid({ entries, compact }: { entries: CalendarEn
                 {!tiles && list.length > 0 && (
                   <div className="prog-slots">
                     {(open ? list : list.slice(0, cap)).map((e) => (
-                      <Entry key={`${e.kind}-${e.id}`} e={e} past={past} />
+                      <Entry key={`${e.kind}-${e.id}-${e.release ?? ''}`} e={e} past={past} />
                     ))}
                   </div>
                 )}
@@ -418,7 +423,7 @@ export default function CalendarGrid({ entries, compact }: { entries: CalendarEn
               ) : (
                 <ul className="prog-cards">
                   {list.map((e) => (
-                    <li key={`${e.kind}-${e.id}`}>
+                    <li key={`${e.kind}-${e.id}-${e.release ?? ''}`}>
                       <Entry e={e} past={past} card />
                     </li>
                   ))}

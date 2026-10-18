@@ -142,13 +142,13 @@ func TestHuntTVRemembersASeasonPackSearchThatFoundNothing(t *testing.T) {
 	}
 	env.server.TestHunt(context.Background())
 	first, err := env.server.MovieRepo.SeasonPackSearches(env.seriesID)
-	if err != nil || first[1] == "" {
+	if err != nil || first[1].At == "" {
 		t.Fatalf("the search for a season 1 pack was not remembered: %v %v", first, err)
 	}
 	env.server.TestHunt(context.Background())
 	second, _ := env.server.MovieRepo.SeasonPackSearches(env.seriesID)
-	if second[1] != first[1] {
-		t.Fatalf("searched again straight away: %s then %s", first[1], second[1])
+	if second[1].At != first[1].At {
+		t.Fatalf("searched again straight away: %s then %s", first[1].At, second[1].At)
 	}
 	env.finish(t)
 }
@@ -178,7 +178,7 @@ func setEpisodeRelease(t *testing.T, env *tvAutoEnv, season, episode int, releas
 func notePackSearch(t *testing.T, env *tvAutoEnv, season int, ago time.Duration) {
 	t.Helper()
 	at := time.Now().Add(ago).UTC().Format(time.RFC3339)
-	if err := env.server.MovieRepo.NoteSeasonPackSearch(env.seriesID, season, at); err != nil {
+	if err := env.server.MovieRepo.NoteSeasonPackSearch(env.seriesID, season, at, 3, false); err != nil {
 		t.Fatal(err)
 	}
 }

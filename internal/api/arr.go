@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -1069,8 +1068,7 @@ func arrQueryTerm(r *http.Request) (kind, value string) {
 			return k, strings.TrimSpace(term[i+1:])
 		}
 	}
-	if u, err := url.QueryUnescape(term); err == nil {
-		term = u
-	}
+	// r.URL.Query() has already decoded the term once; decoding again would
+	// turn a real "+" into a space and choke on a real "%".
 	return "", term
 }

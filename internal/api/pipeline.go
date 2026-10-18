@@ -152,16 +152,25 @@ func (s *Server) runPipeline(queueID, movieID int64, movieTitle string, movieYea
 		policy, isBetter, replacing = smallerVersionPolicy(item.ReplacesFile, earlierFile, destPath, policy, isBetter)
 		replaceEarlier = replaceEarlier || replacing
 	}
-	result, err := s.importDownloaded(videoFile, destPath, policy, isBetter)
-	if err != nil {
-		return fail(fmt.Errorf("couldn't move the file into your library: %w", err))
+	// The title's file under another name stays when this release may not
+	// replace it: the import is turned away like a same-name collision.
+	existing := destPath
+	var result organizer.ImportResult
+	if keepsEarlierFile(earlierFile, destPath, replaceEarlier) {
+		existing = earlierFile
+		result.Skipped = true
+	} else {
+		result, err = s.importDownloaded(videoFile, destPath, policy, isBetter)
+		if err != nil {
+			return fail(fmt.Errorf("couldn't move the file into your library: %w", err))
+		}
 	}
 	if result.Skipped {
 		if policy == organizer.ConflictAsk {
 			if err := s.QueueRepo.SetConflict(queueID, videoFile, destPath); err != nil {
 				return fail(err)
 			}
-			message := fmt.Sprintf("%s: a file already exists at %s. Choose what to do in Activity.", movieTitle, destPath)
+			message := fmt.Sprintf("%s: a file already exists at %s. Choose what to do in Activity.", movieTitle, existing)
 			_ = s.QueueRepo.LogActivity(movieID, "conflict", message)
 			conflictItem := s.movieItemByID(movieID, movieTitle, movieYear, tmdbID)
 			conflictItem.Path, conflictItem.Release = destPath, releaseTitle
@@ -176,7 +185,7 @@ func (s *Server) runPipeline(queueID, movieID int64, movieTitle string, movieYea
 		}
 		s.discardWorkDir(incompleteDir, protocol)
 		_ = s.MovieRepo.SetStatus(movieID, restoreStatus, "", "")
-		_ = s.QueueRepo.LogActivity(movieID, "kept", fmt.Sprintf("%s: a file is already at %s, so Mediarium kept it and did not import %s.", movieTitle, destPath, releaseTitle))
+		_ = s.QueueRepo.LogActivity(movieID, "kept", fmt.Sprintf("%s: a file is already at %s, so Mediarium kept it and did not import %s.", movieTitle, existing, releaseTitle))
 		return nil
 	}
 
@@ -688,7 +697,7 @@ func (s *Server) importConflictPolicy(movieID int64, incomingTier quality.Tier) 
 		if err != nil {
 			return "", false
 		}
-		return quality.Tier(current.Quality), true
+		return existingTier(current.Quality, current.ReleaseTitle, current.FilePath)
 	})
 }
 
@@ -769,6 +778,14 @@ func (s *Server) resolveConflict(queueID int64, overwrite bool) error {
 	if owner := otherFileOwner(s.trackedFileOwners(), item.DestPath, item.MovieID, nil); owner != "" {
 		return errFileOfAnother(owner, item.DestPath)
 	}
+	var earlierFile, earlierRoot, earlierTitle string
+	if m, err := s.MovieRepo.Get(item.MovieID); err == nil {
+		earlierFile, earlierTitle = m.FilePath, m.Title
+		earlierRoot = s.movieRootFor(m)
+		if m.CopyOf != 0 {
+			earlierRoot = s.movieCopiesRoot()
+		}
+	}
 	result, err := s.importDownloaded(item.SourcePath, item.DestPath, organizer.ConflictOverwrite, nil)
 	if err != nil {
 		return fmt.Errorf("couldn't replace the existing file: %w", err)
@@ -777,6 +794,9 @@ func (s *Server) resolveConflict(queueID int64, overwrite bool) error {
 	if err := s.MovieRepo.SetStatus(item.MovieID, library.StatusDownloaded, string(tier), result.DestPath); err != nil {
 		return err
 	}
+	// The earlier file had another name than the new one: it goes now that
+	// the new one is in the library.
+	s.removeReplacedFile(earlierRoot, earlierFile, result.DestPath, item.MovieID, 0, earlierTitle)
 	s.afterMovieImported(item.MovieID, item.ReleaseTitle)
 	if err := s.QueueRepo.SetStatus(queueID, queue.StatusCompleted, ""); err != nil {
 		return err

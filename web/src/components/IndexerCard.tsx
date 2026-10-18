@@ -10,6 +10,7 @@ import { apiKey as apiKeyCheck, firstError, maxLength, numberRange, required, ur
 import { plural, t, st } from '../i18n'
 import { untilText } from '../delayText'
 import TipLabel from './TipLabel'
+import KnownFixHint from './KnownFixHint'
 
 // One saved indexer: name, type and address on top, actions underneath, the
 // last test result on its own line, and an inline form to edit it.
@@ -23,6 +24,7 @@ export default function IndexerCard({ indexer: i, onChanged, onToggle, onRemove 
   const [apiKey, setApiKey] = useState('')
   const [perDay, setPerDay] = useState(String(i.requestsPerDay ?? 0))
   const [saving, setSaving] = useState(false)
+  const [prio, setPrio] = useState(String(i.priority ?? 25))
   const site = i.kind === 'cardigann'
   const v = useValidation({
     name: firstError(required(name, t('Give this indexer a name.')), maxLength(name, 80, t('The name'))),
@@ -61,13 +63,22 @@ export default function IndexerCard({ indexer: i, onChanged, onToggle, onRemove 
     }
   }
 
-  async function setPriority(priority: number) {
+  // The priority is saved when the box is left or Enter is pressed, not on every key.
+  async function savePriority() {
+    const n = Number(prio)
+    if (prio.trim() === '' || !Number.isInteger(n) || n < 1 || n > 50) {
+      toast.error(t('Priority must be a whole number from 1 to 50.'))
+      setPrio(String(i.priority ?? 25))
+      return
+    }
+    if (n === (i.priority ?? 25)) return
     try {
-      await api.setIndexerPriority(i.id, priority)
-      toast.success(priority === 1 ? t('{name} is preferred now.', { name: i.name }) : priority === 3 ? t('{name} is only used as a last resort now.', { name: i.name }) : t('{name} is back to normal.', { name: i.name }))
+      await api.setIndexerPriority(i.id, n)
+      toast.success(t('{name} now has priority {n}.', { name: i.name, n }))
       onChanged()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e))
+      setPrio(String(i.priority ?? 25))
     }
   }
 
@@ -114,6 +125,7 @@ export default function IndexerCard({ indexer: i, onChanged, onToggle, onRemove 
               </TipLabel>
             </small>
           )}
+          {paused && <KnownFixHint error={i.pausedWhy} />}
           {!!i.dailyLimit && (
             <small className={`indexer-health ${i.limitNote ? 'bad' : 'ok'}`}>
               {i.limitNote ? st(i.limitNote) : t('{used} of {limit} requests today', { used: i.requestsToday ?? 0, limit: i.dailyLimit })}
@@ -125,14 +137,11 @@ export default function IndexerCard({ indexer: i, onChanged, onToggle, onRemove 
               {i.lastTestError ? t('Last test failed {when}: {error}', { when: timeAgo(i.lastTestAt), error: friendlyIndexerError(i.lastTestError) }) : t('Last test passed {when}', { when: timeAgo(i.lastTestAt) })}
             </small>
           )}
+          {!result && !!i.lastTestAt && <KnownFixHint error={i.lastTestError} />}
         </div>
         <label className="indexer-priority">
-          <TipLabel text={t('Quality always comes first. Between two equally good releases, the one from the more preferred indexer wins.')} learnMore="indexers#priority-health-and-test-all">{t('Priority')}</TipLabel>
-          <select value={i.priority ?? 2} onChange={(e) => void setPriority(Number(e.target.value))}>
-            <option value={1}>{t('Preferred')}</option>
-            <option value={2}>{t('Normal')}</option>
-            <option value={3}>{t('Last resort')}</option>
-          </select>
+          <TipLabel text={t('Lower number = tried first. Quality always comes first. Between two equally good releases, the one with the lower number wins.')} learnMore="indexers#priority-health-and-test-all">{t('Priority')}</TipLabel>
+          <input type="number" min={1} max={50} step={1} value={prio} style={{ width: 72 }} onChange={(e) => setPrio(e.target.value)} onBlur={() => void savePriority()} onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur() }} />
         </label>
       </div>
 
@@ -161,6 +170,7 @@ export default function IndexerCard({ indexer: i, onChanged, onToggle, onRemove 
       {result && (
         <div className={`indexer-result ${result.ok ? 'ok' : 'bad'}`}>
           <Icon name={result.ok ? 'check' : 'warning'} size={14} /> {st(result.message)}
+          {!result.ok && <KnownFixHint error={result.message} />}
         </div>
       )}
 

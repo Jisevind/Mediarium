@@ -10,6 +10,31 @@ export interface ReleaseNotes {
 
 export const WHATS_NEW: ReleaseNotes[] = [
   {
+    version: '3.2.3',
+    items: [
+      t("A movie's page shows when it is in cinemas and when it comes out digitally, and the calendar marks both days."),
+      t("A release that may not replace your file is no longer imported next to it under another name, which stops second copies."),
+      t("Subtitle search tries each site by TMDB id, IMDb id and title, and shows an error instead of saying there are none."),
+    ],
+  },
+  {
+    version: '3.2.2',
+    items: [
+      t("The indexer list is sorted by priority, in two columns, with a filter box when you have many."),
+      t("The problem report form tells you when a newer version is out, so you can update first."),
+      t("Members no longer see server folder paths, and more checks keep a disconnected library drive from being written into."),
+    ],
+  },
+  {
+    version: '3.2.1',
+    items: [
+      t("Indexers have a priority from 1 to 50, like Prowlarr, and Knaben is a built-in site."),
+      t("Import your Simkl lists, next to Trakt (new, not yet tried with a real account)."),
+      t("Anime numbered by TheTVDB seasons, like One Piece and Jujutsu Kaisen, is placed on the right episodes."),
+      t("The e-reader catalogue loads much faster on big libraries, and an unmounted library folder is never written into."),
+    ],
+  },
+  {
     version: '3.2.0',
     items: [
       t("Click an actor, director or writer on a movie or show page to see their photo, life and other work, and add it from there."),

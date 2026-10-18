@@ -36,7 +36,7 @@ type Result struct {
 	SeedersKnown bool
 	Peers        int    // torrent-only (Torznab attr), 0 for usenet results
 	InfoHash     string // torrent-only, when the indexer reports it
-	Priority     int    // the indexer's priority (1 preferred, 2 normal, 3 last resort); set by the engine
+	Priority     int    // the indexer's priority (1 to 50, lower is preferred); set by the engine
 	// Cached is set by the search code (never by an indexer) when the debrid
 	// service in use already has this torrent. False means "not cached or not
 	// known".

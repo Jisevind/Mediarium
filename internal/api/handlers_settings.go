@@ -36,8 +36,8 @@ type settingsPayload struct {
 	// DownloadsTempPath is the temporary download folder ("" clears it, so it
 	// is a pointer): where the unfinished part of downloads is worked on.
 	DownloadsTempPath *string `json:"downloadsTempPath,omitempty"`
-	NamingPreset     string    `json:"namingPreset"`
-	MovieNameFormat  string    `json:"movieNameFormat"`
+	NamingPreset      string  `json:"namingPreset"`
+	MovieNameFormat   string  `json:"movieNameFormat"`
 	// EpisodeNameFormat is the custom file name format for episodes.
 	EpisodeNameFormat string `json:"episodeNameFormat"`
 	// KeepOriginalNames keeps the file name an imported video came with
@@ -162,12 +162,14 @@ type settingsPayload struct {
 	TMDBKeyBuiltIn          bool `json:"tmdbKeyBuiltIn"`
 	OpenSubtitlesKeyBuiltIn bool `json:"openSubtitlesKeyBuiltIn"`
 	TraktClientIDBuiltIn    bool `json:"traktClientIdBuiltIn"`
+	SimklClientIDBuiltIn    bool `json:"simklClientIdBuiltIn"`
 
 	// True when the person saved their own key, which takes precedence over
 	// the built-in (shared) one.
 	TMDBUsingOwnKey          bool `json:"tmdbUsingOwnKey"`
 	OpenSubtitlesUsingOwnKey bool `json:"openSubtitlesUsingOwnKey"`
 	TraktUsingOwnKey         bool `json:"traktUsingOwnKey"`
+	SimklUsingOwnKey         bool `json:"simklUsingOwnKey"`
 
 	// Illegal filename character handling.
 	IllegalCharMode        string `json:"illegalCharMode,omitempty"`        // "strip" | "replace"
@@ -203,6 +205,11 @@ type settingsPayload struct {
 	// A pointer for the same reason as OpenSubtitlesAPIKey.
 	TraktClientID    *string `json:"traktClientId,omitempty"`
 	HasTraktClientID bool    `json:"hasTraktClientId"`
+
+	// Simkl: the Client ID of a Simkl app, for reading a person's own lists
+	// (the account itself is connected on its own, see simkl_connect.go).
+	SimklClientID    *string `json:"simklClientId,omitempty"`
+	HasSimklClientID bool    `json:"hasSimklClientId"`
 
 	// Address of the person's FlareSolverr (e.g. http://flaresolverr:8191),
 	// used for indexer sites behind a Cloudflare check. A pointer so ""
@@ -451,6 +458,8 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		TMDBKeyBuiltIn:           s.builtin.TMDB != "",
 		OpenSubtitlesKeyBuiltIn:  s.builtin.OpenSubtitles != "",
 		TraktClientIDBuiltIn:     s.builtin.TraktClientID != "",
+		SimklClientIDBuiltIn:     s.builtin.SimklClientID != "",
+		SimklUsingOwnKey:         s.usingOwnKey(settings.KeySimklClientID),
 		TMDBUsingOwnKey:          s.usingOwnKey(settings.KeyTMDBAPIKey),
 		OpenSubtitlesUsingOwnKey: s.usingOwnKey(settings.KeyOpenSubtitlesAPIKey),
 		TraktUsingOwnKey:         s.usingOwnKey(settings.KeyTraktClientID),
@@ -464,6 +473,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		RouteIndexersThroughVPN:  &routeIndexersThroughVPN,
 		ImportConflictPolicy:     importConflictPolicy,
 		HasTraktClientID:         s.Trakt().HasClientID(),
+		HasSimklClientID:         s.Simkl().HasClientID(),
 		FlareSolverrURL:          &flareSolverr,
 		PublicURL:                &publicURL,
 		FlareSolverrBundled:      s.cfg.BundledFlareSolverr,
@@ -836,9 +846,16 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.SeasonPacks != nil {
-		if err := setBool(s.Settings, settings.KeySeasonPacks, *req.SeasonPacks); err != nil {
+		changed := *req.SeasonPacks != s.seasonPackDefault()
+		if err := setBool(tx, settings.KeySeasonPacks, *req.SeasonPacks); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
+		}
+		if changed {
+			// A changed setting is a reason to look for packs again.
+			if err := s.MovieRepo.ResetSeasonPackTries(0); err != nil {
+				slog.Warn("settings: couldn't reset the season pack searches", "err", err)
+			}
 		}
 	}
 
@@ -963,6 +980,9 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.TraktClientID != nil {
 		s.stageTraktClientID(tx, strings.TrimSpace(*req.TraktClientID))
+	}
+	if req.SimklClientID != nil {
+		s.stageSimklClientID(tx, strings.TrimSpace(*req.SimklClientID))
 	}
 	if req.FlareSolverrURL != nil {
 		if err := tx.Set(settings.KeyFlareSolverrURL, *req.FlareSolverrURL, false); err != nil {
@@ -1143,7 +1163,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if *req.ResumeInterrupted {
 			val = "1"
 		}
-		if err := s.Settings.Set(settings.KeyResumeInterrupted, val, false); err != nil {
+		if err := tx.Set(settings.KeyResumeInterrupted, val, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}

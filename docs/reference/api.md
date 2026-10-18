@@ -315,7 +315,7 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | DELETE | `/api/indexers/{id}` | admin |  |
 | PUT | `/api/indexers/{id}` | admin | edits a saved indexer. |
 | PUT | `/api/indexers/{id}/enabled` | admin |  |
-| PUT | `/api/indexers/{id}/priority` | admin | sets how much an indexer is preferred: 1 preferred, 2 normal, 3 last resort. |
+| PUT | `/api/indexers/{id}/priority` | admin | sets how much an indexer is preferred: a number from 1 to 50, lower first. |
 | POST | `/api/indexers/{id}/resume` | admin | is "Try again now": the indexer is asked by the next search, and its failures are forgotten. |
 | PUT | `/api/indexers/{id}/seed-rules` | admin |  |
 | POST | `/api/indexers/{id}/test` | admin | tests a saved indexer with its stored credentials. |
@@ -682,6 +682,10 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | PUT | `/api/settings/metadata-files` | admin |  |
 | GET | `/api/settings/naming-preview` | admin | shows a naming preset or custom format applied to a fixed sample release (kind=movie, the default, or kind=tv), so the page can display the exact file name w... |
 | GET | `/api/settings/naming-tokens` | admin | lists the tokens a custom format can use and the ready-made formats to start from, for the builder in Settings. |
+| DELETE | `/api/settings/simkl` | admin | DELETE /api/settings/simkl: forget the connected account. |
+| GET | `/api/settings/simkl` | admin | GET /api/settings/simkl |
+| POST | `/api/settings/simkl/pin` | admin | POST /api/settings/simkl/pin: start connecting an account. |
+| GET | `/api/settings/simkl/pin/{code}` | admin | GET /api/settings/simkl/pin/{code}: has the code been entered yet? |
 | POST | `/api/settings/test-ffmpeg` | admin | runs the configured ffmpeg and reports what it is. |
 | POST | `/api/settings/test-service` | admin | checks a key for an outside service without saving it, so the setup wizard and Settings can say whether it works before the person moves on. |
 
@@ -854,4 +858,4 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | PUT | `/api/watched/settings` | admin | PUT /api/watched/settings {"sync": true, "cleanup": {...}} |
 | POST | `/api/watched/sync` | admin | POST /api/watched/sync: read what's been watched now. |
 
-514 routes.
+518 routes.

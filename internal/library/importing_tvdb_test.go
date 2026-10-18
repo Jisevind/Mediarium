@@ -3,6 +3,7 @@ package library_test
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -250,8 +251,8 @@ func TestImportPlacesFilesByTheTVDBSeasonNumbers(t *testing.T) {
 				}
 			}
 			done, _ := repo.ImportBatchItems(items[0].BatchID)
-			if done[0].Note != tc.wantNote {
-				t.Fatalf("note %q, want %q", done[0].Note, tc.wantNote)
+			if got := withoutFileList(done[0].Note); got != tc.wantNote {
+				t.Fatalf("note %q, want %q", got, tc.wantNote)
 			}
 		})
 	}
@@ -268,4 +269,17 @@ func TestImportPlacerCountsEachSeasonFromItsFirstEpisode(t *testing.T) {
 	if _, _, ok := library.ImportPlacer(onePieceSeasons(), false, library.ImportMaps{}, nil)(importFile("One Piece (1999)", 22, 41, "x")); ok {
 		t.Fatal("a standard show is not placed this way")
 	}
+}
+
+// withoutFileList drops the last line of an import note when it is the list of
+// the files that were left out, which the tests of the other lines don't read.
+func withoutFileList(note string) string {
+	i := strings.LastIndex(note, "\nFiles left out: ")
+	if i >= 0 {
+		return note[:i]
+	}
+	if strings.HasPrefix(note, "Files left out: ") {
+		return ""
+	}
+	return note
 }

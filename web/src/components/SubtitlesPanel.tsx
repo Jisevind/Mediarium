@@ -3,7 +3,7 @@ import { api, type SubtitleQuota, type SubtitleResult, type SubtitleSlot } from 
 import { t } from '../i18n'
 import { languageName } from '../languages'
 import { slotName } from '../subtitleProfiles'
-import { SUBTITLE_FIRST_DIRECTION, sortSubtitles, type SortDir, type SubtitleSortKey } from '../releaseSort'
+import { SUBTITLE_FIRST_DIRECTION, sortSubtitles, subtitleFit, subtitleRating, subtitleSite, type SortDir, type SubtitleSortKey } from '../releaseSort'
 import Icon from './Icon'
 import QuotaNote from './QuotaNote'
 import NoSourceNote from './NoSourceNote'
@@ -89,7 +89,7 @@ export default function SubtitlesPanel({ kind, id }: { kind: 'movie' | 'episode'
       </button>
     </th>
   )
-  const sourceName = (r: SubtitleResult) => (r.source === 'subdl' ? 'SubDL' : r.source === 'addon' ? t('Add-on') : 'OpenSubtitles')
+  const sourceName = (r: SubtitleResult) => subtitleSite(r) || t('Add-on')
 
   return (
     <div>
@@ -162,8 +162,8 @@ export default function SubtitlesPanel({ kind, id }: { kind: 'movie' | 'episode'
                   {r.hashMatch ? <span className="badge downloaded" title={t('Timed for this exact video file')}>{t('made for this file')}</span> : r === results[0] && <span className="badge downloaded">{t('best match')}</span>}
                 </td>
                 <td className="rel-fit">{sourceName(r)}</td>
-                <td className="rel-fit">{r.source ? '—' : r.rating}</td>
-                <td className="rel-fit">{Math.round(r.score)}</td>
+                <td className="rel-fit">{subtitleRating(r)}</td>
+                <td className="rel-fit">{subtitleFit(r)}</td>
                 <td className="rel-fit">
                   <button onClick={() => download(r)} disabled={status === t('Downloading…')}>
                     {t('Download')}

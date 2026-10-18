@@ -1,7 +1,7 @@
 // Run with: npm test (uses node's built-in test runner, no extra packages).
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { ageOf, filterReleases, indexersIn, qualitiesIn, resolutionOf, sortReleases, sortSubtitles, type SortableRelease } from './releaseSort.ts'
+import { ageOf, filterReleases, indexersIn, qualitiesIn, resolutionOf, sortReleases, sortSubtitles, subtitleFit, subtitleRating, subtitleSite, type SortableRelease } from './releaseSort.ts'
 
 const base = { protocol: 'usenet', sizeBytes: 0 }
 const list: SortableRelease[] = [
@@ -63,4 +63,19 @@ test('age sorts by when the release was posted, newest first, and unknown last',
   assert.equal(ageOf(rel('a', '2024-01-01T00:00:00Z'), now), '2y')
   assert.equal(ageOf(rel('a'), now), '')
   assert.equal(ageOf(rel('a', '0001-01-01T00:00:00Z'), now), '')
+})
+
+test('a subtitle shows its own site or add-on name, and only the rating and fit it has', () => {
+  const os = { release: 'a', rating: 7.5, score: 61.4 }
+  const sdl = { release: 'b', rating: 0, score: 130, source: 'subdl' }
+  const addon = { release: 'c', rating: 0, score: 130.2, source: 'addon', sourceName: 'YIFY Subtitles' }
+  const nameless = { release: 'd', rating: 0, score: 0, source: 'addon' }
+  assert.equal(subtitleSite(os), 'OpenSubtitles')
+  assert.equal(subtitleSite(sdl), 'SubDL')
+  assert.equal(subtitleSite(addon), 'YIFY Subtitles')
+  assert.equal(subtitleSite(nameless), '')
+  assert.equal(subtitleRating(os), '7.5')
+  assert.equal(subtitleRating(addon), '')
+  assert.equal(subtitleFit(addon), '130')
+  assert.equal(subtitleFit(nameless), '')
 })

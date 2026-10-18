@@ -115,10 +115,10 @@ func (s *Server) handlePutFilePermissions(w http.ResponseWriter, r *http.Request
 		return
 	}
 	type change struct {
-		key      string
-		dir       bool
-		in        *string
-		out       string
+		key string
+		dir bool
+		in  *string
+		out string
 	}
 	changes := []*change{
 		{key: settings.KeyFileMode, in: req.FileMode},

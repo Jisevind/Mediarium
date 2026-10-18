@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // Series is a TV show in the library. Metadata is keyed by TMDB id (TMDB
@@ -507,36 +508,82 @@ func (r *Repo) SetSeriesSeasonPack(id int64, choice string) error {
 	if err != nil {
 		return fmt.Errorf("set series %d season pack: %w", id, err)
 	}
-	return nil
+	// A changed choice is a reason to look for packs again.
+	return r.ResetSeasonPackTries(id)
 }
 
-// SeasonPackSearches returns when each season of the show was last searched for
-// a season pack (RFC 3339), keyed by season.
-func (r *Repo) SeasonPackSearches(seriesID int64) (map[int]string, error) {
-	rows, err := r.db.Query(`SELECT season, searched_at FROM season_pack_searches WHERE series_id = ?`, seriesID)
+// SeasonPackGiveUpDays is how long a season that kept finding no season pack is
+// left alone after its last search.
+const SeasonPackGiveUpDays = 60
+
+// PackSearch is what is remembered about the searches for a season pack of one
+// season.
+type PackSearch struct {
+	At       string // when it was last searched for (RFC 3339)
+	Tries    int    // searches in a row that found no pack
+	Episodes int    // how many episodes the season had then
+}
+
+// SeasonPackSearches returns what is remembered about the searches for a season
+// pack of each season of the show, keyed by season.
+func (r *Repo) SeasonPackSearches(seriesID int64) (map[int]PackSearch, error) {
+	rows, err := r.db.Query(`SELECT season, searched_at, tries, episodes FROM season_pack_searches WHERE series_id = ?`, seriesID)
 	if err != nil {
 		return nil, fmt.Errorf("list season pack searches: %w", err)
 	}
 	defer rows.Close()
-	out := map[int]string{}
+	out := map[int]PackSearch{}
 	for rows.Next() {
 		var season int
-		var at string
-		if err := rows.Scan(&season, &at); err != nil {
+		var p PackSearch
+		if err := rows.Scan(&season, &p.At, &p.Tries, &p.Episodes); err != nil {
 			return nil, fmt.Errorf("scan season pack search: %w", err)
 		}
-		out[season] = at
+		out[season] = p
 	}
 	return out, rows.Err()
 }
 
-// NoteSeasonPackSearch records that a season was searched for a season pack at
-// the given time (RFC 3339).
-func (r *Repo) NoteSeasonPackSearch(seriesID int64, season int, at string) error {
-	_, err := r.db.Exec(`INSERT INTO season_pack_searches (series_id, season, searched_at) VALUES (?, ?, ?)
-		ON CONFLICT(series_id, season) DO UPDATE SET searched_at = excluded.searched_at`, seriesID, season, at)
+// NoteSeasonPackSearch records that a season (with this many episodes) was
+// searched for a season pack at the given time (RFC 3339). found says a pack
+// was taken, which clears the count of searches that found nothing; otherwise
+// the count goes up by one, or starts again at one when the season has
+// another number of episodes than at the last search or that search was more
+// than SeasonPackGiveUpDays ago.
+func (r *Repo) NoteSeasonPackSearch(seriesID int64, season int, at string, episodes int, found bool) error {
+	tries := 1
+	if found {
+		tries = 0
+	}
+	cutoff := ""
+	if t, err := time.Parse(time.RFC3339, at); err == nil {
+		cutoff = t.UTC().AddDate(0, 0, -SeasonPackGiveUpDays).Format(time.RFC3339)
+	}
+	_, err := r.db.Exec(`INSERT INTO season_pack_searches (series_id, season, searched_at, tries, episodes) VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT(series_id, season) DO UPDATE SET
+			tries = CASE WHEN ? = 0 THEN 0
+				WHEN season_pack_searches.episodes <> excluded.episodes OR season_pack_searches.searched_at <= ? THEN 1
+				ELSE season_pack_searches.tries + 1 END,
+			searched_at = excluded.searched_at, episodes = excluded.episodes`,
+		seriesID, season, at, tries, episodes, tries, cutoff)
 	if err != nil {
 		return fmt.Errorf("note season pack search: %w", err)
+	}
+	return nil
+}
+
+// ResetSeasonPackTries lets the seasons of a show (every show when seriesID is
+// 0) be searched for a season pack again, as after a pack setting was changed.
+// When each season was last searched stays as it is.
+func (r *Repo) ResetSeasonPackTries(seriesID int64) error {
+	var err error
+	if seriesID == 0 {
+		_, err = r.db.Exec(`UPDATE season_pack_searches SET tries = 0`)
+	} else {
+		_, err = r.db.Exec(`UPDATE season_pack_searches SET tries = 0 WHERE series_id = ?`, seriesID)
+	}
+	if err != nil {
+		return fmt.Errorf("reset season pack searches: %w", err)
 	}
 	return nil
 }

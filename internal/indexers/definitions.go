@@ -306,8 +306,32 @@ func (s *DefinitionStore) loadIndexLocked() (*DefinitionIndex, error) {
 	if err := json.Unmarshal(data, &idx); err != nil {
 		return nil, fmt.Errorf("read %s: %w", indexFile, err)
 	}
+	s.recheckUnsupportedLocked(&idx)
 	s.index = &idx
 	return s.index, nil
+}
+
+// recheckUnsupportedLocked judges the sites the saved list marks as not
+// supported against this version of Mediarium. The mark was made when the
+// list was downloaded, possibly by an older version with a stricter engine, so
+// a site would stay grey after an update until the list was downloaded again.
+func (s *DefinitionStore) recheckUnsupportedLocked(idx *DefinitionIndex) {
+	for i := range idx.Definitions {
+		d := &idx.Definitions[i]
+		if d.Supported || d.Custom {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(s.Dir, d.ID+".yml"))
+		if err != nil {
+			continue
+		}
+		def, err := ParseDefinition(data)
+		if err != nil {
+			continue
+		}
+		fresh := summarize(def)
+		d.Supported, d.Problem = fresh.Supported, fresh.Problem
+	}
 }
 
 // refresh downloads the archive and rebuilds the cache. Callers hold

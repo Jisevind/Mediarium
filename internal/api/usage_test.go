@@ -63,7 +63,7 @@ func TestUsageEndpointAndTraktLimitWarning(t *testing.T) {
 	for _, s := range services {
 		ids = append(ids, s.(map[string]any)["id"].(string))
 	}
-	if strings.Join(ids, ",") != "trakt,opensubtitles,tmdb" {
+	if strings.Join(ids, ",") != "trakt,simkl,opensubtitles,tmdb" {
 		t.Fatalf("services = %v", ids)
 	}
 	svc := usageService(t, env, "trakt")

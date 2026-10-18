@@ -11,6 +11,75 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 ### Added
 - **The built-in player now plays videos the browser cannot play on its own.** Before playback, Mediarium probes the file with ffprobe. MP4/MOV and WebM files with browser-friendly streams are still sent directly, unchanged. Other containers, and files whose audio codec browsers do not support (AC-3, EAC-3, DTS, TrueHD), are converted on demand to H.264 and AAC in HLS segments. An MP4 with H.264 video keeps its video stream when only the audio needs converting; MKV is re-encoded so seeking and sound stay in step. Playback starts after the first segment and seeking converts only the part you jump to. Hardware VAAPI, Intel Quick Sync and NVIDIA NVENC are detected and tested, with libx264 as the fallback; a missing or broken ffmpeg falls back to the old direct-play path. Text subtitle tracks inside MKV/MP4 files (SubRip, ASS/SSA, WebVTT and MP4 text tracks) now appear in the player's subtitle menu, extracted as WebVTT, with language, SDH and forced labels; bitmap tracks such as PGS and VobSub are left out. Settings > General > Playback has the on/off switch, an ffmpeg path for your own build and the hardware picker ([playback.md](docs/playback.md)).
 
+## [3.2.3] - 2026-10-18
+
+In short: release dates on the movie page, and fixes for second copies and for subtitles.
+- A movie's page shows when it is in cinemas and when it comes out digitally, and the calendar shows both days.
+- A release that may not replace your file is no longer imported next to it under another name (this left second copies with TRaSH-style names).
+- The subtitle search asks each site by TMDB id, IMDb id and title, reads more pages, and shows an error instead of "No subtitles found".
+
+### Fixed
+- A release that is not allowed to replace the file you have is no longer imported next to it when its file name differs (for example with TRaSH-style names). Before, a worse release, or any release for a title set to keep its file, landed beside the good file and became the one Mediarium pointed at, leaving two copies. It is now turned away with "Kept the file you already have." (reported by dxtrlws on GitHub, #84)
+- A file whose quality is not stored is now read from its name, including bracketed names like `[Bluray-1080p]` and `[Remux-2160p]`; a file whose quality cannot be told is never counted as worse than a new release.
+- When a new version replaces a file under another name, the old file goes to the recycle bin (when it is on) together with the subtitles and other files named after it, instead of being deleted and leaving them behind. Choosing "Overwrite" on a parked "Ask me each time" conflict now also removes the old file that had another name.
+- Searching for subtitles could say "no subtitles" for well-known titles that OpenSubtitles and SubDL do have. Both sites are now asked by TMDB id first, then by IMDb id, then by title and year, and up to three pages of results are read. A site that fails to answer is now shown as an error instead of "No subtitles found", and a failed search is no longer remembered for days (reported by SanketBaraiya on GitHub, #83).
+- Subtitle results from an add-on show the add-on's own name in the From column, and Rating and Fit are left empty when there is nothing to base them on, instead of a dash or 0.
+
+### Added
+- A movie's page now shows when it is in cinemas and when it comes out digitally (with how long until then when it is still ahead), for your country, and the calendar shows a monitored movie on both days, marked Cinema and Digital. The calendar learns the digital dates a few movies at a time in the background, so right after the update it shows only the cinema dates. Thanks to SanketBaraiya on GitHub, #82.
+
+## [3.2.2] - 2026-10-18
+
+In short: a tidier indexer page and a round of fixes from a full check of the 3.2 changes.
+- The indexer list is sorted by priority, in two columns, and the Add card stays in view.
+- The problem report form tells you when a newer version is out, and an indexer error that an update fixed says so.
+- Members no longer see server folder paths, a disconnected library folder is better protected, and settings save all or nothing.
+- Fixes for rescan, same-name shows, season packs and resuming downloads after a restart.
+
+### Changed
+- The indexer list is sorted by priority (lowest number first) and shown as compact cards in two columns, the Add card stays in view while you scroll, and a filter box appears when you have more than eight indexers. Asked for by SanketBaraiya on GitHub, #80.
+
+### Added
+- The problem report form tells you when a newer version is out (it says which version you are on and which is newest, and that many problems are fixed by updating) before you send it, and says to leave an email or GitHub name if you would like an answer.
+- An indexer that shows a known error from an older version says which version fixed it and to update and press Try again.
+
+### Fixed
+- Shows with the same name: a show you are searching for (monitored) now always gets the releases without a country tag before one you are not searching for. The American-first rule only decides between shows that are all monitored (or all unmonitored).
+- Rescan files on a show: when the show's folder also holds files of other shows, a file is only given to this show when the title in its name is the show's. Files named for another show stay where they are and are listed as not matched.
+- Rescan files on a show: a smaller file for two episodes that you added by hand is no longer dropped as a copy of a bigger file that an episode already has.
+- Season packs: a season that keeps finding no pack is searched for six times (once a week) and then left alone until an episode is added to it, you change the season pack setting, or 60 days have passed.
+- Pause while streaming: the list of paused downloads can no longer lose entries when the restart resume and the stream check change it at the same time.
+- Settings > Downloading: the download client card keeps what you typed when it reloads because another card changed, and says so when its settings can't be loaded.
+- Members no longer see server folder paths in the downloads list (failed-import messages, conflict paths) or the second-copies folder.
+- Imports into a library folder that sits inside another library folder are now checked against that inner folder's own marker.
+- Season packs and the resume-interrupted option are now saved together with the rest of a settings update, so a failed save no longer leaves them half-changed.
+- When a restart interrupted downloads that could not carry on by themselves, Activity now says so and that they stay paused.
+- A settings file that names an indexer priority with an old word ("preferred", "normal", "last resort") or a number in quotes no longer shows a change on every check.
+- Simkl connect: the "waiting for the code" wait is no longer cut short when the client ID box changes, and it stops if you leave the page.
+- Person page: moving from one person to another can no longer show the previous person's details.
+- Settings > Indexers: a leftover filter word can no longer hide a short indexer list.
+
+## [3.2.1] - 2026-10-18
+
+In short: new indexers and lists, and fixes for what you reported after 3.2.0.
+- Indexer priority is a number from 1 to 50 like Prowlarr, Knaben is a built-in site, and Simkl lists can be imported (Simkl is new and has not been tried with a real account yet).
+- Anime numbered by TheTVDB seasons (One Piece, Jujutsu Kaisen) is placed on the right episodes, and Mazepa is selectable again.
+- The e-reader catalogue loads much faster on big libraries.
+- Better on a desktop with wide fonts, and a few more fixes below.
+
+### Added
+- **Simkl lists**: import your own Simkl lists (Plan to watch, Watching, Completed, On hold, Dropped; movies, shows and anime). Connect your Simkl account with a short code at simkl.com/pin under Settings > Info, lists and subtitles > Import lists, then add a Simkl list. An idea from nexus4004 on GitHub, through the idea form.
+- **Knaben** is a built-in torrent site now: add it from Settings > Indexers & Search > Torrent > Pick a site from the list. It's public, needs no login, and works with the VPN switch like the other sites. Asked for by SanketBaraiya on GitHub, #73.
+- **Indexer priority is a number from 1 to 50** (like Prowlarr; lower is tried first, 25 by default) instead of Preferred, Normal and Last resort. Existing indexers keep their order (Preferred became 10, Normal 25, Last resort 40), the Prowlarr import carries its numbers over, and the settings file and the API still accept the three old words. Thanks to SanketBaraiya on GitHub, #80.
+
+### Fixed
+- A title with a `+` or a `%` in it (`C++ Primer`) is no longer changed when Sonarr or Radarr style tools look it up through Mediarium: the search term was decoded twice.
+- Names with `&` are handled better: a folder named with an HTML-escaped `&amp;` still matches its title, a search for a title like `Law & Order` no longer misses releases because of the `&`, and the Library, Wanted and Bookshelf search boxes treat `&` and "and" as the same and ignore accents (reported by franciscojnneto on GitHub, #81; if folders with `&` still don't show up for you, send me one example).
+- Anime files named by TheTVDB season (One Piece) were placed three episodes too late because TheTVDB starts the season earlier than the movie database does. Placement now checks the episode titles in the file names, and places a file by its title when the title matches exactly one episode. The import note lists the files that were left out (reported by SanketBaraiya on GitHub, #69).
+- A site marked "Not supported yet" in the site list is checked again after an update, so one that an update made possible (like Mazepa) no longer stays grey until you press Update list (reported by Apostol6 on GitHub, #16).
+- The e-reader catalogue (OPDS) and the Kobo sync no longer load and sort the whole book list for every request. Built pages are kept in memory and rebuilt only when a book is added, removed or changed; saving a reading place does not count. Pages also carry an ETag, so an app that sends If-None-Match gets a 304.
+- On a phone, long button labels and hints in Settings (Russian, German, French, Polish) now wrap instead of pushing the page wider than the screen.
+
 ## [3.2.0] - 2026-10-18
 
 In short: a feature release, built mostly from your reports and ideas.

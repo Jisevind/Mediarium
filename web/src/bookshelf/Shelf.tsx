@@ -9,6 +9,7 @@ import { t, tc, tx } from '../i18n'
 import { listenPath, readPath } from './open'
 import { withBase } from '../base'
 import { useModules } from '../ModulesContext'
+import { looseIncludes } from '../looseText'
 
 type Tab = 'all' | BookFormat
 
@@ -40,7 +41,7 @@ export default function Shelf() {
   const shelf = (books ?? []).filter(
     (b) =>
       (tab === 'all' ? b.ebook.status === 'downloaded' || b.audiobook.status === 'downloaded' : b[tab].status === 'downloaded') &&
-      (!needle || b.title.toLowerCase().includes(needle) || b.author.toLowerCase().includes(needle)),
+      (!needle || looseIncludes(b.title, needle) || looseIncludes(b.author, needle)),
   )
   shelf.sort((a, b) => a.title.localeCompare(b.title))
 

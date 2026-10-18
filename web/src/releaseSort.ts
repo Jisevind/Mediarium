@@ -129,8 +129,27 @@ export type SubtitleSortKey = 'release' | 'source' | 'rating' | 'fit'
 export interface SortableSubtitle {
   release: string
   source?: string
+  sourceName?: string // an add-on's own name
   rating: number
   score: number
+}
+
+// The site a subtitle comes from: its own name for an add-on. Empty when an
+// add-on result has no name, so the caller can show a translated fallback.
+export function subtitleSite(r: SortableSubtitle): string {
+  if (r.source === 'subdl') return 'SubDL'
+  if (r.source === 'addon') return r.sourceName ?? ''
+  return 'OpenSubtitles'
+}
+
+// Rating and fit are only written when the source gave something.
+export function subtitleRating(r: SortableSubtitle): string {
+  return r.rating > 0 ? String(r.rating) : ''
+}
+
+export function subtitleFit(r: SortableSubtitle): string {
+  const n = Math.round(r.score)
+  return n > 0 ? String(n) : ''
 }
 
 export const SUBTITLE_FIRST_DIRECTION: Record<SubtitleSortKey, SortDir> = { release: 1, source: 1, rating: -1, fit: -1 }
@@ -142,9 +161,9 @@ export function sortSubtitles<T extends SortableSubtitle>(list: T[], key: Subtit
       case 'release':
         return text(a.release, b.release)
       case 'source':
-        return text(a.source ?? '', b.source ?? '')
+        return text(subtitleSite(a), subtitleSite(b))
       case 'rating':
-        return (a.source ? 0 : a.rating) - (b.source ? 0 : b.rating)
+        return a.rating - b.rating
       case 'fit':
         return a.score - b.score
     }

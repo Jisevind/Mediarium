@@ -19,11 +19,11 @@ func TestApplyMonitorMode(t *testing.T) {
 	// before lists the episodes (numbered as above) that start unmonitored;
 	// want is the monitored flag of episodes 1 to 6 afterwards.
 	cases := []struct {
-		name    string
-		before  []int
-		mode    string
-		want    [6]bool
-		want2   library.MonitorChange
+		name   string
+		before []int
+		mode   string
+		want   [6]bool
+		want2  library.MonitorChange
 	}{
 		{"future stops the aired ones, keeps today, unaired and undated", nil, "future", [6]bool{false, false, false, true, true, true}, library.MonitorChange{Stopped: 2}},
 		{"future also switches unaired ones back on", []int{4, 5, 6}, "future", [6]bool{false, false, false, true, true, true}, library.MonitorChange{Stopped: 2, Started: 3}},

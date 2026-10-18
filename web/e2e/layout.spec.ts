@@ -4,7 +4,7 @@ import { openNav } from './helpers'
 // Nothing pushes the page wider than the screen, at any of the three sizes
 // (run with --project app, app-tablet or app-phone). Russian has the longest
 // button labels, so it is the one that shows a button running off the card.
-const PAGES = ['/series/101', '/settings/media', '/settings/system', '/settings/services', '/queue', '/library?kind=tv']
+const PAGES = ['/series/101', '/title/9010', '/settings/media', '/settings/system', '/settings/services', '/queue', '/library?kind=tv']
 
 for (const lang of ['en', 'ru']) {
   for (const path of PAGES) {
@@ -21,6 +21,63 @@ for (const lang of ['en', 'ru']) {
       expect(over, `main is ${over}px wider than the screen`).toBeLessThanOrEqual(0)
     })
   }
+}
+
+// The same check with a wide fallback font, the way a Linux machine without
+// Edge's fonts draws Cyrillic and accented text (DejaVu Sans is much wider than
+// Segoe UI). Every settings page is walked in the languages with long words.
+const WIDE_FONT = '*{font-family: Verdana, "DejaVu Sans", sans-serif !important}'
+const SETTINGS = [
+  'modules', 'media', 'naming', 'quality', 'automation', 'indexers', 'usenet', 'torrents', 'download-rules', 'vpn',
+  'subtitles', 'metadata', 'lists', 'media-servers', 'other-apps', 'addons', 'migrate', 'notifications', 'profile',
+  'system', 'backup', 'accounts', 'requests', 'sign-in', 'general', 'security', 'services', 'logs', 'about', 'statistics',
+].map((s) => `/settings/${s}`)
+
+for (const lang of ['en', 'ru', 'de', 'fr', 'pl']) {
+  for (const path of [...PAGES.filter((p) => !p.startsWith('/settings')), ...SETTINGS]) {
+    test(`${path} does not scroll sideways with a wide font (${lang})`, async ({ page }) => {
+      await page.addInitScript((l) => {
+        localStorage.setItem('mediarium-demo', '1')
+        localStorage.setItem('mediarium-lang', l)
+      }, lang)
+      await page.goto(path)
+      const content = page.locator('main.content')
+      await expect(content).toBeVisible()
+      await page.addStyleTag({ content: WIDE_FONT })
+      await page.waitForTimeout(800)
+      const { over, culprits } = await content.evaluate((el) => {
+        const edge = el.getBoundingClientRect().right
+        const culprits: string[] = []
+        for (const child of Array.from(el.querySelectorAll('*'))) {
+          const r = child.getBoundingClientRect()
+          if (r.width > 0 && r.right > edge + 1 && !child.closest('table, .table-scroll, .ep-table, .lib-list')) {
+            culprits.push(`${child.tagName.toLowerCase()}.${String(child.className).split(' ').join('.')} +${Math.round(r.right - edge)}px "${(child.textContent ?? '').trim().slice(0, 30)}"`)
+          }
+        }
+        return { over: el.scrollWidth - el.clientWidth, culprits: culprits.slice(0, 8) }
+      })
+      expect(over, `main is ${over}px wider than the screen: ${culprits.join(' | ')}`).toBeLessThanOrEqual(0)
+    })
+  }
+}
+
+// The indexer list is sorted by priority (lower first), then by name, and the
+// 15 demo indexers fit without the page scrolling sideways in either language.
+for (const lang of ['en', 'ru']) {
+  test(`/settings/indexers lists 15 demo indexers by priority (${lang})`, async ({ page }) => {
+    await page.addInitScript((l) => {
+      localStorage.setItem('mediarium-demo', '1')
+      localStorage.setItem('mediarium-lang', l)
+    }, lang)
+    await page.goto('/settings/indexers')
+    const cards = page.locator('.indexer-card')
+    await expect(cards).toHaveCount(15)
+    await expect(cards.first().locator('.indexer-title strong')).toHaveText('Tabula Rasa')
+    await expect(cards.last().locator('.indexer-title strong')).toHaveText('LimeTorrents')
+    await expect(page.locator('.indexer-filter')).toBeVisible()
+    const over = await page.locator('main.content').evaluate((el) => el.scrollWidth - el.clientWidth)
+    expect(over).toBeLessThanOrEqual(0)
+  })
 }
 
 // The header buttons are big enough for a finger on a tablet or phone.

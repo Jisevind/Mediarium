@@ -31,12 +31,14 @@ func TestSettingsUpdateIsAllOrNothing(t *testing.T) {
 		"tmdbApiKey":        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		"subdlApiKey":       "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 		"unmonitorFinished": true,
+		"seasonPacks":       true,
+		"resumeInterrupted": true,
 	}
 	status, body := doJSONStatus(t, admin, http.MethodPut, base+"/api/settings", update)
 	if status != http.StatusInternalServerError {
 		t.Fatalf("status %d %v, want 500 from the failing write", status, body)
 	}
-	for _, key := range []string{settings.KeyMoviesPath, settings.KeyTMDBAPIKey, settings.KeySubDLAPIKey, settings.KeyUnmonitorFinished} {
+	for _, key := range []string{settings.KeyMoviesPath, settings.KeyTMDBAPIKey, settings.KeySubDLAPIKey, settings.KeyUnmonitorFinished, settings.KeySeasonPacks, settings.KeyResumeInterrupted} {
 		if v, _ := server.Settings.Get(key); v != "" {
 			t.Errorf("%s = %q after a refused update, want nothing saved", key, v)
 		}

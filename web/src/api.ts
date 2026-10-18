@@ -451,6 +451,13 @@ export interface RequestNotices {
   devices: { id: number; name: string; createdAt: string }[]
 }
 
+// The connected Simkl account (the sign-in itself never leaves the server).
+export interface SimklStatus {
+  connected: boolean
+  unreadable: boolean
+  hasClientId: boolean
+}
+
 // Scheduled import lists (Settings > Info, lists and subtitles > Import lists).
 export interface ImportListConfig {
   url?: string
@@ -459,6 +466,8 @@ export interface ImportListConfig {
   genre?: number
   language?: string
   csv?: string
+  // Simkl: which of the account's lists to read (plantowatch, watching, completed, hold or dropped)
+  status?: string
 }
 
 export interface ImportList {
@@ -631,6 +640,8 @@ export interface Settings {
   hasTmdbApiKey: boolean
   traktClientId?: string
   hasTraktClientId: boolean
+  simklClientId?: string
+  hasSimklClientId?: boolean
   onboardingDone: boolean
   torrentListenPort?: string
   torrentSeedRatioLimit?: string
@@ -673,8 +684,10 @@ export interface Settings {
   tmdbUsingOwnKey?: boolean
   openSubtitlesUsingOwnKey?: boolean
   traktUsingOwnKey?: boolean
+  simklUsingOwnKey?: boolean
   openSubtitlesKeyBuiltIn?: boolean
   traktClientIdBuiltIn?: boolean
+  simklClientIdBuiltIn?: boolean
   subtitleLanguages?: string[]
   // Which kind of subtitle to look for, per language code. A language that is not listed wants a normal or SDH one.
   subtitleProfiles?: Record<string, SubtitleProfile>
@@ -753,7 +766,7 @@ export interface IndexerConfig {
   kind?: 'torznab' | 'newznab' | 'cardigann'
   lastTestError?: string
   lastTestAt?: string
-  // 1 preferred, 2 normal, 3 last resort
+  // 1 to 50, lower is tried first (default 25)
   priority?: number
   // Set after repeated failures: searches skip the indexer until pausedUntil.
   failures?: number
@@ -1829,6 +1842,16 @@ export interface SeasonInfo {
   airDate?: string
 }
 
+// The cinema and digital dates of a movie ("YYYY-MM-DD") in the person's country.
+// cinemaRegion / digitalRegion name the country a date came from when it was not that one.
+export interface MovieReleaseDates {
+  cinema?: string
+  digital?: string
+  region?: string
+  cinemaRegion?: string
+  digitalRegion?: string
+}
+
 export interface TitleDetails {
   directors?: string[] // movies
   creators?: string[] // shows
@@ -1879,6 +1902,7 @@ export interface MovieDetail extends TitleDetails {
   folderPath?: string // the full folder of its files, as Mediarium sees it
   // The series of films this one is part of, when it is.
   collection?: CollectionRef
+  releaseDates?: MovieReleaseDates
 }
 
 // One subtitle source and where it stands: "on", "off" (set up but switched off),
@@ -1947,6 +1971,7 @@ export interface SubtitleResult {
   score: number
   fileId: number
   source?: 'subdl' | 'addon' // empty for OpenSubtitles
+  sourceName?: string // an add-on's own name
   link?: string // SubDL's download path
   language: string
   release: string
@@ -2220,6 +2245,7 @@ export interface CalendarEntry {
   title: string
   subtitle?: string
   releaseDate: string
+  release?: 'cinema' | 'digital' // a movie with both dates on different days shows twice: which date this is
   status: 'missing' | 'downloading' | 'downloaded'
   posterUrl?: string // the poster or cover, when there is one
   backdropUrl?: string // a wide still, once it has been fetched (the calendar's Backdrops view)
@@ -3284,6 +3310,10 @@ export const api = {
   followSeries: (source: string, key: string, body: { name: string; ebook: boolean; audiobook: boolean }) =>
     put<{ added: number; message?: string }>(`/book-series/${source}/${encodeURIComponent(key)}/follow`, body),
   unfollowSeries: (source: string, key: string) => del<null>(`/book-series/${source}/${encodeURIComponent(key)}/follow`),
+  simklStatus: () => get<SimklStatus>('/settings/simkl'),
+  simklStartPin: () => post<{ code: string; url: string; expiresIn: number; interval: number }>('/settings/simkl/pin', {}),
+  simklPinStatus: (code: string) => get<{ done: boolean; status?: SimklStatus }>(`/settings/simkl/pin/${encodeURIComponent(code)}`),
+  simklDisconnect: () => del<null>('/settings/simkl'),
   getHardcover: () => get<{ set: boolean; username?: string }>('/settings/hardcover'),
   putHardcover: (token: string) => put<{ set: boolean; username?: string }>('/settings/hardcover', { token }),
   // tracks=false answers with the album alone (fast); the tracklist is a second request.
@@ -3556,7 +3586,7 @@ export const api = {
   addSubtitleAddon: (url: string) => post<SubtitleAddon>('/subtitles/addons', { url }),
   removeSubtitleAddon: (id: string) => del<{ ok: boolean }>(`/subtitles/addons/${encodeURIComponent(id)}`),
   testSubtitleAddon: (id: string) => post<{ ok: boolean; message: string }>(`/subtitles/addons/${encodeURIComponent(id)}/test`),
-  testService: (data: { service: 'tmdb' | 'opensubtitles' | 'subdl' | 'wizdom' | 'trakt'; key?: string; username?: string; password?: string }) =>
+  testService: (data: { service: 'tmdb' | 'opensubtitles' | 'subdl' | 'wizdom' | 'trakt' | 'simkl'; key?: string; username?: string; password?: string }) =>
     post<{ ok: boolean; message: string }>('/settings/test-service', data),
   createFolder: (path: string) => post<FolderCheck>('/settings/folder-create', { path }),
   folderCheck: (path: string) => get<FolderCheck>(`/settings/folder-check?path=${encodeURIComponent(path)}`),

@@ -24,8 +24,11 @@ type calendarEntryPayload struct {
 	Title       string `json:"title"`
 	Subtitle    string `json:"subtitle,omitempty"`
 	ReleaseDate string `json:"releaseDate"`
-	Status      string `json:"status"`
-	PosterURL   string `json:"posterUrl,omitempty"` // the poster or cover the calendar shows next to the title
+	// Release says which date of a movie this entry is, "cinema" or "digital",
+	// when the movie has both on different days; empty otherwise.
+	Release   string `json:"release,omitempty"`
+	Status    string `json:"status"`
+	PosterURL string `json:"posterUrl,omitempty"` // the poster or cover the calendar shows next to the title
 	// BackdropURL and LogoURL are the wide still and the title logo of a movie or
 	// show, for the Backdrops view. They appear once they have been fetched in
 	// the background (see artwork.go). For an episode, TMDBID is the show's.
@@ -49,6 +52,7 @@ func (s *Server) handleCalendar(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	entries = s.withDigitalDates(entries)
 	// Album and book releases, while their modules are on (the dashboard's
 	// "coming up" list stays movies and episodes).
 	more, err := s.moduleCalendarEntries()

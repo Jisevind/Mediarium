@@ -143,7 +143,14 @@ func (s *Server) libraryRootProblem(root string) *libraryRootError {
 // checkLibraryRoot is called before anything is written to dest. It does
 // nothing for a path outside the library folders.
 func (s *Server) checkLibraryRoot(dest string) error {
-	root := rootContaining(s.writableRoots(), filepath.Clean(dest))
+	dest = filepath.Clean(dest)
+	// The innermost library folder holding dest is the one that has to be real.
+	root := ""
+	for _, r := range s.writableRoots() {
+		if rootContaining([]string{r}, dest) != "" && len(r) > len(root) {
+			root = r
+		}
+	}
 	if root == "" {
 		return nil
 	}

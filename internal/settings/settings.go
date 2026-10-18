@@ -30,8 +30,8 @@ const (
 	KeyMovieCopiesPath     = "library.movie_copies_path"        // where second copies of movies go (a 4K copy next to the 1080p one); unset = second copies of movies are off
 	KeyTVCopiesPath        = "library.tv_copies_path"           // the same for shows
 	KeyDownloadsPath       = "library.downloads_path"
-	KeyDownloadsTempDir    = "downloads.temp_dir"            // a folder for the unfinished part of downloads (a fast cache drive); unset = they stay in the downloads folder
-	KeyDownloadsTempPrev   = "downloads.temp_dir_previous"   // earlier temporary folders (a JSON list), kept so downloads that started there are still found
+	KeyDownloadsTempDir    = "downloads.temp_dir"          // a folder for the unfinished part of downloads (a fast cache drive); unset = they stay in the downloads folder
+	KeyDownloadsTempPrev   = "downloads.temp_dir_previous" // earlier temporary folders (a JSON list), kept so downloads that started there are still found
 	KeyNamingPreset        = "library.naming_preset"       // plex|jellyfin|kodi|minimal|custom
 	KeyMovieNameFormat     = "library.movie_name_format"   // token string, used when preset=custom
 	KeyEpisodeNameFormat   = "library.episode_name_format" // token string, used when preset=custom
@@ -88,7 +88,7 @@ const (
 	KeySubtitleAddons     = "subtitles.addons"              // subtitle add-ons (JSON list of {id, name, url}; the url can hold the person's own key for a site, so it is stored encrypted)
 	KeyDefaultSources     = "library.default_sources"       // usenet | torrent | both (default both)
 	KeySeasonPacks        = "library.season_packs"          // "1" looks for a season pack once a season has ended (a show can say otherwise for itself); unset or "0" leaves it off
-	KeyDefaultProfileID   ="library.default_profile_id"    // id of the stored quality profile used by items with no profile of their own
+	KeyDefaultProfileID   = "library.default_profile_id"    // id of the stored quality profile used by items with no profile of their own
 	KeyDefaultTVProfileID = "library.default_profile_id_tv" // id of the quality profile shows with none of their own use; unset = the same default as movies
 	KeyPresetsVersion     = "library.presets_version"       // revision of the built-in quality presets last applied; unset means never (set at start, not user-editable)
 
@@ -116,6 +116,8 @@ const (
 	// public list-items endpoint only needs a client ID (an app
 	// registration on trakt.tv), no OAuth user login — see internal/trakt.
 	KeyTraktClientID  = "metadata.trakt_client_id" // encrypted
+	KeySimklClientID  = "metadata.simkl_client_id" // encrypted; the Client ID of a Simkl app (own, or the one a release ships with)
+	KeySimklToken     = "metadata.simkl_token"     // encrypted; the access token of the connected Simkl account
 	KeyHardcoverToken = "books.hardcover_token"    // encrypted; a personal Hardcover API token for better book series and release dates. Unset = Open Library only
 
 	// Illegal filename character handling ("configurable
