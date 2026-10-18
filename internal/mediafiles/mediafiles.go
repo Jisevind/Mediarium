@@ -283,6 +283,27 @@ func (f Folder) List() ([]File, error) {
 	return out, nil
 }
 
+// Path returns the absolute path of a file in the folder after checking it
+// the same way Open does, for programs such as ffmpeg that need a path rather
+// than an open file. Symlinks are resolved, so the returned path is the file
+// inside the folder and never a link leading out.
+func (f Folder) Path(rel string) (string, error) {
+	file, _, err := f.Open(rel)
+	if err != nil {
+		return "", err
+	}
+	_ = file.Close()
+	p := filepath.Join(f.Dir, filepath.FromSlash(rel))
+	real, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", rel, err)
+	}
+	if _, ok := within(f.Dir, real); !ok {
+		return "", fmt.Errorf("%s: %w", rel, ErrInvalidPath)
+	}
+	return real, nil
+}
+
 // Open opens a file by its "/"-separated path relative to the folder. It
 // rejects absolute paths, "..", hidden files, and any symlink that leads out
 // of the folder. The caller closes the file.

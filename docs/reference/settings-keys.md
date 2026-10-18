@@ -120,6 +120,9 @@ The keys the app stores in its settings table. You normally change these from th
 | `notify.vapid_key` | this server's key for push notifications (encrypted; made on first start) |
 | `numbering.lookup` | "0" stops Mediarium looking up scene and anime numbering (TheXEM, the anime lists, AniList) for anime on its own; on by default. The Refresh mapping button on a show's page still works |
 | `onboarding.done` | "1" once the first-run wizard completes |
+| `playback.ffmpeg_path` | ffmpeg command or full path; unset = "ffmpeg" on PATH |
+| `playback.transcode_enabled` | "0" turns on-demand transcoding off; anything else (including unset) leaves it on |
+| `playback.transcode_hardware` | auto\|software\|vaapi\|qsv\|nvenc; unset = auto |
 | `quality.language` | the audio language wanted, as a name like "English" (the default when unset); a release clearly in another language only is not picked automatically |
 | `quality.language_only` | "1" takes only releases that say they are in a wanted audio language (no untagged, English-only or bare multi releases unless English is wanted); unset or "0" keeps those as a lower-ranked fallback |
 | `quality.size_limits` | size limits per quality in MB per minute of runtime (JSON: enabled, limits); applied only while enabled is true |

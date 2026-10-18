@@ -33,6 +33,7 @@ The screenshots in these pages come from demo mode: the movies, shows, artists, 
 | Subtitles: the on/off switch, release subtitles, offers, daily limits, dismissing | [subtitles.md](./subtitles.md) |
 | Switch movies, TV, music, ebooks and audiobooks on or off (Settings > Media types) | [modules.md](./modules.md) |
 | Change many movies, shows or artists at once from the Library (monitor, better versions, quality profile, download from, search now, remove) | [library.md](./library.md) |
+| Play a video in the built-in player, including files the browser cannot play directly (conversion, hardware acceleration, no sound) | [playback.md](./playback.md) |
 | Manage music (switch on the music module, artists and albums, audio quality, importing a collection) | [music.md](./music.md) |
 | Ebooks and audiobooks (switch them on, add books, which release is picked, where files go) | [books.md](./books.md) |
 | Connect Plex, Jellyfin or Emby (library refresh after imports, "Watch in" links, finding the token or API key, path mapping) | [media-servers.md](./media-servers.md) |
@@ -56,7 +57,7 @@ Settings has one entry in the sidebar. It always lists its groups, and one group
 
 | Group | Pages | What is there |
 |---|---|---|
-| General | General | The language of the app, light or dark, the time zone note, the address you open Mediarium at, updates and the legal notice. Everyone sees the first three. |
+| General | General, Playback | The language of the app, light or dark, the time zone note, the address you open Mediarium at, updates and the legal notice; how the built-in player converts videos the browser cannot play. Everyone sees the first three. |
 | Media types | Media types | Switch movies, shows, music, ebooks and audiobooks on or off. |
 | Library | Folders, File names and importing, Quality, Automatic searching | Where files live; how they are named, NFO and artwork files and the script after an import; quality profiles, size limits and the audio language you want; when Mediarium searches by itself. |
 | Indexers & Search | Indexers & Search | Indexers, FlareSolverr and IRC announce. |

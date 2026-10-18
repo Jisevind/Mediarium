@@ -40,17 +40,24 @@ import (
 	"github.com/rdborg/mediarium/internal/subtitles"
 	"github.com/rdborg/mediarium/internal/torrentopts"
 	"github.com/rdborg/mediarium/internal/trakt"
+	"github.com/rdborg/mediarium/internal/transcode"
 	"github.com/rdborg/mediarium/internal/usage"
 	"github.com/rdborg/mediarium/internal/vpn"
 )
 
 type Server struct {
 	resumeStop  context.CancelFunc // ends the resume of interrupted downloads (resume_interrupted.go)
-	streamPause streamPauseState  // pause while someone is watching (stream_pause.go)
-	libStats    libraryStatsCache // the Statistics page's answer, kept for a few minutes (stats_library.go)
-	appFrames   atomic.Value      // []string: the origins of add-ons shown in a frame, kept in memory so the security headers never wait for the database (app_links.go)
-	cfg         config.Config
-	db          *sql.DB // for backups (VACUUM INTO); repos hold their own handles
+	streamPause streamPauseState   // pause while someone is watching (stream_pause.go)
+	transcoder  *transcode.Manager // on-demand HLS sessions for the built-in player (files_play.go)
+	prober      *transcode.Prober  // ffprobe results and keyframes, kept while a file is unchanged
+
+	encoderMu    sync.Mutex
+	encoderKey   string
+	encoderCache transcode.Encoder // the encoder the current ffmpeg and hardware setting chose
+	libStats     libraryStatsCache // the Statistics page's answer, kept for a few minutes (stats_library.go)
+	appFrames    atomic.Value      // []string: the origins of add-ons shown in a frame, kept in memory so the security headers never wait for the database (app_links.go)
+	cfg          config.Config
+	db           *sql.DB // for backups (VACUUM INTO); repos hold their own handles
 
 	Auth              *auth.Service
 	Settings          *settings.Store
@@ -233,6 +240,8 @@ func New(db *sql.DB, cfg config.Config, box *crypto.Box, defaultTMDBAPIKey, vers
 		LoginLimiter: auth.NewLoginLimiter(5, 15*time.Minute),
 		version:      version,
 		Usage:        tracker,
+		transcoder:   transcode.NewManager(),
+		prober:       transcode.NewProber(),
 	}
 	s.QueueRepo.SetBox(box) // download addresses carry indexer keys: kept encrypted
 	s.startProblems()
@@ -596,6 +605,10 @@ func (s *Server) protectedRoutes() *routeTable {
 	member.HandleFunc("GET /api/movies/{id}/events", s.handleMovieEvents)
 	member.HandleFunc("GET /api/series/{id}/events", s.handleSeriesEvents)
 	play.HandleFunc("GET /api/files/stream", s.handleStreamFile)
+	play.HandleFunc("GET /api/files/play", s.handlePlayFile)
+	play.HandleFunc("GET /api/files/hls/{session}/index.m3u8", s.handleHLSManifest)
+	play.HandleFunc("GET /api/files/hls/{session}/{segment}", s.handleHLSSegment)
+	play.HandleFunc("DELETE /api/files/hls/{session}", s.handleCloseHLS)
 
 	// "Watch in Plex/Jellyfin/Emby" and "Open my media server" links.
 	member.HandleFunc("GET /api/media-servers/links", s.handleMediaServerLinks)
@@ -636,6 +649,7 @@ func (s *Server) protectedRoutes() *routeTable {
 	admin.HandleFunc("GET /api/settings", s.handleGetSettings)
 	admin.HandleFunc("PUT /api/settings", s.handlePutSettings)
 	admin.HandleFunc("GET /api/settings/filesystem-check", s.handleFilesystemCheck)
+	admin.HandleFunc("POST /api/settings/test-ffmpeg", s.handleTestFFmpeg)
 	admin.HandleFunc("POST /api/settings/test-service", s.handleTestService)
 	admin.HandleFunc("POST /api/subtitles/addons", s.handleAddSubtitleAddon)
 	admin.HandleFunc("DELETE /api/subtitles/addons/{id}", s.handleDeleteSubtitleAddon)

@@ -190,6 +190,11 @@ func (s *Server) collectHealth() []healthItem {
 			"Without it, Usenet downloads with missing pieces fail instead of being repaired. The Docker image includes it. On a native install, install par2.",
 			"How to install it", "/about")
 	}
+	if s.transcodeEnabled() && !s.ffmpegFound() {
+		addHealth("no-ffmpeg", "info", "The video converter (ffmpeg) is missing",
+			"Videos the browser can't play are sent directly, so some may have no picture or no sound. The Docker image includes it. On a native install, install ffmpeg, or set its path under Settings > Playback.",
+			"Open playback settings", "/settings/playback")
+	}
 
 	// While subtitles are switched off in Settings, nothing here mentions them.
 	if s.subtitlesEnabled() {

@@ -308,6 +308,20 @@ func (s *Server) validateSettings(req *settingsPayload) string {
 		}
 		*req.PublicURL = v
 	}
+	if req.TranscodeFfmpeg != nil {
+		v := strings.TrimSpace(*req.TranscodeFfmpeg)
+		if m := firstProblem(checkMaxLen(v, "The ffmpeg path", maxPathLen), checkNoControl(v, "The ffmpeg path")); m != "" {
+			return m
+		}
+		*req.TranscodeFfmpeg = v
+	}
+	if req.TranscodeHw != nil {
+		v := strings.ToLower(strings.TrimSpace(*req.TranscodeHw))
+		if m := checkChoice(v, "Choose auto, software, VAAPI, QSV or NVENC.", "auto", "software", "vaapi", "qsv", "nvenc"); m != "" {
+			return m
+		}
+		*req.TranscodeHw = v
+	}
 	return s.checkSettingsLimits(req)
 }
 

@@ -18,6 +18,9 @@ const (
 	KeyPushVAPID           = "notify.vapid_key"                 // this server's key for push notifications (encrypted; made on first start)
 	KeyTrailerSound        = "ui.trailer_sound"                 // "1" starts the trailer behind a title page with its sound on, where the browser allows it; unset or "0" starts it muted
 	KeyTrailerBackground   = "ui.trailer_background"            // unset or "1" plays the trailer behind movie and show pages for everyone, unless a browser chose otherwise; "0" switches it off for everyone
+	KeyTranscodeEnabled    = "playback.transcode_enabled"       // "0" turns on-demand transcoding off; anything else (including unset) leaves it on
+	KeyTranscodeFFmpeg     = "playback.ffmpeg_path"             // ffmpeg command or full path; unset = "ffmpeg" on PATH
+	KeyTranscodeHardware   = "playback.transcode_hardware"      // auto|software|vaapi|qsv|nvenc; unset = auto
 	KeyShowAdvanced        = "ui.show_advanced"                 // "1" shows custom formats and format scores on the Quality page; unset follows whether any custom format exists
 	KeyUnmonitorDownloaded = "library.unmonitor_downloaded"     // "1" stops monitoring a movie once it is downloaded; unset or "0" keeps it monitored
 	KeyUnmonitorFinished   = "library.unmonitor_finished_shows" // "1" stops monitoring a show once it has ended and every monitored episode is in; unset or "0" keeps it monitored

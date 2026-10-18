@@ -140,6 +140,13 @@ type settingsPayload struct {
 	// not allow it keeps it muted, and each browser can choose for itself).
 	TrailerSound      *bool `json:"trailerSound,omitempty"`
 	UnmonitorFinished *bool `json:"unmonitorFinished,omitempty"`
+
+	// On-demand transcoding for the built-in player: the master switch, the
+	// ffmpeg command ("" = ffmpeg on PATH) and the encoder preference.
+	TranscodeEnabled *bool   `json:"transcodeEnabled,omitempty"`
+	TranscodeFfmpeg  *string `json:"ffmpegPath,omitempty"`
+	TranscodeHw      *string `json:"transcodeHardware,omitempty"`
+	FFmpegAvailable  bool    `json:"ffmpegAvailable"`
 	// SeasonPacks looks for a season pack once a season has ended (off unless
 	// switched on; a show can say otherwise for itself).
 	SeasonPacks *bool `json:"seasonPacks,omitempty"`
@@ -339,6 +346,9 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	showAdvanced := s.showAdvanced()
 	trailerBackground := s.trailerBackground()
 	trailerSound := s.trailerSound()
+	transcodeOn := s.transcodeEnabled()
+	ffmpegPath := s.ffmpegPath()
+	transcodeHw := s.transcodeHardware()
 	subtitlesOn := s.subtitlesEnabled()
 	osUser, _ := s.Settings.Get(settings.KeyOpenSubtitlesUsername)
 	illegalCharMode, _ := s.Settings.Get(settings.KeyIllegalCharMode)
@@ -430,6 +440,10 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		ShowAdvanced:             &showAdvanced,
 		TrailerBackground:        &trailerBackground,
 		TrailerSound:             &trailerSound,
+		TranscodeEnabled:         &transcodeOn,
+		TranscodeFfmpeg:          &ffmpegPath,
+		TranscodeHw:              &transcodeHw,
+		FFmpegAvailable:          s.ffmpegFound(),
 		UnmonitorFinished:        &unmonitorFinished,
 		SeasonPacks:              &seasonPacks,
 		HasOpenSubtitlesAccount:  s.Subtitles().HasCredentials(),
@@ -768,6 +782,24 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.TrailerSound != nil {
 		if err := setBool(tx, settings.KeyTrailerSound, *req.TrailerSound); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if req.TranscodeEnabled != nil {
+		if err := setBool(tx, settings.KeyTranscodeEnabled, *req.TranscodeEnabled); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if req.TranscodeFfmpeg != nil {
+		if err := tx.Set(settings.KeyTranscodeFFmpeg, *req.TranscodeFfmpeg, false); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if req.TranscodeHw != nil {
+		if err := tx.Set(settings.KeyTranscodeHardware, *req.TranscodeHw, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}

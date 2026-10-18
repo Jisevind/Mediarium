@@ -75,6 +75,7 @@ const UsenetSettings = lazy(() => import('./pages/settings/DownloadSettings').th
 const TorrentSettings = lazy(() => import('./pages/settings/DownloadSettings').then((m) => ({ default: m.TorrentSettings })))
 const NamingSettings = lazy(() => import('./pages/settings/MediaSettings').then((m) => ({ default: m.NamingSettings })))
 const GeneralSettings = lazy(() => import('./pages/settings/GeneralSettings'))
+const PlaybackSettings = lazy(() => import('./pages/settings/PlaybackSettings'))
 const SecuritySettings = lazy(() => import('./pages/Profile').then((m) => ({ default: m.SecuritySettings })))
 const ServicesSettings = lazy(() => import('./pages/Profile').then((m) => ({ default: m.ServicesSettings })))
 const RequestsSettings = lazy(() => import('./pages/Profile').then((m) => ({ default: m.RequestsSettings })))
@@ -212,6 +213,7 @@ function Gate() {
           <Route path="requests" element={<AdminOnly><RequestsSettings /></AdminOnly>} />
           <Route path="sign-in" element={<AdminOnly><SignInSettings /></AdminOnly>} />
           <Route path="general" element={<GeneralSettings />} />
+          <Route path="playback" element={<AdminOnly><PlaybackSettings /></AdminOnly>} />
           <Route path="security" element={<SecuritySettings />} />
           <Route path="services" element={<ServicesSettings />} />
           <Route path="logs" element={<AdminOnly><LogsSettings /></AdminOnly>} />

@@ -177,15 +177,17 @@ func (s *Server) handleSeriesFiles(w http.ResponseWriter, r *http.Request) {
 	listFolder(w, folder, main)
 }
 
-// handleStreamFile plays a video (or, for an album, an audio track), or shows a picture or text file, from a title's folder in the browser:
-// ?movie={id}&path=<relative path>, ?series={id}&path=<relative path> or
-// ?album={id}&path=<relative path> (music module).
-// The file is sent as it is (no transcoding) with range support, so a
-// <video> element can seek; whether it plays depends on the browser
-// supporting the container and codecs. Pictures (jpg, png, webp, gif) keep
-// their image type; text files (nfo, srt, ass, ssa, vtt, txt, up to 2 MB) are
-// always sent as plain text. Anything else, html and svg included, is refused.
-func (s *Server) handleStreamFile(w http.ResponseWriter, r *http.Request) {
+// streamTarget is one file the stream and play endpoints were asked for.
+type streamTarget struct {
+	folder mediafiles.Folder
+	rel    string
+	album  bool
+}
+
+// resolveStreamTarget reads ?movie=, ?series= or ?album= and ?path=, and
+// answers a bad request itself. It is shared by direct streaming and by the
+// play handshake so both reach exactly the same files.
+func (s *Server) resolveStreamTarget(w http.ResponseWriter, r *http.Request) (streamTarget, bool) {
 	q := r.URL.Query()
 	movieID, seriesID, albumID := q.Get("movie"), q.Get("series"), q.Get("album")
 	given := 0
@@ -196,60 +198,79 @@ func (s *Server) handleStreamFile(w http.ResponseWriter, r *http.Request) {
 	}
 	if given != 1 {
 		writeError(w, http.StatusBadRequest, "give one of movie, series or album")
-		return
+		return streamTarget{}, false
 	}
 	rel := q.Get("path")
 	if rel == "" {
 		writeError(w, http.StatusBadRequest, "path is required")
-		return
+		return streamTarget{}, false
 	}
 
 	var folder mediafiles.Folder
 	if albumID != "" {
 		var ok bool
 		if folder, ok = s.albumStreamFolder(w, albumID); !ok {
-			return
+			return streamTarget{}, false
 		}
 	} else if movieID != "" {
 		id, err := strconv.ParseInt(movieID, 10, 64)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "That isn't a valid movie ID.")
-			return
+			return streamTarget{}, false
 		}
 		m, err := s.MovieRepo.Get(id)
 		if errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "That movie isn't in your library.")
-			return
+			return streamTarget{}, false
 		}
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
-			return
+			return streamTarget{}, false
 		}
 		if folder, err = s.movieFolder(m); err != nil {
 			writeStreamFolderError(w, err)
-			return
+			return streamTarget{}, false
 		}
 	} else {
 		id, err := strconv.ParseInt(seriesID, 10, 64)
 		if err != nil {
 			writeError(w, http.StatusBadRequest, "That isn't a valid show ID.")
-			return
+			return streamTarget{}, false
 		}
 		if _, err := s.MovieRepo.GetSeries(id); errors.Is(err, sql.ErrNoRows) {
 			writeError(w, http.StatusNotFound, "That show isn't in your library.")
-			return
+			return streamTarget{}, false
 		} else if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
-			return
+			return streamTarget{}, false
 		}
 		if folder, _, err = s.seriesFolder(id); err != nil {
 			writeStreamFolderError(w, err)
-			return
+			return streamTarget{}, false
 		}
 	}
+	return streamTarget{folder: folder, rel: rel, album: albumID != ""}, true
+}
+
+// handleStreamFile plays a video (or, for an album, an audio track), or shows a picture or text file, from a title's folder in the browser:
+// ?movie={id}&path=<relative path>, ?series={id}&path=<relative path> or
+// ?album={id}&path=<relative path> (music module).
+// The file is sent as it is (no transcoding) with range support, so a
+// <video> element can seek; whether it plays depends on the browser
+// supporting the container and codecs. The player asks /api/files/play first
+// when it needs to know whether transcoding is required. Pictures (jpg, png,
+// webp, gif) keep their image type; text files (nfo, srt, ass, ssa, vtt, txt,
+// up to 2 MB) are always sent as plain text. Anything else, html and svg
+// included, is refused.
+func (s *Server) handleStreamFile(w http.ResponseWriter, r *http.Request) {
+	target, ok := s.resolveStreamTarget(w, r)
+	if !ok {
+		return
+	}
+	folder, rel, albumID := target.folder, target.rel, target.album
 
 	contentType, isText := mediafiles.PreviewContentType(rel)
-	if albumID != "" {
+	if albumID {
 		// An album's tracks play in the browser too (the browser plays what its
 		// codecs allow; ranges are supported so a track can be seeked).
 		if ct := mediafiles.AudioContentType(rel); ct != "" {

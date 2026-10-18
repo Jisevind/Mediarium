@@ -118,6 +118,32 @@ func library(t *testing.T) (movies, tv, secret string) {
 	return movies, tv, secret
 }
 
+func TestFolderPathKeepsTranscodingInsideTheLibrary(t *testing.T) {
+	movies, _, secret := library(t)
+	folder, err := mediafiles.ForFile(filepath.Join(movies, "The Matrix (1999)", "The Matrix (1999).mkv"), []string{movies}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := folder.Path("The Matrix (1999).mkv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(folder.Dir, "The Matrix (1999).mkv"); got != want {
+		t.Fatalf("Path = %q, want %q", got, want)
+	}
+	for _, rel := range []string{"../passwords.txt", "/etc/passwd", ".hidden", "missing.mkv"} {
+		if _, err := folder.Path(rel); err == nil {
+			t.Errorf("Path(%q) should be refused", rel)
+		}
+	}
+	// A symlink that leaves the folder is refused just as Open refuses it.
+	link := filepath.Join(folder.Dir, "escape.mkv")
+	symlink(t, secret, link)
+	if _, err := folder.Path("escape.mkv"); err == nil {
+		t.Fatal("a symlink out of the folder must not produce a path")
+	}
+}
+
 func paths(files []mediafiles.File) string {
 	var p []string
 	for _, f := range files {

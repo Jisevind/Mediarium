@@ -263,6 +263,10 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 
 | Method | Path | Access | What it does |
 |---|---|---|---|
+| DELETE | `/api/files/hls/{session}` | any account | stops a session when the player closes, so its temporary segments go away at once. |
+| GET | `/api/files/hls/{session}/index.m3u8` | any account | serves one session's complete VOD playlist. |
+| GET | `/api/files/hls/{session}/{segment}` | any account | makes (or reuses) one segment and sends it. |
+| GET | `/api/files/play` | any account | decides whether a video can be played as it is or needs HLS. |
 | GET | `/api/files/stream` | any account | plays a video (or, for an album, an audio track), or shows a picture or text file, from a title's folder in the browser: ?movie={id}&path=<relative path>, ?s... |
 
 ## flaresolverr
@@ -677,6 +681,7 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | PUT | `/api/settings/metadata-files` | admin |  |
 | GET | `/api/settings/naming-preview` | admin | shows a naming preset or custom format applied to a fixed sample release (kind=movie, the default, or kind=tv), so the page can display the exact file name w... |
 | GET | `/api/settings/naming-tokens` | admin | lists the tokens a custom format can use and the ready-made formats to start from, for the builder in Settings. |
+| POST | `/api/settings/test-ffmpeg` | admin | runs the configured ffmpeg and reports what it is. |
 | POST | `/api/settings/test-service` | admin | checks a key for an outside service without saving it, so the setup wizard and Settings can say whether it works before the person moves on. |
 
 ## stats
@@ -848,4 +853,4 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | PUT | `/api/watched/settings` | admin | PUT /api/watched/settings {"sync": true, "cleanup": {...}} |
 | POST | `/api/watched/sync` | admin | POST /api/watched/sync: read what's been watched now. |
 
-508 routes.
+513 routes.

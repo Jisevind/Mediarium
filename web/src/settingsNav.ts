@@ -9,6 +9,7 @@ import { t, tc } from './i18n.ts'
 // one honest sentence under it (`blurb`).
 export const SETTINGS_NAV: { to: string; label: string; icon: IconName; color: string; blurb: string; member?: boolean; notViewer?: boolean; help?: string }[] = [
   { to: '/settings/general', label: t('General'), icon: 'sliders', color: '#e7a6f2', blurb: t('The app as a whole: its language, look, address and updates.'), member: true },
+  { to: '/settings/playback', label: t('Playback'), icon: 'film', color: '#e7a6f2', blurb: t('How the built-in player handles videos the browser cannot play.'), help: 'playback' },
   { to: '/settings/modules', label: t('Media types'), icon: 'grid', color: '#ff9f6b', blurb: t('Switch movies, shows, music, ebooks and audiobooks on or off.'), help: 'getting-started#media-types' },
   { to: '/settings/media', label: t('Folders'), icon: 'folder', color: '#7cc4f8', blurb: t('Where your movies, shows, music, books and downloads are kept.'), help: 'install-docker#why-one-data-folder-hardlinks' },
   { to: '/settings/naming', label: t('File names and importing'), icon: 'list', color: '#7cc4f8', blurb: t('How imported files are named, the info files saved next to them, and what runs after an import.'), help: 'library#file-names' },
@@ -69,7 +70,7 @@ export interface SettingsGroup {
 // open in the sidebar; one entry at a time shows its pages as indented items
 // underneath, so the sidebar stays short.
 const GROUPS: { key: string; label: string; icon: IconName; color: string; pages: string[] }[] = [
-  { key: 'general', label: t('General'), icon: 'sliders', color: '#e7a6f2', pages: ['/settings/general'] },
+  { key: 'general', label: t('General'), icon: 'sliders', color: '#e7a6f2', pages: ['/settings/general', '/settings/playback'] },
   { key: 'modules', label: t('Media types'), icon: 'grid', color: '#ff9f6b', pages: ['/settings/modules'] },
   { key: 'library', label: t('Library'), icon: 'folder', color: '#7cc4f8', pages: ['/settings/media', '/settings/naming', '/settings/quality', '/settings/automation'] },
   { key: 'indexers', label: t('Indexers & Search'), icon: 'search', color: '#a5b4fc', pages: ['/settings/indexers'] },

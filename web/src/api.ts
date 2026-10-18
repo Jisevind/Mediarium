@@ -599,6 +599,15 @@ export interface SpeedRule {
   limitMB: number
 }
 
+// How the server wants a video played: the file as it is, or a scoped HLS
+// playlist whose segments are made as they are watched.
+export interface PlaybackSource {
+  mode: 'direct' | 'hls'
+  url: string
+  reason?: string
+  duration?: number
+}
+
 export interface Settings {
   moviesPath: string
   tvPath?: string
@@ -642,6 +651,10 @@ export interface Settings {
   showAdvanced?: boolean // show custom formats and format scores on the Quality page
   trailerBackground?: boolean // play the trailer behind movie and show pages for everyone (on by default)
   trailerSound?: boolean // start that trailer with its sound on (off by default)
+  transcodeEnabled?: boolean // convert videos the browser can't play, on by default
+  ffmpegPath?: string // ffmpeg command or full path; empty = ffmpeg on PATH
+  transcodeHardware?: string // auto | software | vaapi | qsv | nvenc
+  ffmpegAvailable?: boolean // read-only: the configured ffmpeg can be run
   unmonitorDownloaded?: boolean // stop monitoring a movie once it is downloaded (off by default)
   unmonitorFinished?: boolean // stop monitoring a show once it has ended and every episode is in (off by default)
   seasonPacks?: boolean // look for a season pack once a season has ended (off by default)
@@ -3044,6 +3057,7 @@ export const api = {
 
   getSettings: () => get<Settings>('/settings'),
   putSettings: (partial: Partial<Settings> & { legalAcknowledged?: boolean; tmdbApiKey?: string; openSubtitlesApiKey?: string; openSubtitlesUsername?: string; openSubtitlesPassword?: string }) => put<Settings>('/settings', partial),
+  testFfmpeg: (path = '') => post<{ ok: boolean; version: string; vaapi?: boolean; qsv?: boolean; nvenc?: boolean }>('/settings/test-ffmpeg', { path }),
 
   listIndexers: () => get<IndexerConfig[]>('/indexers'),
   addIndexerDefinition: (content: string) => post<IndexerDefinition>('/indexer-definitions/custom', { content }),
@@ -3434,6 +3448,10 @@ export const api = {
   movieFiles: (id: number) => get<{ folder: string; files: TitleFile[] }>(`/movies/${id}/files`),
   seriesFiles: (id: number) => get<{ folder: string; files: TitleFile[] }>(`/series/${id}/files`),
   streamUrl: (kind: 'movie' | 'series', id: number, path: string) => withBase(`/api/files/stream?${kind}=${id}&path=${encodeURIComponent(path)}`),
+  playMedia: async (kind: 'movie' | 'series', id: number, path: string): Promise<PlaybackSource> => {
+    const r = await get<PlaybackSource>(`/files/play?${kind}=${id}&path=${encodeURIComponent(path)}`)
+    return { ...r, url: withBase(r.url) }
+  },
   discoverList: (kind: 'movie' | 'tv', list: 'trending' | 'popular' | 'upcoming' | 'similar', page = 1, older = false) =>
     get<{ page: number; totalPages: number; totalResults?: number; results: DiscoverMovie[] }>(
       `/discover/list?kind=${kind}&list=${list}&page=${page}${older ? '&older=true' : ''}`,

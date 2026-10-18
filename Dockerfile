@@ -77,7 +77,7 @@ FROM ${FLARESOLVERR_IMAGE} AS full
 USER root
 ARG VERSION=
 LABEL org.opencontainers.image.version="${VERSION}"       org.opencontainers.image.source="https://github.com/rdborg/mediarium"       org.opencontainers.image.licenses="AGPL-3.0"       org.opencontainers.image.description="Mediarium with a built-in Cloudflare helper (FlareSolverr)"
-RUN apt-get update  && apt-get install -y --no-install-recommends ca-certificates tzdata par2 p7zip-full  && rm -rf /var/lib/apt/lists/*
+RUN apt-get update  && apt-get install -y --no-install-recommends ca-certificates tzdata par2 p7zip-full ffmpeg  && rm -rf /var/lib/apt/lists/*
 ENV PUID=1000     PGID=1000     TZ=Etc/UTC     APP_PORT=8264     BUNDLED_FLARESOLVERR=1
 # The program inside this image. The entrypoint may start a newer installed one
 # from /config/update instead (docs/INSTALL.md, "Updating without rebuilding").
@@ -112,9 +112,12 @@ LABEL org.opencontainers.image.version="${VERSION}" \
 # shells out to. p7zip is only used for .7z archives: RAR and
 # ZIP are unpacked natively in Go (Alpine's 7z has no RAR codec, so it could
 # not be relied on for RAR anyway).
+# ffmpeg (with ffprobe) converts videos the browser cannot play. The Alpine
+# build covers software H.264 and, with /dev/dri mapped, VAAPI; users who need
+# NVENC or Quick Sync can point Settings > Playback at their own build.
 # tini runs as process 1 and cleans up processes that end without a parent
 # (for example ones a post-import script left behind).
-RUN apk add --no-cache ca-certificates tzdata su-exec par2cmdline p7zip tini
+RUN apk add --no-cache ca-certificates tzdata su-exec par2cmdline p7zip ffmpeg tini
 
 # Default UID/GID, overridable via PUID/PGID at runtime
 ENV PUID=1000 \

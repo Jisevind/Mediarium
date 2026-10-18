@@ -89,6 +89,13 @@ export const TOPICS: TopicDef[] = [
     sources: [{ file: 'quality-profiles.md' }],
   },
   {
+    id: 'playback',
+    title: 'Playback in the browser',
+    summary: 'Direct play and conversion, hardware acceleration, and what to try when a video has no sound.',
+    group: 'Your media',
+    sources: [{ file: 'playback.md' }],
+  },
+  {
     id: 'subtitles',
     title: 'Subtitles',
     summary: 'Where subtitles come from, the kinds, daily limits, and fixing one that is out of time.',

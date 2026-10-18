@@ -242,6 +242,7 @@ The images install these from Alpine Linux (the standard image) or Debian (the `
 |---|---|---|
 | par2cmdline | checking and repairing Usenet downloads | GPL-2.0-or-later |
 | p7zip | unpacking .7z archives | LGPL-2.1-or-later, with the unRAR restriction for its RAR code |
+| ffmpeg | converting videos for the built-in player | GPL-2.0-or-later, with LGPL-2.1-or-later parts |
 | tini (standard image), dumb-init (` + "`-full`" + `) | process 1 in the container | MIT |
 | su-exec | dropping to your PUID/PGID | MIT |
 | ca-certificates | trusting https sites | MPL-2.0 |

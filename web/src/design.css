@@ -1383,6 +1383,7 @@ fieldset.group .card, fieldset.group table { max-width: 100%; }
 .player { width: min(1100px, 94vw); background: #000; border-radius: 14px; overflow: hidden; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6); animation: pop-scale 0.18s ease both; }
 .player-head { display: flex; align-items: center; gap: 12px; padding: 10px 12px 10px 16px; background: var(--surface); color: var(--text); }
 .player-head strong { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.player-reason { color: var(--text-dim); font-size: 12px; white-space: nowrap; }
 .player video { display: block; width: 100%; max-height: 78vh; background: #000; }
 .player-failed { display: grid; justify-items: center; gap: 10px; padding: 48px 24px; color: var(--text); text-align: center; background: var(--surface); }
 .player-failed p { max-width: 460px; margin: 0; color: var(--text-dim); }
