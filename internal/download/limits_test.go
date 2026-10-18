@@ -98,6 +98,14 @@ func (s *limitedNNTP) enter() (ok bool) {
 	return true
 }
 
+// setClientOpen sets the function that counts the downloader's own places
+// while the server is already accepting connections.
+func (s *limitedNNTP) setClientOpen(f func() int) {
+	s.mu.Lock()
+	s.clientOpen = f
+	s.mu.Unlock()
+}
+
 func (s *limitedNNTP) leave(wasAllowed bool) {
 	s.mu.Lock()
 	s.active--
@@ -373,14 +381,14 @@ func TestTwoDownloadsShareOneLoginsConnections(t *testing.T) {
 	cfg := ClientConfig{Host: srv.addr, Port: srv.port, Username: "shared", Password: "x", Connections: 4}
 
 	host := srv.addr + ":" + strconv.Itoa(srv.port)
-	srv.clientOpen = func() int {
+	srv.setClientOpen(func() int {
 		for _, st := range ServerStates() {
 			if st.Host == host {
 				return st.InUse
 			}
 		}
 		return 0
-	}
+	})
 
 	var wg sync.WaitGroup
 	for i := 0; i < 2; i++ {

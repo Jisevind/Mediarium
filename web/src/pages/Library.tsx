@@ -31,6 +31,7 @@ import HelpLink from '../components/HelpLink'
 import { useUrlState } from '../useUrlState'
 import { plural, t, tx, st } from '../i18n'
 import { compareTitles } from '../titleSort'
+import { looseIncludes } from '../looseText'
 
 type Kind = 'movie' | 'tv'
 type View = 'grid' | 'list'
@@ -288,7 +289,7 @@ export default function Library() {
     const list = items.filter(
       (i) =>
         test(i) &&
-        (!needle || i.title.toLowerCase().includes(needle)) &&
+        (!needle || looseIncludes(i.title, needle)) &&
         (!genre || i.genres.includes(genre)) &&
         (!tag || i.tags.some((t) => t.toLowerCase() === tag.toLowerCase())) &&
         (!decade || (i.year >= Number(decade) && i.year < Number(decade) + 10)) &&

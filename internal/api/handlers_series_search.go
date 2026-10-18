@@ -156,6 +156,7 @@ func startsWithKeyWords(words []string, title string) bool {
 // one episode ("Show S01E02") — the shape Newznab-family indexers match
 // best, same as Sonarr's own fallback text query.
 func tvSearchQuery(title string, season, episode int) string {
+	title = indexerQuery(title)
 	if episode > 0 {
 		return fmt.Sprintf("%s S%02dE%02d", title, season, episode)
 	}
@@ -344,4 +345,24 @@ func bestTVMatch(shows []metadata.Show, release parser.Release) *metadata.Show {
 		}
 	}
 	return exact // none named like the release: no guess, the person picks
+}
+
+// indexerQuery is a title as it is searched for at an indexer. A lone "&"
+// ("Law & Order") is left out: releases are named "Law.and.Order" as often as
+// "Law.&.Order", and an indexer matches the words either way, while a search
+// with the "&" in it finds only one of the two spellings, or none. An "&"
+// inside a word ("AT&T", "R&B") is part of the name and stays. HTML's "&amp;"
+// that some metadata sources leave in a title counts as the same "&".
+func indexerQuery(title string) string {
+	words := strings.Fields(strings.ReplaceAll(title, "&amp;", "&"))
+	kept := words[:0]
+	for _, w := range words {
+		if w != "&" {
+			kept = append(kept, w)
+		}
+	}
+	if len(kept) == 0 {
+		return title
+	}
+	return strings.Join(kept, " ")
 }

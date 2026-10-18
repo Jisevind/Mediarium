@@ -12,6 +12,7 @@ import FilterToggle from '../components/FilterToggle'
 import { t } from '../i18n'
 import { useUrlState } from '../useUrlState'
 import { useModules } from '../ModulesContext'
+import { looseIncludes } from '../looseText'
 
 type Sort = 'added' | 'title' | 'author'
 
@@ -80,7 +81,7 @@ export default function BookLibrary({
     if (!books) return null
     const test = FILTERS.find((f) => f.id === filter)?.test ?? (() => true)
     const needle = text.trim().toLowerCase()
-    const list = mine.filter((b) => test(bookState(b, format, queue)) && (!needle || b.title.toLowerCase().includes(needle) || b.author.toLowerCase().includes(needle)))
+    const list = mine.filter((b) => test(bookState(b, format, queue)) && (!needle || looseIncludes(b.title, needle) || looseIncludes(b.author, needle)))
     if (sort === 'title') list.sort((a, b) => a.title.localeCompare(b.title))
     else if (sort === 'author') list.sort((a, b) => a.author.localeCompare(b.author) || a.title.localeCompare(b.title))
     else list.sort((a, b) => b.addedAt.localeCompare(a.addedAt))
