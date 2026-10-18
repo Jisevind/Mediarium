@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strconv"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/rdborg/mediarium/internal/auth"
 	"github.com/rdborg/mediarium/internal/mediafiles"
+	"github.com/rdborg/mediarium/internal/subtitles"
 	"github.com/rdborg/mediarium/internal/transcode"
 )
 
@@ -20,10 +22,20 @@ import (
 // points at the existing stream endpoint, untouched. HLS points at a scoped
 // playlist whose segments are made as they are watched.
 type playPayload struct {
-	Mode     string  `json:"mode"` // direct | hls
-	URL      string  `json:"url"`
-	Reason   string  `json:"reason,omitempty"`
-	Duration float64 `json:"duration,omitempty"`
+	Mode      string            `json:"mode"` // direct | hls
+	URL       string            `json:"url"`
+	Reason    string            `json:"reason,omitempty"`
+	Duration  float64           `json:"duration,omitempty"`
+	Subtitles []subtitlePayload `json:"subtitles,omitempty"`
+}
+
+// subtitlePayload is one text track inside the video, ready for a <track>.
+type subtitlePayload struct {
+	URL      string `json:"url"`
+	Language string `json:"language,omitempty"`
+	Title    string `json:"title,omitempty"`
+	Forced   bool   `json:"forced,omitempty"`
+	SDH      bool   `json:"sdh,omitempty"`
 }
 
 // handlePlayFile decides whether a video can be played as it is or needs
@@ -35,21 +47,14 @@ func (s *Server) handlePlayFile(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	input, ok := s.resolvePlayFile(w, target)
+	if !ok {
+		return
+	}
+	subs := s.embeddedSubtitlePayloads(r, target, input)
 	direct := func(reason string) {
 		w.Header().Set("Cache-Control", "private, no-store")
-		writeJSON(w, http.StatusOK, playPayload{Mode: "direct", URL: "/api/files/stream?" + r.URL.RawQuery, Reason: reason})
-	}
-	input, err := target.folder.Path(target.rel)
-	switch {
-	case errors.Is(err, mediafiles.ErrInvalidPath):
-		writeError(w, http.StatusBadRequest, "That file path isn't valid.")
-		return
-	case errors.Is(err, fs.ErrNotExist):
-		writeError(w, http.StatusNotFound, "Couldn't find that file. It may have been moved or deleted.")
-		return
-	case err != nil:
-		writeFileReadError(w, err)
-		return
+		writeJSON(w, http.StatusOK, playPayload{Mode: "direct", URL: "/api/files/stream?" + r.URL.RawQuery, Reason: reason, Subtitles: subs})
 	}
 	// Album tracks and pictures keep the direct path; the handshake exists for
 	// video files.
@@ -115,8 +120,102 @@ func (s *Server) handlePlayFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, no-store")
 	writeJSON(w, http.StatusOK, playPayload{
 		Mode: "hls", URL: "/api/files/hls/" + session.ID + "/index.m3u8",
-		Reason: plan.Reason, Duration: media.Duration,
+		Reason: plan.Reason, Duration: media.Duration, Subtitles: subs,
 	})
+}
+
+// resolvePlayFile turns a stream target into the absolute file path ffmpeg
+// and the subtitle reader use, answering the usual path errors itself.
+func (s *Server) resolvePlayFile(w http.ResponseWriter, target streamTarget) (string, bool) {
+	input, err := target.folder.Path(target.rel)
+	switch {
+	case errors.Is(err, mediafiles.ErrInvalidPath):
+		writeError(w, http.StatusBadRequest, "That file path isn't valid.")
+		return "", false
+	case errors.Is(err, fs.ErrNotExist):
+		writeError(w, http.StatusNotFound, "Couldn't find that file. It may have been moved or deleted.")
+		return "", false
+	case err != nil:
+		writeFileReadError(w, err)
+		return "", false
+	}
+	return input, true
+}
+
+// embeddedSubtitlePayloads lists the text subtitle tracks inside a video.
+// Bitmap tracks are left out: a browser cannot show them as WebVTT.
+func (s *Server) embeddedSubtitlePayloads(r *http.Request, target streamTarget, input string) []subtitlePayload {
+	if target.album || mediafiles.VideoContentType(target.rel) == "" || !s.ffmpegFound() {
+		return nil
+	}
+	tracks, err := subtitles.EmbeddedSubtitles(input)
+	if err != nil {
+		return nil
+	}
+	base := url.Values{}
+	for _, k := range []string{"movie", "series", "album"} {
+		if v := r.URL.Query().Get(k); v != "" {
+			base.Set(k, v)
+		}
+	}
+	base.Set("path", target.rel)
+	out := make([]subtitlePayload, 0, len(tracks))
+	for i, t := range tracks {
+		if !subtitles.IsTextSubtitle(t.Codec) {
+			continue
+		}
+		q := make(url.Values, len(base)+1)
+		for k, vs := range base {
+			q[k] = append([]string(nil), vs...)
+		}
+		q.Set("stream", strconv.Itoa(i))
+		out = append(out, subtitlePayload{
+			URL: "/api/files/subtitle?" + q.Encode(), Language: t.Lang, Title: t.Name,
+			Forced: t.Forced, SDH: t.SDH,
+		})
+	}
+	return out
+}
+
+// handleSubtitleFile turns one embedded text subtitle into WebVTT for the
+// player's <track>. It is separate from playback because the browser loads
+// the track by itself, both for direct play and for HLS.
+func (s *Server) handleSubtitleFile(w http.ResponseWriter, r *http.Request) {
+	target, ok := s.resolveStreamTarget(w, r)
+	if !ok {
+		return
+	}
+	if target.album || mediafiles.VideoContentType(target.rel) == "" {
+		writeError(w, http.StatusNotFound, "That subtitle track isn't a text track Mediarium can show.")
+		return
+	}
+	stream, err := strconv.Atoi(r.URL.Query().Get("stream"))
+	if err != nil || stream < 0 {
+		writeError(w, http.StatusBadRequest, "That isn't a valid subtitle track.")
+		return
+	}
+	input, ok := s.resolvePlayFile(w, target)
+	if !ok {
+		return
+	}
+	tracks, err := subtitles.EmbeddedSubtitles(input)
+	if err != nil || stream >= len(tracks) || !subtitles.IsTextSubtitle(tracks[stream].Codec) {
+		writeError(w, http.StatusNotFound, "That subtitle track isn't a text track Mediarium can show.")
+		return
+	}
+	data, err := s.prober.SubtitleVTT(r.Context(), s.ffmpegPath(), input, stream)
+	if err != nil {
+		slog.Warn("subtitle: couldn't extract a track", "file", path.Base(target.rel), "stream", stream, "err", err)
+		writeError(w, http.StatusBadGateway, "Couldn't read this subtitle. Check the server log for details.")
+		return
+	}
+	h := w.Header()
+	h.Set("Content-Type", "text/vtt; charset=utf-8")
+	h.Set("Cache-Control", "private, no-store")
+	h.Set("X-Content-Type-Options", "nosniff")
+	h.Set("Content-Security-Policy", "sandbox")
+	h.Set("Content-Disposition", "inline")
+	_, _ = w.Write(data)
 }
 
 // sessionFor finds a session owned by the signed-in account. A session ID is

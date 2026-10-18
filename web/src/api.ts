@@ -601,11 +601,20 @@ export interface SpeedRule {
 
 // How the server wants a video played: the file as it is, or a scoped HLS
 // playlist whose segments are made as they are watched.
+export interface PlaybackSubtitle {
+  url: string
+  language?: string
+  title?: string
+  forced?: boolean
+  sdh?: boolean
+}
+
 export interface PlaybackSource {
   mode: 'direct' | 'hls'
   url: string
   reason?: string
   duration?: number
+  subtitles?: PlaybackSubtitle[]
 }
 
 export interface Settings {
@@ -3450,7 +3459,11 @@ export const api = {
   streamUrl: (kind: 'movie' | 'series', id: number, path: string) => withBase(`/api/files/stream?${kind}=${id}&path=${encodeURIComponent(path)}`),
   playMedia: async (kind: 'movie' | 'series', id: number, path: string): Promise<PlaybackSource> => {
     const r = await get<PlaybackSource>(`/files/play?${kind}=${id}&path=${encodeURIComponent(path)}`)
-    return { ...r, url: withBase(r.url) }
+    return {
+      ...r,
+      url: withBase(r.url),
+      subtitles: r.subtitles?.map((s) => ({ ...s, url: withBase(s.url) })),
+    }
   },
   discoverList: (kind: 'movie' | 'tv', list: 'trending' | 'popular' | 'upcoming' | 'similar', page = 1, older = false) =>
     get<{ page: number; totalPages: number; totalResults?: number; results: DiscoverMovie[] }>(

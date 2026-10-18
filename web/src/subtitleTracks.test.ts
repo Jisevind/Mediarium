@@ -37,3 +37,12 @@ test('episodes in a season folder find their own subtitles', () => {
   ]
   assert.deepEqual(subtitleTracksFor('Season 01/Show - S01E01.mp4', files), [{ path: 'Season 01/Show - S01E01.fr.srt', code: 'fr' }])
 })
+
+test('embedded subtitles get a readable label', async () => {
+  const { embeddedSubtitleLabel } = await import('./subtitleTracks.ts')
+  assert.equal(embeddedSubtitleLabel({ language: 'en', sdh: true }, 0), 'English SDH')
+  assert.equal(embeddedSubtitleLabel({ language: 'en', title: 'SDH' }, 0), 'English SDH')
+  assert.equal(embeddedSubtitleLabel({ language: 'en', title: 'English SDH' }, 0), 'English SDH')
+  assert.equal(embeddedSubtitleLabel({ language: 'de', forced: true }, 0), 'German forced')
+  assert.equal(embeddedSubtitleLabel({}, 1), 'Subtitle 2')
+})

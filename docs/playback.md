@@ -42,6 +42,12 @@ Settings > General > Playback (administrators) has:
 
 The settings are stored as `playback.transcode_enabled`, `playback.ffmpeg_path` and `playback.transcode_hardware` (see [reference/settings-keys.md](./reference/settings-keys.md)).
 
+## Subtitles
+
+Subtitle files next to the video (`.srt` and `.vtt`) appear in the player's subtitle menu. Text tracks stored **inside** an MKV or MP4 are offered too: SubRip, ASS/SSA, WebVTT and MP4 `tx3g`/`mov_text`. Mediarium extracts the chosen track with ffmpeg as WebVTT and the browser shows it over direct play or HLS. The menu uses the track's language, and says `SDH` or `forced` when the file marks it so.
+
+Bitmap subtitles (PGS, VobSub and DVB) are not offered: a browser cannot display them as text, and turning them into text needs OCR or burning them into the picture. They are left out of the menu.
+
 ## When it does not work
 
 - **The film plays but has no sound.** Check Settings > General > Playback: the switch must be on, and **Test ffmpeg** must find a working ffmpeg. If the file has an unusual audio codec, the conversion should still fix it; if it does not, the server log names the ffmpeg error.
@@ -51,7 +57,7 @@ The settings are stored as `playback.transcode_enabled`, `playback.ffmpeg_path` 
 
 ## What it does not do yet
 
-- Embedded subtitle tracks are not converted. Subtitle files next to the video (SRT and VTT) still appear in the player's subtitle menu.
+- Bitmap subtitle tracks (PGS, VobSub and DVB) are not supported. Text tracks inside the video, and SRT/VTT files next to it, are.
 - HDR video is converted without tone mapping, so colours can look washed out. Direct play keeps the original colour.
 - There is no quality or resolution picker; the converter aims for a good 1080p-class H.264 picture and stereo AAC audio.
 - The audio track the file marks as default is used. There is no menu for the other tracks yet.

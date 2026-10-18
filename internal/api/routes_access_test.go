@@ -179,6 +179,7 @@ var memberRoutes = []string{
 	"GET /api/series/{id}/events",
 	"GET /api/files/stream",
 	"GET /api/files/play",
+	"GET /api/files/subtitle",
 	"GET /api/files/hls/{session}/index.m3u8",
 	"GET /api/files/hls/{session}/{segment}",
 	"DELETE /api/files/hls/{session}",

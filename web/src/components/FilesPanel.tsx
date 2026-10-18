@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import Hls from 'hls.js'
 import { hlsMode } from '../hls'
 import { useFocusTrap } from '../useFocusTrap'
-import { api, can, type TitleFile } from '../api'
+import { api, can, type PlaybackSubtitle, type TitleFile } from '../api'
 import { useAuth } from '../AuthContext'
 import SubtitleTiming from './SubtitleTiming'
 import { formatBytes, timeAgo } from '../format'
@@ -12,7 +12,7 @@ import { useLive } from '../useLive'
 import Icon from './Icon'
 import { t } from '../i18n'
 import { languageName } from '../languages'
-import { srtToVtt, subtitleTracksFor } from '../subtitleTracks'
+import { embeddedSubtitleLabel, srtToVtt, subtitleTracksFor } from '../subtitleTracks'
 
 const KIND_ICON: Record<TitleFile['kind'], string> = { video: 'film', audio: 'music', subtitle: 'chat', image: 'image', nfo: 'info', other: 'folder' }
 
@@ -116,6 +116,7 @@ function Player({ src, kind, id, file, subs = [], onClose }: { src: string; kind
   const name = file.path
   const [failed, setFailed] = useState(false)
   const [tracks, setTracks] = useState<{ code: string; url: string }[]>([])
+  const [embedded, setEmbedded] = useState<PlaybackSubtitle[]>([])
   const [mode, setMode] = useState<'direct' | 'hls'>('direct')
   const [resolved, setResolved] = useState(src)
   const [preparing, setPreparing] = useState(!audio)
@@ -171,11 +172,13 @@ function Player({ src, kind, id, file, subs = [], onClose }: { src: string; kind
       setMode('direct')
       setResolved(src)
       setPreparing(false)
+      setEmbedded([])
       return
     }
     let cancelled = false
     setMode('direct')
     setResolved('')
+    setEmbedded([])
     setPreparing(true)
     setFailed(false)
     setStarted(false)
@@ -187,6 +190,7 @@ function Player({ src, kind, id, file, subs = [], onClose }: { src: string; kind
         setMode(r.mode)
         setResolved(r.url)
         setReason(r.reason ?? '')
+        setEmbedded(r.subtitles ?? [])
         setPreparing(false)
         session.current = r.mode === 'hls' ? r.url.replace(/\/index\.m3u8$/, '') : ''
       })
@@ -203,9 +207,21 @@ function Player({ src, kind, id, file, subs = [], onClose }: { src: string; kind
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
-  const trackEls = tracks.map((tr, i) => (
-    <track key={tr.url} kind="subtitles" src={tr.url} srcLang={tr.code} label={languageName(tr.code)} default={i === 0} />
-  ))
+  const trackEls = [
+    ...tracks.map((tr, i) => (
+      <track key={tr.url} kind="subtitles" src={tr.url} srcLang={tr.code} label={languageName(tr.code)} default={i === 0} />
+    )),
+    ...embedded.map((tr, i) => (
+      <track
+        key={tr.url}
+        kind="subtitles"
+        src={tr.url}
+        srcLang={tr.language ?? ''}
+        label={embeddedSubtitleLabel(tr, i)}
+        default={tracks.length === 0 && i === 0}
+      />
+    )),
+  ]
   return createPortal(
     <div className="modal-backdrop" onClick={onClose}>
       <div className={`player${audio ? ' audio' : ''}`} onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" ref={box} tabIndex={-1} aria-label={t('Playing {name}', { name })}>

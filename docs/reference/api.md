@@ -268,6 +268,7 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | GET | `/api/files/hls/{session}/{segment}` | any account | makes (or reuses) one segment and sends it. |
 | GET | `/api/files/play` | any account | decides whether a video can be played as it is or needs HLS. |
 | GET | `/api/files/stream` | any account | plays a video (or, for an album, an audio track), or shows a picture or text file, from a title's folder in the browser: ?movie={id}&path=<relative path>, ?s... |
+| GET | `/api/files/subtitle` | any account | turns one embedded text subtitle into WebVTT for the player's <track>. |
 
 ## flaresolverr
 
@@ -853,4 +854,4 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | PUT | `/api/watched/settings` | admin | PUT /api/watched/settings {"sync": true, "cleanup": {...}} |
 | POST | `/api/watched/sync` | admin | POST /api/watched/sync: read what's been watched now. |
 
-513 routes.
+514 routes.

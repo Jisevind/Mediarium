@@ -1,9 +1,11 @@
 package transcode
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -19,11 +21,12 @@ type Prober struct {
 	mu     sync.Mutex
 	media  map[string]Media
 	frames map[string][]float64
+	subs   map[string][]byte
 }
 
 // NewProber returns an empty probe cache.
 func NewProber() *Prober {
-	return &Prober{media: map[string]Media{}, frames: map[string][]float64{}}
+	return &Prober{media: map[string]Media{}, frames: map[string][]float64{}, subs: map[string][]byte{}}
 }
 
 // FFprobePath finds ffprobe next to the configured ffmpeg. An empty setting
@@ -105,6 +108,65 @@ func (p *Prober) Keyframes(ctx context.Context, ffmpegPath, path string) []float
 	p.frames[key] = frames
 	p.mu.Unlock()
 	return frames
+}
+
+// maxSubtitleVTT caps one extracted subtitle. Text tracks are small; anything
+// larger is not a subtitle a browser should be asked to parse.
+const maxSubtitleVTT = 5 << 20
+
+// SubtitleVTT extracts one text subtitle track as WebVTT. The result is kept
+// while the file stays the same, so the same track is only read once.
+func (p *Prober) SubtitleVTT(ctx context.Context, ffmpegPath, path string, ordinal int) ([]byte, error) {
+	key, ok := cacheKey(path)
+	if !ok {
+		return nil, fmt.Errorf("stat %s: %w", filepath.Base(path), os.ErrNotExist)
+	}
+	key = fmt.Sprintf("%s|subtitle:%d", key, ordinal)
+	p.mu.Lock()
+	if data, hit := p.subs[key]; hit {
+		p.mu.Unlock()
+		return data, nil
+	}
+	p.mu.Unlock()
+
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, ffmpegPath, "-hide_banner", "-loglevel", "error", "-nostdin",
+		"-i", path, "-map", fmt.Sprintf("0:s:%d", ordinal), "-f", "webvtt", "-")
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return nil, fmt.Errorf("read subtitle %d: %w", ordinal, err)
+	}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("start subtitle extraction: %w", err)
+	}
+	data, readErr := io.ReadAll(io.LimitReader(stdout, maxSubtitleVTT+1))
+	waitErr := cmd.Wait()
+	if readErr != nil {
+		return nil, fmt.Errorf("read subtitle %d: %w", ordinal, readErr)
+	}
+	if waitErr != nil {
+		detail := strings.TrimSpace(stderr.String())
+		if len(detail) > 500 {
+			detail = detail[len(detail)-500:]
+		}
+		return nil, fmt.Errorf("extract subtitle %d: %w: %s", ordinal, waitErr, detail)
+	}
+	if len(data) > maxSubtitleVTT {
+		return nil, fmt.Errorf("subtitle %d is larger than %d MB", ordinal, maxSubtitleVTT>>20)
+	}
+	p.mu.Lock()
+	if len(p.subs) >= 1000 {
+		for k := range p.subs {
+			delete(p.subs, k)
+			break
+		}
+	}
+	p.subs[key] = data
+	p.mu.Unlock()
+	return data, nil
 }
 
 // cacheKey is a file's identity for the probe cache.

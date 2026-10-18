@@ -37,6 +37,19 @@ func TestEmbeddedSubtitlesInRealFiles(t *testing.T) {
 	}
 }
 
+func TestIsTextSubtitle(t *testing.T) {
+	for _, codec := range []string{"S_TEXT/UTF8", "S_TEXT/ASS", "S_TEXT/SSA", "S_TEXT/WEBVTT", "tx3g", "mov_text", "subrip", "wvtt"} {
+		if !IsTextSubtitle(codec) {
+			t.Errorf("%s should count as text", codec)
+		}
+	}
+	for _, codec := range []string{"S_HDMV/PGS", "S_VOBSUB", "S_DVBSUB", "dvd_subtitle", ""} {
+		if IsTextSubtitle(codec) {
+			t.Errorf("%s should not count as text", codec)
+		}
+	}
+}
+
 func TestEmbeddedLanguagesLeavesOutForcedAndCaches(t *testing.T) {
 	dir := t.TempDir()
 	src, _ := os.ReadFile(filepath.Join("testdata", "embedded.mkv"))

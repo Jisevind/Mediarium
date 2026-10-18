@@ -52,6 +52,7 @@ esac
 for last; do :; done
 case " $* " in
   *" -version "*) echo "ffmpeg version fake";;
+  *" webvtt "*) printf 'WEBVTT\n\n00:00:01.000 --> 00:00:02.000\nHello\n';;
   *" -encoders "*) echo " V....D libx264              H.264";;
   *) printf 'segment' > "$last";;
 esac
@@ -206,4 +207,38 @@ func TestTranscodeSettings(t *testing.T) {
 		t.Fatalf("saved settings: %v", body)
 	}
 	putJSONStatus(t, e.admin, e.base+"/api/settings", map[string]any{"transcodeHardware": "magic"}, http.StatusBadRequest)
+}
+
+func TestPlayListsAndServesEmbeddedTextSubtitles(t *testing.T) {
+	e := newPlayEnv(t)
+	embedded, err := os.ReadFile(filepath.Join("..", "subtitles", "testdata", "embedded.mkv"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(e.dir, "Embedded.mkv"), embedded, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	status, body := e.play(t, e.member, "Embedded.mkv")
+	if status != http.StatusOK || body["mode"] != "hls" {
+		t.Fatalf("play: %d %v", status, body)
+	}
+	tracks, ok := body["subtitles"].([]any)
+	if !ok || len(tracks) != 4 {
+		t.Fatalf("subtitles: %v", body["subtitles"])
+	}
+	first := tracks[0].(map[string]any)
+	subURL, _ := first["url"].(string)
+	if subURL == "" || !strings.Contains(subURL, "/api/files/subtitle?") || !strings.Contains(subURL, "stream=0") || first["language"] != "en" {
+		t.Fatalf("first subtitle: %v", first)
+	}
+	status, hdr, sub := getRaw(t, e.member, e.base+subURL)
+	if status != http.StatusOK || hdr.Get("Content-Type") != "text/vtt; charset=utf-8" || !strings.Contains(string(sub), "WEBVTT") {
+		t.Fatalf("subtitle: %d %q %q", status, hdr.Get("Content-Type"), sub)
+	}
+	if status, _, _ := getRaw(t, e.member, e.base+strings.Replace(subURL, "stream=0", "stream=99", 1)); status != http.StatusNotFound {
+		t.Fatalf("unknown track: %d", status)
+	}
+	if status, _, _ := getRaw(t, e.member, e.base+"/api/files/subtitle?movie="+strconv.FormatInt(e.movie.ID, 10)+"&path="+url.QueryEscape("../../secret.mkv")+"&stream=0"); status != http.StatusBadRequest {
+		t.Fatalf("escaping path: %d", status)
+	}
 }

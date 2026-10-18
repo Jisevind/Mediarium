@@ -27,6 +27,17 @@ type EmbeddedTrack struct {
 // ErrNotVideo means the file isn't an MKV or MP4 this can read.
 var ErrNotVideo = errors.New("not an MKV or MP4 file")
 
+// IsTextSubtitle reports whether a codec can be turned into WebVTT text.
+// Bitmap subtitles (PGS, VobSub, DVB) need OCR or burning into the picture.
+func IsTextSubtitle(codec string) bool {
+	switch strings.ToUpper(strings.TrimSpace(codec)) {
+	case "S_TEXT/UTF8", "S_TEXT/ASS", "S_TEXT/SSA", "S_TEXT/WEBVTT",
+		"SUBRIP", "ASS", "SSA", "WEBVTT", "MOV_TEXT", "TX3G", "WVTT":
+		return true
+	}
+	return false
+}
+
 const (
 	maxTracksBytes = 4 << 20 // an MKV's track list
 	maxBoxBytes    = 1 << 20 // one small MP4 box (mdhd, hdlr, elng)

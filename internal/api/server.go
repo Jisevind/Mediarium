@@ -606,6 +606,7 @@ func (s *Server) protectedRoutes() *routeTable {
 	member.HandleFunc("GET /api/series/{id}/events", s.handleSeriesEvents)
 	play.HandleFunc("GET /api/files/stream", s.handleStreamFile)
 	play.HandleFunc("GET /api/files/play", s.handlePlayFile)
+	play.HandleFunc("GET /api/files/subtitle", s.handleSubtitleFile)
 	play.HandleFunc("GET /api/files/hls/{session}/index.m3u8", s.handleHLSManifest)
 	play.HandleFunc("GET /api/files/hls/{session}/{segment}", s.handleHLSSegment)
 	play.HandleFunc("DELETE /api/files/hls/{session}", s.handleCloseHLS)

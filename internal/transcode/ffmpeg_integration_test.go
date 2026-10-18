@@ -12,6 +12,24 @@ import (
 // TestRealFFmpegMakesAPlayableSegment is skipped when the machine has no
 // ffmpeg. It checks the part unit tests cannot: that the argument list really
 // produces an MPEG-TS segment with H.264 video and AAC audio.
+func TestRealFFmpegExtractsAnEmbeddedTextSubtitle(t *testing.T) {
+	ffmpeg, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skip("ffmpeg is not installed")
+	}
+	p := NewProber()
+	data, err := p.SubtitleVTT(context.Background(), ffmpeg, filepath.Join("..", "subtitles", "testdata", "embedded.mkv"), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(strings.TrimSpace(string(data)), "WEBVTT") {
+		t.Fatalf("subtitle = %q, want WebVTT", data)
+	}
+	if !strings.Contains(string(data), "-->") {
+		t.Fatalf("subtitle has no cue: %q", data)
+	}
+}
+
 func TestRealFFmpegMakesAPlayableSegment(t *testing.T) {
 	ffmpeg, err := exec.LookPath("ffmpeg")
 	if err != nil {
