@@ -2,6 +2,7 @@ import { createPortal } from 'react-dom'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import Hls from 'hls.js'
+import { hlsMode } from '../hls'
 import { useFocusTrap } from '../useFocusTrap'
 import { api, can, type TitleFile } from '../api'
 import { useAuth } from '../AuthContext'
@@ -263,11 +264,15 @@ function HlsVideo({ src, onFatal, onPlaying, children }: { src: string; onFatal:
   useEffect(() => {
     const video = ref.current
     if (!video) return
-    if (video.canPlayType('application/vnd.apple.mpegurl')) {
+    // Chrome reports "maybe" for HLS in canPlayType even though it cannot play
+    // an m3u8 itself. Use hls.js wherever MediaSource works, and native HLS
+    // only where it does not (notably iPhone and iPad).
+    const way = hlsMode(Hls.isSupported(), video.canPlayType('application/vnd.apple.mpegurl'))
+    if (way === 'native') {
       video.src = src
       return
     }
-    if (!Hls.isSupported()) {
+    if (way === 'none') {
       fatal.current()
       return
     }
