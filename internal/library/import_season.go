@@ -9,6 +9,7 @@ const (
 	placedAsNamed  placedHow = iota // the show lists the season and episode the name carries
 	placedRemapped                  // by the absolute number in the name, or TheXEM's scene numbering
 	placedBySeason                  // by TheTVDB's season numbers (Sonarr's), converted to the show's own
+	placedByTitle                   // by the episode title in the file name, the last resort
 )
 
 // ImportMaps is what is known about a show's other numberings. Either is nil
@@ -36,6 +37,16 @@ type importRules struct {
 	runs     map[int]seasonRun
 	inferred map[[2]int][2]int // what the files themselves say, see inferFromFiles
 	claimed  map[[2]int]bool   // episodes that a file names for certain
+
+	// The title rule: normalised title -> the episodes that carry it, the
+	// episodes that other rules fill, how many files claim an episode by its
+	// title, and the seasons where the two season-counting rules disagree
+	// with the titles in the file names (see calibrate).
+	titles     map[string][][2]int
+	taken      map[[2]int]bool
+	titleCount map[[2]int]int
+	offsetBad  map[int]bool
+	inferBad   map[int]bool
 }
 
 // newImportRules reads the show's episode list once. files are all the files
@@ -43,8 +54,17 @@ type importRules struct {
 func newImportRules(episodes []Episode, anime bool, maps ImportMaps, files []ImportFile) *importRules {
 	listed := make(map[[2]int]bool, len(episodes))
 	bySeason := map[int][]int{}
+	var r0 map[string][][2]int
 	for _, e := range episodes {
 		listed[[2]int{e.Season, e.Episode}] = true
+		if anime && e.Season > 0 {
+			if key := titleKey(e.Title); key != "" {
+				if r0 == nil {
+					r0 = map[string][][2]int{}
+				}
+				r0[key] = append(r0[key], [2]int{e.Season, e.Episode})
+			}
+		}
 		if e.Season > 0 && e.Episode > 0 {
 			bySeason[e.Season] = append(bySeason[e.Season], e.Episode)
 		}
@@ -55,6 +75,8 @@ func newImportRules(episodes []Episode, anime bool, maps ImportMaps, files []Imp
 		anime: anime,
 		maps:  maps,
 		runs:  map[int]seasonRun{},
+
+		titles: r0,
 	}
 	for season, nums := range bySeason {
 		sort.Ints(nums)
@@ -81,12 +103,24 @@ func newImportRules(episodes []Episode, anime bool, maps ImportMaps, files []Imp
 				}
 			}
 		}
+		r.calibrate(files)
 	}
 	return r
 }
 
 // resolve says which episodes of the show a file is.
 func (r *importRules) resolve(f ImportFile) (importTarget, bool, placedHow) {
+	if t, ok, how := r.resolveStrong(f); ok {
+		return t, true, how
+	}
+	if t, ok := r.resolveByTitle(f); ok {
+		return t, true, placedByTitle
+	}
+	return importTarget{}, false, placedAsNamed
+}
+
+// resolveStrong is every rule except the title one.
+func (r *importRules) resolveStrong(f ImportFile) (importTarget, bool, placedHow) {
 	if t, ok, how := r.resolveNamed(f); ok {
 		return t, true, how
 	}
@@ -143,7 +177,8 @@ func (r *importRules) resolveNamed(f ImportFile) (importTarget, bool, placedHow)
 
 // resolveBySeason places a file named by a season and episode that the show
 // does not list, counting the way TheTVDB does (Sonarr's names). Three rules,
-// each strict, in this order: the anime lists' TheTVDB seasons; a season of
+// in this order (the last two stand down for a season whose file names carry
+// episode titles that say they count differently, see calibrate): the anime lists' TheTVDB seasons; a season of
 // the show whose numbers are one run that does not start at 1 (the movie
 // database numbers One Piece's season 22 from 1089 to 1155, where TheTVDB
 // counts 1 to 67); and the file set itself, when its seasons add up to the
@@ -152,35 +187,50 @@ func (r *importRules) resolveBySeason(f ImportFile) (importTarget, bool) {
 	if t, ok := r.viaMap(f, r.maps.TVDB); ok {
 		return t, true
 	}
-	if run, ok := r.runs[f.Season]; ok && run.first > 1 {
-		t := importTarget{season: f.Season}
-		for _, n := range f.Episodes {
-			if n < 1 || n > run.count {
-				t = importTarget{}
-				break
-			}
-			t.episodes = append(t.episodes, run.first+n-1)
-		}
-		if len(t.episodes) > 0 {
+	if !r.offsetBad[f.Season] {
+		if t, ok := r.offsetTarget(f); ok {
 			return t, true
 		}
 	}
-	if len(r.inferred) > 0 {
-		t := importTarget{}
-		for _, n := range f.Episodes {
-			to, ok := r.inferred[[2]int{f.Season, n}]
-			if !ok || (t.season != 0 && to[0] != t.season) {
-				t = importTarget{}
-				break
-			}
-			t.season = to[0]
-			t.episodes = append(t.episodes, to[1])
-		}
-		if t.season > 0 && len(t.episodes) > 0 {
+	if !r.inferBad[f.Season] {
+		if t, ok := r.inferTarget(f); ok {
 			return t, true
 		}
 	}
 	return importTarget{}, false
+}
+
+// offsetTarget is the season offset rule.
+func (r *importRules) offsetTarget(f ImportFile) (importTarget, bool) {
+	run, ok := r.runs[f.Season]
+	if !ok || run.first <= 1 {
+		return importTarget{}, false
+	}
+	t := importTarget{season: f.Season}
+	for _, n := range f.Episodes {
+		if n < 1 || n > run.count {
+			return importTarget{}, false
+		}
+		t.episodes = append(t.episodes, run.first+n-1)
+	}
+	return t, len(t.episodes) > 0
+}
+
+// inferTarget is the rule that reads the file set, see inferFromFiles.
+func (r *importRules) inferTarget(f ImportFile) (importTarget, bool) {
+	if len(r.inferred) == 0 {
+		return importTarget{}, false
+	}
+	t := importTarget{}
+	for _, n := range f.Episodes {
+		to, ok := r.inferred[[2]int{f.Season, n}]
+		if !ok || (t.season != 0 && to[0] != t.season) {
+			return importTarget{}, false
+		}
+		t.season = to[0]
+		t.episodes = append(t.episodes, to[1])
+	}
+	return t, t.season > 0 && len(t.episodes) > 0
 }
 
 // viaMap converts the file's season and episodes with another numbering. All

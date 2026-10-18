@@ -695,6 +695,7 @@ type SeriesImportResult struct {
 	Unknown  int // episodes on disk that the movie database does not list
 	Remapped int // episodes found through their absolute number or the show's other numbering
 	BySeason int // episodes found through TheTVDB's season numbers
+	Titled   int // episodes found by the title in the file name
 }
 
 // ImportPlacer returns a function that says which episodes of a show a file
@@ -846,13 +847,18 @@ func (r *Repo) CompleteSeriesImport(item ImportItem, d SeriesDetails, episodes [
 	}
 	defer mark.Close()
 	anime := seriesType == SeriesAnime
+	titleOf := make(map[[2]int]string, len(episodes))
+	for _, e := range episodes {
+		titleOf[[2]int{e.Season, e.Episode}] = e.Title
+	}
 	listed := make([]Episode, 0, len(byNumber))
 	for key := range byNumber {
-		listed = append(listed, Episode{Season: key[0], Episode: key[1]})
+		listed = append(listed, Episode{Season: key[0], Episode: key[1], Title: titleOf[key]})
 	}
 	rules := newImportRules(listed, anime, ImportMaps{Scene: d.SceneMap, TVDB: d.TVDBMap}, item.Files)
 	// What the files left out were numbered by, to tell the person what to do.
 	var leftByNumber, leftByAbsolute int
+	var leftFiles []string
 	for _, f := range item.Files {
 		target, resolved, how := resolveImportFile(f, rules)
 		if !resolved {
@@ -861,6 +867,7 @@ func (r *Repo) CompleteSeriesImport(item ImportItem, d SeriesDetails, episodes [
 				left = len(f.Absolute)
 			}
 			out.Unknown += left // specials, or numbering that differs from the movie database
+			leftFiles = append(leftFiles, f.Path)
 			if f.Season > 0 || len(f.Absolute) > 0 {
 				if len(f.Absolute) > 0 {
 					leftByAbsolute += left
@@ -889,12 +896,14 @@ func (r *Repo) CompleteSeriesImport(item ImportItem, d SeriesDetails, episodes [
 					out.Remapped++
 				case placedBySeason:
 					out.BySeason++
+				case placedByTitle:
+					out.Titled++
 				}
 			}
 		}
 	}
 
-	note := importNote(out.BySeason, leftOutNote(out.Unknown, leftByAbsolute > 0, leftByNumber > 0, anime))
+	note := importNote(out.BySeason, out.Titled, leftOutNote(out.Unknown, leftByAbsolute > 0, leftByNumber > 0, anime), leftFiles)
 	if _, err := tx.Exec(`INSERT INTO activity (series_id, event_type, message) VALUES (?, 'imported', ?)`,
 		item.TitleID, fmt.Sprintf("%s: registered %s that were already on disk", d.Title, countOf(out.Imported, "episode"))); err != nil {
 		return out, fmt.Errorf("log import: %w", err)

@@ -57,6 +57,13 @@
   .page-header .btn-link { margin-left: 0; }
 }
 
+/* quality profiles on a wide screen: the buttons in the last column wrap when the words are long (Russian, or a wide
+   fallback font) instead of pushing the table past the page */
+.settings-content .profiles-table :is(th, td) { white-space: normal !important; overflow-wrap: anywhere; }
+.settings-content .profiles-table td:first-child { min-width: min(240px, 30vw); }
+.settings-content .profiles-table td button { white-space: normal; max-width: 100%; }
+.credit-top .badge { white-space: normal; max-width: 100%; }
+
 /* quality profiles: each one a plain card, not a table row */
 @media (max-width: 900px) {
   .settings-content .profiles-table, .settings-content .profiles-table tbody, .settings-content .profiles-table tr, .settings-content .profiles-table td { display: block; width: 100%; min-width: 0; }

@@ -223,3 +223,45 @@ func TestExtractDefinitionsPicksSupportedVersion(t *testing.T) {
 		t.Fatalf("only newer versions: expected the oldest (12), got v%d %v", v, err)
 	}
 }
+
+// A site the saved list marks as not supported is judged again by the running
+// version: after an update that lifted a limit it must not stay grey until the
+// list is downloaded again.
+func TestSavedUnsupportedMarkIsCheckedAgain(t *testing.T) {
+	archive := tarGz(t, map[string][]byte{"definitions/v11/fixturepublic.yml": fixtureDef(t, "fixturepublic")})
+	srv, hits := archiveServer(t, archive)
+	dir := filepath.Join(t.TempDir(), "indexer-definitions")
+	store := NewDefinitionStore(dir)
+	store.SourceURL = srv.URL
+	if _, err := store.Catalogue(context.Background(), false); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(dir, "index.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cached DefinitionIndex
+	if err := json.Unmarshal(raw, &cached); err != nil {
+		t.Fatal(err)
+	}
+	for i := range cached.Definitions {
+		if cached.Definitions[i].ID == "fixturepublic" {
+			cached.Definitions[i].Supported = false
+			cached.Definitions[i].Problem = "field title: more than 32 filters"
+		}
+	}
+	raw, _ = json.Marshal(cached)
+	if err := os.WriteFile(filepath.Join(dir, "index.json"), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	again := NewDefinitionStore(dir)
+	again.SourceURL = srv.URL
+	idx, err := again.Catalogue(context.Background(), false)
+	if err != nil || hits.Load() != 1 {
+		t.Fatalf("catalogue: hits=%d err=%v", hits.Load(), err)
+	}
+	sum, ok := findSummary(idx, "fixturepublic")
+	if !ok || !sum.Supported || sum.Problem != "" {
+		t.Fatalf("a site that the engine runs fine is still marked unsupported: %+v", sum)
+	}
+}

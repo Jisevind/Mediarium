@@ -14,6 +14,8 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 - **Indexer priority is a number from 1 to 50** (like Prowlarr; lower is tried first, 25 by default) instead of Preferred, Normal and Last resort. Existing indexers keep their order (Preferred became 10, Normal 25, Last resort 40), the Prowlarr import carries its numbers over, and the settings file and the API still accept the three old words. Thanks to SanketBaraiya on GitHub, #80.
 
 ### Fixed
+- Anime files named by TheTVDB season (One Piece) were placed three episodes too late because TheTVDB starts the season earlier than the movie database does. Placement now checks the episode titles in the file names, and places a file by its title when the title matches exactly one episode. The import note lists the files that were left out (reported by SanketBaraiya on GitHub, #69).
+- A site marked "Not supported yet" in the site list is checked again after an update, so one that an update made possible (like Mazepa) no longer stays grey until you press Update list (reported by Apostol6 on GitHub, #16).
 - The e-reader catalogue (OPDS) and the Kobo sync no longer load and sort the whole book list for every request. Built pages are kept in memory and rebuilt only when a book is added, removed or changed; saving a reading place does not count. Pages also carry an ETag, so an app that sends If-None-Match gets a 304.
 - On a phone, long button labels and hints in Settings (Russian, German, French, Polish) now wrap instead of pushing the page wider than the screen.
 

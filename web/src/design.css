@@ -1242,7 +1242,7 @@ fieldset.group .card, fieldset.group table { max-width: 100%; }
 
 /* About: credits as a readable list, every entry the same weight. */
 .credit-card h3 { margin: 0 0 10px; font-family: var(--font-display); font-size: 1rem; font-weight: 700; letter-spacing: -0.01em; color: var(--text); }
-.credit-list li { display: grid; gap: 2px; justify-content: stretch; }
+.credit-list li { display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; justify-content: stretch; min-width: 0; }
 .credit-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .credit-top a { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
 .credit-logo { height: 12px; width: auto; }
@@ -1404,7 +1404,7 @@ fieldset.group .card, fieldset.group table { max-width: 100%; }
 .indexer-edit { padding-top: 10px; border-top: 1px dashed var(--border); }
 
 /* About: credits in columns across the full width, legal as its own row below. */
-.about-stack { display: grid; gap: 22px; }
+.about-stack { display: grid; grid-template-columns: minmax(0, 1fr); gap: 22px; }
 /* The thank-you list and the credits sit on one grid: three columns on a wide
    page, two on a medium one, one on a phone. The widths are measured on the
    page itself (not the screen), so the sidebar doesn't throw them off. Each
@@ -1416,7 +1416,7 @@ fieldset.group .card, fieldset.group table { max-width: 100%; }
    columns instead of sitting in rows with empty space under the short ones. */
 .credit-area .helper-grid { display: block; column-count: 3; column-gap: 14px; }
 .credit-area .helper-card { break-inside: avoid; margin-bottom: 14px; }
-.credit-cell { display: grid; gap: 14px; min-width: 0; }
+.credit-cell { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; }
 .credit-cell.wide { grid-column: span 2; }
 .credit-card { min-width: 0; padding: 14px 16px 12px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--border); }
 .credit-card .credit-list li:last-child { border-bottom: 0; padding-bottom: 0; }
