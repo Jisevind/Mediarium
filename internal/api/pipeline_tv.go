@@ -230,6 +230,7 @@ func (s *Server) runTVPipeline(queueID int64, series library.Series, season int,
 
 	mapper := s.releaseMapper(series) // anime and daily file names
 	imported, skipped := 0, 0
+	copiedNote := "" // set when files had to be copied over from the temporary download folder
 	// Files the library has down for other titles, and the places this run
 	// has already filled: two episodes of one pack never overwrite each other,
 	// and no file of another episode or movie is ever replaced.
@@ -292,6 +293,9 @@ func (s *Server) runTVPipeline(queueID int64, series library.Series, season int,
 			// for TV it behaves like skip — the existing file is kept.
 			skipped++
 			continue
+		}
+		if n := s.copiedFromTempNote(file, result); n != "" {
+			copiedNote = n
 		}
 		usedDest[filepath.Clean(result.DestPath)] = true
 		usedDest[filepath.Clean(destPath)] = true
@@ -360,7 +364,7 @@ func (s *Server) runTVPipeline(queueID int64, series library.Series, season int,
 		_, _ = s.QueueRepo.ClearFailedForEpisodes(series.ID, sn, eps, queueID)
 	}
 	s.autoSubtitlesFor(subtitleItems...)
-	message := fmt.Sprintf("%s: imported %s from %s", series.Title, plural(imported, "episode"), releaseTitle)
+	message := fmt.Sprintf("%s: imported %s from %s", series.Title, plural(imported, "episode"), releaseTitle) + copiedNote
 	_ = s.QueueRepo.LogSeriesActivity(series.ID, "imported", message)
 	s.checkFinishedShowSoon(series.ID)
 	importedItem := seriesItemFor(series, season, importedEps)

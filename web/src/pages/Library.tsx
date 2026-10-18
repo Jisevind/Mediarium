@@ -20,7 +20,7 @@ import { WindowedBody, WindowedGrid } from '../components/Windowed'
 import { sortProfiles } from '../components/qualityBlurb'
 import { detailsState, movieState, progressFor, seriesState, type ItemState } from '../components/state'
 import { useToast } from '../components/Toast'
-import { formatBytes } from '../format'
+import { formatBytes, withNameTag } from '../format'
 import { useConfirm } from '../components/ConfirmProvider'
 import { useLive } from '../useLive'
 import { chosenOf, count, failureLines, nameList, selectAllKeys, selectionText, selectRange, toggleKey } from '../librarySelection'
@@ -45,6 +45,7 @@ interface Item {
   id: number
   tmdbId: number
   title: string
+  tag?: string // tells a show from another of the same name ("UK")
   year: number
   posterUrl?: string
   monitored: boolean
@@ -105,7 +106,7 @@ function fromMovie(m: Movie, queue: QueueItem[]): Item {
 function fromSeries(s: Series, queue: QueueItem[]): Item {
   const status: Item['status'] = s.episodeCount > 0 && s.downloadedCount === s.episodeCount ? 'downloaded' : s.downloadedCount > 0 ? 'partial' : 'missing'
   return {
-    key: `tv-${s.id}`, kind: 'tv', id: s.id, tmdbId: s.tmdbId, title: s.title, year: s.year, posterUrl: s.posterUrl,
+    key: `tv-${s.id}`, kind: 'tv', id: s.id, tmdbId: s.tmdbId, title: s.title, tag: s.nameTag, year: s.year, posterUrl: s.posterUrl,
     monitored: s.monitored, profileId: s.profileId ?? 0, status, have: s.downloadedCount, total: s.episodeCount,
     state: detailsState(s) ?? seriesState(s, queue), live: progressFor(queue, (q) => q.seriesId === s.id), genres: s.genres ?? [], tags: s.tags ?? [],
     gettingDetails: !!s.detailsState,
@@ -805,7 +806,7 @@ export default function Library() {
               key={i.key}
               to={openPath(i)}
               poster={i.posterUrl}
-              title={i.title}
+              title={withNameTag(i.title, i.tag, i.year)}
               meta={[i.year || null, i.kind === 'movie' ? i.quality : i.gettingDetails ? null : t('{have}/{total} episodes', { have: i.have, total: i.total }), i.copies ? plural(i.copies, '+{n} copy', '+{n} copies') : null, i.monitored ? null : t('unmonitored')].filter(Boolean).join(' · ')}
               state={i.state}
               kind={i.kind}
@@ -868,7 +869,7 @@ export default function Library() {
                   <Link to={openPath(i)} className="lib-title" onClick={selecting ? (e) => { e.preventDefault(); pick(i.key, e.shiftKey) } : undefined}>
                     <span className="lib-thumb">{i.posterUrl ? <img src={i.posterUrl} alt="" loading="lazy" /> : <PosterFallback />}</span>
                     <span>
-                      <strong>{i.title}</strong>
+                      <strong>{withNameTag(i.title, i.tag, i.year)}</strong>
                       <small>
                         {i.year || '—'}
                         {i.monitored ? '' : ` · ${t('unmonitored')}`}

@@ -45,6 +45,7 @@ const MusicRelease = page(() => import('./pages/MusicRelease'))
 const Search = page(() => import('./pages/Search'))
 const SeriesDetail = page(() => import('./pages/SeriesDetail'))
 const ShowDetail = page(() => import('./pages/ShowDetail'))
+const Person = page(() => import('./pages/Person'))
 
 // Fetches the pages above one after another once the browser has nothing else to do.
 function fetchPagesWhenIdle() {
@@ -177,6 +178,7 @@ function Gate() {
         <Route path="/title/:tmdbId" element={<MovieDetail />} />
         <Route path="/series/:id" element={<SeriesDetail />} />
         <Route path="/show/:tmdbId" element={<ShowDetail />} />
+        <Route path="/person/:id" element={<Person />} />
         <Route path="/wanted" element={<Upcoming tab="wanted" />} />
         <Route path="/calendar" element={<Upcoming tab="calendar" />} />
         <Route path="/queue" element={<Queue />} />

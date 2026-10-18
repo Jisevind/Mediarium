@@ -8,6 +8,54 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-10-18
+
+In short: a feature release, built mostly from your reports and ideas.
+- Click an actor, director or writer to see their page, and add their other work from there.
+- Big downloads unpack much faster (a 75 GB movie took hours on an Unraid share), with progress shown in Activity.
+- New options: a temporary download folder on a fast disk, a category per kind of download and seeding limits for qBittorrent and Transmission, prefer season packs, only watch episodes that haven't aired yet, and resume downloads after a restart.
+- Anime named by TheTVDB seasons (One Piece, Jujutsu Kaisen) is placed on the right episodes, and YTS, The Pirate Bay, nekoBT and Mazepa work again.
+- Safer: an unmounted library drive is never written into, settings save all or nothing, and `app reset-key` helps when the key file is lost.
+- Better on a phone and in long languages, with about fifty more server messages translated.
+
+### Added
+- **Shows with the same name are kept apart** (Shameless US and UK, The Office, Top Gear, Doctor Who 1963 and 2005): Mediarium now remembers the country each show comes from. A release tagged `US`, `UK`, `AU` and so on (`Shameless.UK.S02E03`, `Shameless (US) S01E01`) only goes to a show from that country, and when two shows share a name, a release without a tag goes to the American one (or the one you added first), not to both. Lists, search results and the import review show "Shameless (UK)" when two shows have the same name, and a folder called `Shameless (UK)` is matched to the UK show when you import a library. The country is read on the next refresh of each show.
+- **Sign out browsers that sit unused** (optional): Settings > Account & Access > Security has a new choice for administrators, 1 to 7 days. A browser not used for that long is signed out and the sign-in page says why. Off by default. API keys, calendar feeds and e-reader passwords are not affected.
+- `app reset-key`: for when `secret.key` is lost. It lists every saved password and key that can't be read, asks you to type yes (or `--yes`), keeps a copy of the database and the old key, clears only those (the things they belong to are switched off or removed until you enter them again), makes a new `secret.key` when there is none that works, and prints what has to be entered again. It never prints a secret. The startup message for a missing `secret.key` now points to it.
+- **Resume after a restart**: downloads that were running when Mediarium stopped (an update, a restart, a crash) now carry on by themselves, a few seconds apart, once the VPN is up. Anything you paused stays paused. The switch is under Settings > Downloading > Download rules and is on by default.
+- **Prefer season packs** (an idea from nexus4004 on GitHub, through the idea form): an optional switch under Settings > Quality > Automation, and a choice on each show. Once a season has ended, Mediarium looks for the season pack and takes it only if its quality is the same or better than the episodes you have; until then episodes are grabbed one by one as before. Off by default.
+- **Temporary download folder** (an idea from mirisbowring on GitHub, #76): an optional setting under Settings > Downloading > Download rules that keeps the half-finished download, repair and unpack work on another disk (a fast cache drive, for example), while the finished files still go to your library. Empty by default, so nothing changes. A download keeps the folder it started in if you change the setting later. If the folders are on different drives the file is copied across and checked.
+- **Rescan files** on a show now also looks in the show's folder and adds video files you put there by hand to the right episodes (season and episode, the number from the first episode for anime, or the air date for daily shows). Nothing is moved, renamed or downloaded, and the message says how many it found. Files it can't match are listed by name instead of guessed. The button now shows on shows that have no files yet too.
+- A new show added by an import whose files are named by air date (talk shows, news) now switches itself to the Daily numbering type. A show already in your library, or one whose type you set yourself, keeps its type.
+- A show that is already in your library can now be switched to **Only episodes that haven't aired yet** (or all, or none) on its page, with a count of what stops being monitored first. Nothing is deleted. Thanks to Bayharbourbutcher1 on GitHub, #77.
+- An outside download client (qBittorrent, Transmission) can now get a category of its own for movies, shows, music and books, next to the single category. An empty one uses the single category as before. Thanks to Bayharbourbutcher1 on GitHub, #79.
+- The seeding limits (global, or the per-indexer seeding rules) are now sent to an external torrent client when a torrent is added, so qBittorrent seeds for the time or ratio you set instead of you setting it by hand. Transmission gets the ratio only (it has no total seeding time). What the client does at the limit (pause, stop, remove) is set in the client itself. Thanks to Bayharbourbutcher1 on GitHub, #79.
+- **People pages** (asked for by franciscojnneto on GitHub, discussion #72): cast, directors, writers and show creators on a movie or show page are now links to a person page with their photo, biography and the movies and TV shows they worked on, which you can add to your library like any Discover title.
+
+### Fixed
+- Anime files that Sonarr names by TheTVDB season and episode (`One Piece - S22E41 - Title.mkv`, Jujutsu Kaisen's seasons 1 to 3) are now placed on the right episodes when you import an existing library, move from Sonarr or import by hand, even when the name has no absolute number; the import note says how many were placed this way. Reported by SanketBaraiya on GitHub, #69.
+- YTS and The Pirate Bay (and other sites that save a suggested API address with the form) were refused again after 3.1.3 with "the site definition wants to connect to ...". The address a site suggests itself is no longer taken for a login, so they work again (reported by SanketBaraiya on GitHub, #73).
+- A library folder on a network drive that isn't connected is no longer written into. Before it imports, moves or renames anything under a library folder, Mediarium checks the folder is there, and a folder that was known to be the real one (it keeps a small hidden `.mediarium-root` file) but has lost that file is treated as a disconnected drive: the import fails with a plain message, nothing lands on the machine's own disk, and the dashboard's Health list names the folder. A folder that never got the file keeps working as before.
+- Saving settings is now all or nothing: every value is checked first and then stored together in one database transaction, keys and passwords included. A save that is refused or fails part way no longer leaves half the changes behind.
+- Members no longer see where the server keeps the library: the folder choice in the Add dialog lists the folders by name (movies, kids) instead of by path, and a title's folder is shown the same way. Administrators still see the full paths.
+- A saved Usenet password, VPN key, media server token or notification password that can't be read (a `secret.key` that doesn't belong to the database) no longer makes its whole list fail or quietly turn into an empty value. The one that can't be read is marked on its Settings page and named on Health, it isn't used, everything else keeps working, and saving something else never overwrites it with an empty value. The log names them at start (never their values).
+- A blank OpenSubtitles password next to an unchanged user name keeps the saved one exactly as stored, even when it can't be read.
+- Regular new-release checks (RSS) no longer use up an indexer's daily request limit before your searches: they take about a third of it, and the indexer card says how often it checks.
+- Releases whose title contains a number that looks like a year (Blade Runner 2049, 1917, 2012, Wonder Woman 1984 with its release year) are read with the right title and year, and a year in an episode title (an Olympics special from 2012) no longer confuses the show's name or year.
+- Searches read each release name once instead of many times, which saves work on big runs.
+- Mazepa and other sites whose definition cleans titles with many filters are no longer refused as "not supported yet" (reported by Apostol6 on GitHub, #16).
+- Many more messages from the server (cloud backups, directory and single sign-on, subtitles, add-ons, indexers, importing, moving files, restart and update notes) are now translated.
+- On a phone, the Size limits table in Settings > Quality fits the screen, and the release name hint in Add a download by hand is no longer cut off.
+- What's new now names the version you are running and lists the changes of 3.1.2 and 3.1.3.
+- The calendar's month arrows, the theme button in the menu and the Browse more links are bigger to tap on a phone.
+- On a phone, the episode list of a show no longer lets the whole page slide sideways.
+- Long button labels (Russian, German, Polish, French) now wrap inside the settings cards instead of running off the screen or widening the page.
+- The message about the one-time setup code on the sign-up page is now translated.
+- The avatar button in the header is big enough to tap comfortably on a phone.
+- Unpacking a big RAR download is much faster on network shares and on file systems that run in a separate program, such as Unraid user shares (a 75 GB movie took hours there; reported by mirisbowring on GitHub, #76). The Activity page now shows how much has been unpacked, and pausing or stopping a download also stops its unpacking.
+- Indexers that answer with a normal RSS feed, like nekoBT, no longer fail with "XML syntax error ... unexpected end element </link>". The feed's link elements were read as HTML and broke the parse (reported by SanketBaraiya on GitHub, #73).
+- A request whose body was cut off or refused before it was fully sent (for example an oversized program update) was only answered after the upload time limit ran out, and the connection stayed open. It is now answered at once and the connection is closed.
+
 ## [3.1.3] - 2026-10-17
 
 In short: a big round of fixes from a full review and from testing Mediarium with real libraries.

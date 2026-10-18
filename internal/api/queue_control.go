@@ -791,7 +791,7 @@ func (s *Server) tidyOrphans() tidyResult {
 // are put right.
 func (s *Server) recoverAtStartup() {
 	s.restoreVPN() // the VPN that was on comes back on its own; torrents wait for it
-	paused, err := s.QueueRepo.RecoverInterrupted()
+	paused, wasRunning, err := s.QueueRepo.RecoverInterruptedItems()
 	if err != nil {
 		slog.Warn("queue: pause interrupted downloads", "err", err)
 	}
@@ -806,6 +806,14 @@ func (s *Server) recoverAtStartup() {
 	tidy := s.tidyOrphans()
 	if paused > 0 || tidy.any() {
 		slog.Info("queue: start-up check", "pausedDownloads", paused, "moviesFixed", tidy.Movies, "episodesFixed", tidy.Episodes, "albumsFixed", tidy.Albums, "booksFixed", tidy.Books, "upgradesRemoved", tidy.Upgrades)
+	}
+	// What was downloading carries on by itself, a few seconds apart, unless
+	// that is switched off or this is safe mode (see resume_interrupted.go).
+	if s.resumeInterruptedOn() && !s.cfg.PauseAutomation {
+		if len(wasRunning) > 0 {
+			s.startResumeInterrupted(wasRunning)
+			paused -= int64(len(wasRunning))
+		}
 	}
 	if paused > 0 {
 		_ = s.QueueRepo.LogActivity(0, "paused", fmt.Sprintf("Mediarium was restarted, so %s that was downloading is now paused. Press Resume in Activity to carry on.", plural(int(paused), "download")))

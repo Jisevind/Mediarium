@@ -1019,7 +1019,8 @@ button.btn-back:hover { color: var(--text); border-color: var(--text-dim); }
 .wizard-nav { grid-column: 1 / -1; justify-content: center; }
 .wizard .card h2 { text-align: left; }
 .path-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 20px; align-items: start; }
-.path-col { display: grid; gap: 6px; min-width: 0; }
+.path-col { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; min-width: 0; }
+.path-col .btn-with-icon { white-space: normal; max-width: 100%; text-align: left; }
 @media (max-width: 860px) { .path-cols { grid-template-columns: minmax(0, 1fr); } }
 
 details.own-key { margin-top: 12px; padding: 10px 14px; border: 1px dashed var(--border); border-radius: 12px; background: var(--bg); }
@@ -1233,7 +1234,7 @@ details.own-key[open] summary { margin-bottom: 6px; }
 .stack-cols > .card { margin: 0; min-width: 0; }
 fieldset.group .card, fieldset.group table { max-width: 100%; }
 .card { min-width: 0; overflow-wrap: anywhere; }
-.card table { display: block; overflow-x: auto; }
+.card table { display: block; position: relative; overflow-x: auto; }
 
 /* Avatar: one letter on the brand teal. */
 .avatar { background: var(--accent); color: var(--on-accent); border: 2px solid color-mix(in srgb, var(--accent) 45%, var(--bg)); font-size: 1rem; font-weight: 700; }
@@ -1800,7 +1801,7 @@ fieldset.group .card, fieldset.group table { max-width: 100%; }
 .wrow.kind-music { --kc: var(--c-music); }
 .qrow.kind-music { border-left-color: var(--c-music); }
 .mini-poster.kind-music .mini-art { border-color: color-mix(in srgb, var(--c-music) 55%, var(--border)); }
-.table-scroll { overflow-x: auto; }
+.table-scroll { position: relative; overflow-x: auto; }
 
 .album-section { margin-bottom: 26px; }
 .album-section .rail-head h2 small { color: var(--text-dim); font-weight: 400; }

@@ -244,7 +244,7 @@ func (s *Server) handleAddArtist(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	} else if ok {
-		writeError(w, http.StatusConflict, existing.Name+" is already in your library")
+		writeError(w, http.StatusConflict, fmt.Sprintf("%s is already in your library", existing.Name))
 		return
 	}
 

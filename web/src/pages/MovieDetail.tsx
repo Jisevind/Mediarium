@@ -16,7 +16,8 @@ import SubtitlesOffNote from '../components/SubtitlesOffNote'
 import SubtitlesPanel from '../components/SubtitlesPanel'
 import Switch from '../components/Switch'
 import TitleHero from '../components/TitleHero'
-import { CastCard, titleLinks } from '../components/TitlePreview'
+import { CastCard, PeopleLinks, titleLinks } from '../components/TitlePreview'
+import { crewWith } from '../people'
 import WatchLinks from '../components/WatchLinks'
 import FolderLine from '../components/FolderLine'
 import LocateDialog from '../components/LocateDialog'
@@ -246,6 +247,8 @@ function MoviePage() {
   if (!movie) return <div className="skeleton" style={{ height: 380, borderRadius: 22 }} />
 
   const inLibrary = !!movie.libraryId
+  const directors = crewWith(movie.crew, 'Director')
+  const writers = crewWith(movie.crew, 'Writer')
   const stateKey = !inLibrary ? null : movie.status === 'downloaded' ? 'downloaded' : movie.status === 'downloading' ? 'downloading' : monitored === false ? 'added' : 'searching'
   const state = stateKey ? describeState(stateKey) : null
 
@@ -256,7 +259,8 @@ function MoviePage() {
           ...movie,
           kind: 'movie',
           facts: [
-            ...(movie.directors?.length ? [{ label: movie.directors.length > 1 ? t('Directors') : t('Director'), value: movie.directors.join(', ') }] : []),
+            ...(directors.length ? [{ label: directors.length > 1 ? t('Directors') : t('Director'), value: <PeopleLinks people={directors} /> }] : []),
+            ...(writers.length ? [{ label: writers.length > 1 ? t('Writers') : t('Writer'), value: <PeopleLinks people={writers} /> }] : []),
             ...(movie.releaseDate ? [{ label: t('Released'), value: movie.releaseDate }] : []),
             ...(movie.releaseStatus ? [{ label: t('Status'), value: movie.releaseStatus }] : []),
           ],
@@ -348,7 +352,7 @@ function MoviePage() {
         {inLibrary && movie.libraryId && <WatchedLine kind="movie" id={movie.libraryId} />}
       </TitleHero>
 
-      {!inLibrary && <CastCard cast={movie.cast ?? []} />}
+      <CastCard cast={movie.cast ?? []} />
 
       {adding && (
         <AddDialog

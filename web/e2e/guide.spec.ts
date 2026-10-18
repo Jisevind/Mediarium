@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { expectNoErrors, watchErrors } from './helpers'
+import { expectNoErrors, openNav, watchErrors } from './helpers'
 
 // The built-in user guide: it opens, search finds a topic, a link between two
 // topics works, and the small "i" tips open and close the way they should.
@@ -9,7 +9,9 @@ test('the guide opens and lists its topics', async ({ page }) => {
   await page.goto('/help')
   await expect(page).toHaveTitle(/User guide/)
   await expect(page.getByRole('heading', { name: 'User guide', level: 1 })).toBeVisible()
-  await expect(page.getByRole('navigation', { name: 'Guide topics' }).getByRole('link', { name: 'Subtitles' })).toBeVisible()
+  // A wide screen has the side list; a narrow one lists the topics as cards.
+  const topics = (page.viewportSize()?.width ?? 1280) > 900 ? page.getByRole('navigation', { name: 'Guide topics' }) : page.locator('main')
+  await expect(topics.getByRole('link', { name: /^Subtitles/ }).first()).toBeVisible()
   await expect(page.getByRole('link', { name: /Read the full documentation/ }).first()).toHaveAttribute('href', /github\.com/)
   await expectNoErrors(errors)
 })
@@ -71,6 +73,7 @@ test('the ? key, the header button and the profile menu all open the guide', asy
   await box.fill('')
   await box.press('?')
   await expect(page).toHaveURL(/\/library/)
+  await openNav(page)
   await page.getByRole('group', { name: 'Apps and links' }).getByRole('button', { name: 'User guide' }).first().click()
   await expect(page).toHaveURL(/\/help$/)
   await page.goto('/')

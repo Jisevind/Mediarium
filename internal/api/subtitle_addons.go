@@ -83,7 +83,7 @@ func (s *Server) handleAddSubtitleAddon(w http.ResponseWriter, r *http.Request) 
 	}
 	base, err := subtitles.ParseAddonURL(req.URL)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, "That doesn't look right: "+err.Error()+".")
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("That doesn't look right: %s.", err.Error()))
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
@@ -113,7 +113,7 @@ func (s *Server) handleAddSubtitleAddon(w http.ResponseWriter, r *http.Request) 
 	}
 	added := subtitles.Addon{ID: hex.EncodeToString(id), Name: strings.TrimSpace(m.Name), URL: base}
 	if err := s.saveAddons(append(list, added)); err != nil {
-		writeError(w, http.StatusInternalServerError, "Couldn't save the add-on: "+err.Error())
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("Couldn't save the add-on: %s", err.Error()))
 		return
 	}
 	writeJSON(w, http.StatusCreated, addonView(added))
@@ -135,7 +135,7 @@ func (s *Server) handleDeleteSubtitleAddon(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if err := s.saveAddons(kept); err != nil {
-		writeError(w, http.StatusInternalServerError, "Couldn't remove the add-on: "+err.Error())
+		writeError(w, http.StatusInternalServerError, fmt.Sprintf("Couldn't remove the add-on: %s", err.Error()))
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})

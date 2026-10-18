@@ -21,11 +21,14 @@ const (
 	KeyShowAdvanced        = "ui.show_advanced"                 // "1" shows custom formats and format scores on the Quality page; unset follows whether any custom format exists
 	KeyUnmonitorDownloaded = "library.unmonitor_downloaded"     // "1" stops monitoring a movie once it is downloaded; unset or "0" keeps it monitored
 	KeyUnmonitorFinished   = "library.unmonitor_finished_shows" // "1" stops monitoring a show once it has ended and every monitored episode is in; unset or "0" keeps it monitored
+	KeyRootsConfirmed      = "library.roots_confirmed"          // library folders Mediarium has seen with their .mediarium-root marker (a JSON list); one that loses its marker is refused until it is back
 	KeyMoviesExtraPaths    = "library.movies_extra_paths"       // more movie folders next to the main one (a JSON list of paths); each movie says which one its files go to
 	KeyTVExtraPaths        = "library.tv_extra_paths"           // the same for shows
 	KeyMovieCopiesPath     = "library.movie_copies_path"        // where second copies of movies go (a 4K copy next to the 1080p one); unset = second copies of movies are off
 	KeyTVCopiesPath        = "library.tv_copies_path"           // the same for shows
 	KeyDownloadsPath       = "library.downloads_path"
+	KeyDownloadsTempDir    = "downloads.temp_dir"            // a folder for the unfinished part of downloads (a fast cache drive); unset = they stay in the downloads folder
+	KeyDownloadsTempPrev   = "downloads.temp_dir_previous"   // earlier temporary folders (a JSON list), kept so downloads that started there are still found
 	KeyNamingPreset        = "library.naming_preset"       // plex|jellyfin|kodi|minimal|custom
 	KeyMovieNameFormat     = "library.movie_name_format"   // token string, used when preset=custom
 	KeyEpisodeNameFormat   = "library.episode_name_format" // token string, used when preset=custom
@@ -52,6 +55,7 @@ const (
 	KeyDebridService         = "debrid.service"                  // "" (off), "realdebrid" or "torbox": torrent releases go to that service instead of the built-in client
 	KeyDebridAPIKey          = "debrid.api_key"                  // encrypted; the debrid service's API key
 	KeyPauseWhileStreaming   = "downloads.pause_while_streaming" // "1" pauses downloads while someone watches on Plex, Jellyfin or Emby
+	KeyResumeInterrupted     = "downloads.resume_interrupted"    // "0" leaves downloads that a restart interrupted paused; unset or "1" lets them carry on by themselves
 	KeyPausedForStreaming    = "downloads.paused_for_streaming"  // the ids of the downloads paused for a stream, as JSON
 	KeyDebridPreferCached    = "debrid.prefer_cached"            // "0" stops asking TorBox which releases it already has (no tag, no ranking); "1" or unset (with TorBox as the service) asks and ranks a cached release ahead of an equal one that is not. Real-Debrid has no such check
 	KeyDebridCachedLower     = "debrid.cached_lower_score"       // "1" lets a cached release win over an uncached one of the same quality even when the profile's preferred terms score it lower; unset or "0" only breaks ties between equal scores
@@ -59,15 +63,19 @@ const (
 	// An external download client that speaks the qBittorrent Web API
 	// (qBittorrent, RDT-Client, Decypharr). While one is set, torrent
 	// releases go to it instead of the built-in client or a debrid service.
-	KeyDownloadClientKind         = "downloadclient.kind"                // "" (off), "qbittorrent", "rdtclient" or "decypharr"
-	KeyDownloadClientURL          = "downloadclient.url"                 // the client's web address, e.g. http://192.168.1.10:8080
-	KeyDownloadClientUsername     = "downloadclient.username"            // the client's web login
-	KeyDownloadClientPassword     = "downloadclient.password"            // encrypted; never shown or logged
-	KeyDownloadClientCategory     = "downloadclient.category"            // the category torrents are added with; unset = "mediarium"
-	KeyDownloadClientRemotePath   = "downloadclient.remote_path"         // path mapping: a folder as the download client reports it, e.g. /downloads; unset = no mapping
-	KeyDownloadClientLocalPath    = "downloadclient.local_path"          // path mapping: the same folder as Mediarium sees it, e.g. /data/torrents
-	KeyDownloadClientRemoveImport = "downloadclient.remove_after_import" // "1" removes a torrent from the client once it's imported; unset or "0" leaves it seeding
-	KeyDownloadClientLinkRoot     = "downloadclient.link_root"           // symlinks from the client may be imported only when they lead into this folder (Decypharr's mount); unset = no symlinks
+	KeyDownloadClientKind           = "downloadclient.kind"                // "" (off), "qbittorrent", "rdtclient" or "decypharr"
+	KeyDownloadClientURL            = "downloadclient.url"                 // the client's web address, e.g. http://192.168.1.10:8080
+	KeyDownloadClientUsername       = "downloadclient.username"            // the client's web login
+	KeyDownloadClientPassword       = "downloadclient.password"            // encrypted; never shown or logged
+	KeyDownloadClientCategory       = "downloadclient.category"            // the category torrents are added with; unset = "mediarium"
+	KeyDownloadClientCategoryMovies = "downloadclient.category_movies"     // category for movies; unset = the main category
+	KeyDownloadClientCategoryTV     = "downloadclient.category_tv"         // category for TV shows; unset = the main category
+	KeyDownloadClientCategoryMusic  = "downloadclient.category_music"      // category for music; unset = the main category
+	KeyDownloadClientCategoryBooks  = "downloadclient.category_books"      // category for books; unset = the main category
+	KeyDownloadClientRemotePath     = "downloadclient.remote_path"         // path mapping: a folder as the download client reports it, e.g. /downloads; unset = no mapping
+	KeyDownloadClientLocalPath      = "downloadclient.local_path"          // path mapping: the same folder as Mediarium sees it, e.g. /data/torrents
+	KeyDownloadClientRemoveImport   = "downloadclient.remove_after_import" // "1" removes a torrent from the client once it's imported; unset or "0" leaves it seeding
+	KeyDownloadClientLinkRoot       = "downloadclient.link_root"           // symlinks from the client may be imported only when they lead into this folder (Decypharr's mount); unset = no symlinks
 
 	// Automation (RSS sync, scheduled search, hunting).
 	KeyAutomationEnabled  = "automation.enabled"            // "0" disables; anything else (including unset) enables
@@ -76,7 +84,8 @@ const (
 	KeyInfoLanguage       = "info.language"                 // the language titles, plots, genres and posters are read in, as a TMDB tag like "de-DE" (en-US when unset); file and folder names always use the English title
 	KeySubtitleAddons     = "subtitles.addons"              // subtitle add-ons (JSON list of {id, name, url}; the url can hold the person's own key for a site, so it is stored encrypted)
 	KeyDefaultSources     = "library.default_sources"       // usenet | torrent | both (default both)
-	KeyDefaultProfileID   = "library.default_profile_id"    // id of the stored quality profile used by items with no profile of their own
+	KeySeasonPacks        = "library.season_packs"          // "1" looks for a season pack once a season has ended (a show can say otherwise for itself); unset or "0" leaves it off
+	KeyDefaultProfileID   ="library.default_profile_id"    // id of the stored quality profile used by items with no profile of their own
 	KeyDefaultTVProfileID = "library.default_profile_id_tv" // id of the quality profile shows with none of their own use; unset = the same default as movies
 	KeyPresetsVersion     = "library.presets_version"       // revision of the built-in quality presets last applied; unset means never (set at start, not user-editable)
 
@@ -242,6 +251,7 @@ const (
 	// Other ways to sign in (Settings > Accounts). All off until switched on. See docs/security.md.
 	KeyAuthOIDC        = "auth.oidc"         // encrypted; single sign-on with an OpenID Connect provider (JSON: enabled, name, issuer, client id and secret, scopes, claim names, account rules). Off unless enabled is true. Only a signed-in browser session can read or set it, not an API key. MEDIARIUM_DISABLE_SSO=1 overrides it
 	KeyAuthLDAP        = "auth.ldap"         // encrypted; sign-in with a directory (LDAP or Active Directory) (JSON: enabled, server, bind account and password, filters, attribute names, account rules). Off unless enabled is true. Only a signed-in browser session can read or set it, not an API key. MEDIARIUM_DISABLE_SSO=1 overrides it
+	KeyAuthIdleDays    = "auth.idle_days"    // browser sessions not used for this many days (1 to 7) end and the person signs in again. Unset or "0" leaves it off. API keys, calendar feeds and e-reader passwords are not affected
 	KeyAuthPasskeys    = "auth.passkeys"     // "1" lets people sign in with a passkey; needs the public address (server.public_url). Unset or "0" leaves it off
 	KeyAuthLocalSignIn = "auth.local_signin" // "0" turns the username and password form off (only possible once an administrator has signed in with another method); anything else (including unset) leaves it on
 

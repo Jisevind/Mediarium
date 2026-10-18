@@ -52,7 +52,7 @@ const LIBRARY_LINE: Record<LibraryTab, { label: string; glyph: 'movie' | 'tv' | 
 // Where Back goes from a detail page that was opened directly; undefined
 // for pages that aren't a single title.
 function backFallback(path: string): string | undefined {
-  if (path.startsWith('/title/') || path.startsWith('/show/')) return '/discover'
+  if (path.startsWith('/title/') || path.startsWith('/show/') || path.startsWith('/person/')) return '/discover'
   if (path.startsWith('/series/')) return '/library?kind=tv'
   if (path.startsWith('/book/') || path.startsWith('/books/work/')) return '/library?kind=ebook'
   if (path.startsWith('/music/artist/') || path.startsWith('/music/album/')) return '/library?kind=music'

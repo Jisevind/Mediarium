@@ -72,6 +72,19 @@ type queueItemPayload struct {
 	// waiting download does not start (the disk is nearly full), or that a
 	// failed release is held back from searches for now.
 	Note string `json:"note,omitempty"`
+	// Unpack is how far the unpacking of an archive has come, while a download
+	// is being unpacked: the page shows it instead of a bar stuck at 100%.
+	Unpack *queueUnpack `json:"unpack,omitempty"`
+}
+
+// queueUnpack is the progress of unpacking one download. Index is the archive
+// being unpacked out of Count; DoneBytes and TotalBytes are those of that
+// archive (TotalBytes is 0 when it is not known).
+type queueUnpack struct {
+	DoneBytes  int64 `json:"doneBytes"`
+	TotalBytes int64 `json:"totalBytes"`
+	Index      int   `json:"index"`
+	Count      int   `json:"count"`
 }
 
 // queueRank orders the statuses on the Activity page: what is being worked
@@ -188,6 +201,14 @@ func (s *Server) handleListQueue(w http.ResponseWriter, r *http.Request) {
 		}
 		if it.Protocol == queue.ProtocolTorrent {
 			p.Category = categories[it.ID]
+		}
+		if it.Status == queue.StatusImporting {
+			if st, ok := s.unpacking.get(it.ID); ok {
+				p.Unpack = &queueUnpack{DoneBytes: st.Done, TotalBytes: st.Total, Index: st.Index, Count: st.Count}
+				if st.Total > 0 {
+					p.ProgressPct = st.Percent() // the stored 100% only says the download is in
+				}
+			}
 		}
 		if it.Protocol == queue.ProtocolTorrent && it.Status == queue.StatusDownloading {
 			if peers, seeds, ok := s.torrents.swarm(it.ID); ok {
@@ -324,7 +345,7 @@ func (s *Server) handleRetryQueueItem(w http.ResponseWriter, r *http.Request) {
 	if reuse {
 		// Moved now, not when the new item starts: while it waits in line the
 		// files belong to it, so a restart or the daily clean-up can't lose them.
-		reuse = s.moveKeptDownload(keptDir, s.workDirFor(newID))
+		reuse = s.moveKeptDownload(keptDir, newID)
 	}
 	release()
 	message := "Retrying, downloading again: " + item.ReleaseTitle

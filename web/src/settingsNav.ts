@@ -132,6 +132,7 @@ export function pageTitle(pathname: string, admin = true): string {
   if (pathname.startsWith('/search')) return tc('noun', 'Search')
   if (pathname.startsWith('/title')) return t('Movie')
   if (pathname.startsWith('/show') || pathname.startsWith('/series')) return t('TV show')
+  if (pathname.startsWith('/person')) return t('Person')
   if (pathname.startsWith('/library')) return t('Library')
   if (pathname.startsWith('/music/import')) return t('Import music')
   if (pathname.startsWith('/music')) return t('Music')

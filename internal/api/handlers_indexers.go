@@ -46,6 +46,10 @@ type indexerPayload struct {
 	LimitLearned   bool   `json:"limitLearned,omitempty"`  // DailyLimit came from the indexer's own answers
 	RequestsToday  int    `json:"requestsToday,omitempty"` // requests Mediarium made to it today (UTC)
 	LimitNote      string `json:"limitNote,omitempty"`     // plain words, while automatic searches leave the indexer alone
+	// RSSEveryMinutes is how often the check for new releases reads this indexer,
+	// when its daily limit makes that less often than the general setting.
+	RSSEveryMinutes int    `json:"rssEveryMinutes,omitempty"`
+	RSSNote         string `json:"rssNote,omitempty"` // the same in plain words
 }
 
 // isCardigann reports whether a create/test request is for a
@@ -66,6 +70,7 @@ func (s *Server) toIndexerPayload(inst indexers.Instance) indexerPayload {
 	}
 	addPauseInfo(&p, inst)
 	addQuotaInfo(&p, inst)
+	p.RSSEveryMinutes, p.RSSNote = s.rssNote(inst)
 	if !inst.IsCardigann() {
 		return p
 	}
@@ -161,7 +166,7 @@ func (s *Server) definitionFor(ctx context.Context, w http.ResponseWriter, id st
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("unknown indexer %q", id))
 		return sum, false
 	case err != nil:
-		writeError(w, http.StatusBadGateway, "Could not download the list of indexers (check that this server can reach github.com): "+err.Error())
+		writeError(w, http.StatusBadGateway, fmt.Sprintf("Could not download the list of indexers (check that this server can reach github.com): %s", err.Error()))
 		return sum, false
 	case !sum.Supported:
 		writeError(w, http.StatusBadRequest, fmt.Sprintf("%s uses something Mediarium can't run yet (%s).", sum.Name, sum.Problem))
@@ -230,7 +235,7 @@ func (s *Server) createCardigannIndexer(w http.ResponseWriter, r *http.Request, 
 		base = sum.Links[0]
 	}
 	if !sum.HasLink(base) {
-		writeError(w, http.StatusBadRequest, "The address must be one of the site's own addresses: "+strings.Join(sum.Links, ", "))
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("The address must be one of the site's own addresses: %s", strings.Join(sum.Links, ", ")))
 		return
 	}
 	settingsMap, err := cardigannSettings(sum, req.Settings)
@@ -319,7 +324,7 @@ func (s *Server) handleUpdateIndexer(w http.ResponseWriter, r *http.Request) {
 		secret = sum.IsSecret
 		if req.BaseURL != nil && strings.TrimSpace(*req.BaseURL) != "" {
 			if !sum.HasLink(*req.BaseURL) {
-				writeError(w, http.StatusBadRequest, "The address must be one of the site's own addresses: "+strings.Join(sum.Links, ", "))
+				writeError(w, http.StatusBadRequest, fmt.Sprintf("The address must be one of the site's own addresses: %s", strings.Join(sum.Links, ", ")))
 				return
 			}
 			inst.BaseURL = strings.TrimSpace(*req.BaseURL)
@@ -411,7 +416,7 @@ func (s *Server) handleListIndexerDefinitions(w http.ResponseWriter, r *http.Req
 	force := r.URL.Query().Get("refresh") == "1" || r.URL.Query().Get("refresh") == "true"
 	idx, err := s.Definitions.Catalogue(r.Context(), force)
 	if idx == nil {
-		writeError(w, http.StatusBadGateway, "Could not download the list of indexers (check that this server can reach github.com): "+err.Error())
+		writeError(w, http.StatusBadGateway, fmt.Sprintf("Could not download the list of indexers (check that this server can reach github.com): %s", err.Error()))
 		return
 	}
 	out := indexerDefinitionsPayload{

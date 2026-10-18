@@ -14,7 +14,6 @@ import (
 	"github.com/rdborg/mediarium/internal/indexers"
 	"github.com/rdborg/mediarium/internal/library"
 	"github.com/rdborg/mediarium/internal/organizer"
-	"github.com/rdborg/mediarium/internal/parser"
 	"github.com/rdborg/mediarium/internal/plainerror"
 	"github.com/rdborg/mediarium/internal/quality"
 )
@@ -45,7 +44,7 @@ func pickSmallerResult(results []indexers.Result, profile quality.Profile, curre
 		if !smallerEnough(res.SizeBytes, currentSize) {
 			continue
 		}
-		if tierKnown(string(currentTier)) && quality.Rank(quality.Classify(parser.Parse(res.Title))) > quality.Rank(currentTier) {
+		if tierKnown(string(currentTier)) && quality.Rank(quality.Classify(res.Parsed())) > quality.Rank(currentTier) {
 			continue
 		}
 		smaller = append(smaller, res)

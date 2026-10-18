@@ -222,7 +222,7 @@ func (s *Server) handleAddBook(w http.ResponseWriter, r *http.Request) {
 	b.AddedBy = userID
 	created, err := s.BookRepo.Add(b)
 	if errors.Is(err, books.ErrExists) {
-		writeError(w, http.StatusConflict, b.Title+" is already in your library.")
+		writeError(w, http.StatusConflict, fmt.Sprintf("%s is already in your library.", b.Title))
 		return
 	}
 	if err != nil {
@@ -300,7 +300,7 @@ func (s *Server) handleDeleteBook(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	_ = s.QueueRepo.LogActivity(0, "removed", b.Name()+" removed from the library")
+	_ = s.QueueRepo.LogActivity(0, "removed", fmt.Sprintf("%s removed from the library", b.Name()))
 	writeJSON(w, http.StatusOK, nil)
 }
 

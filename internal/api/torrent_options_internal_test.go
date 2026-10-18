@@ -379,3 +379,36 @@ func TestSettingsReadersDefaultToTodaysBehaviour(t *testing.T) {
 		t.Fatal("there are no categories until some are made")
 	}
 }
+
+func TestClientShareLimitsFollowTheIndexersRule(t *testing.T) {
+	s, _ := optionsServer(t)
+	inst, err := s.IndexerRepo.Create(indexers.Instance{Name: "Private", BaseURL: "https://t.example", Protocol: indexers.ProtocolTorrent, Kind: indexers.KindTorznab, Enabled: true}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, _ := s.MovieRepo.Add(library.Movie{TMDBID: 1, Title: "Film", Year: 2026})
+	id, _ := s.QueueRepo.Enqueue(queue.Item{MovieID: m.ID, IndexerID: sql.NullInt64{Int64: inst.ID, Valid: true}, ReleaseTitle: "A", Protocol: queue.ProtocolTorrent})
+	if err := s.Settings.Set(settings.KeyTorrentSeedRatioLimit, "2", false); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.clientShareLimits(id); got.Ratio != 2 || got.Time != 0 || !got.Set() {
+		t.Fatalf("global limits = %+v", got)
+	}
+	hours := 24.0
+	if err := s.TorrentOpts.SetSeedRule(inst.ID, torrentopts.SeedRule{Hours: &hours}); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.clientShareLimits(id); got.Ratio != 2 || got.Time != 24*time.Hour {
+		t.Fatalf("rule hours over the global ratio = %+v", got)
+	}
+	if err := s.Settings.Set(settings.KeyTorrentSeedRatioLimit, "0", false); err != nil {
+		t.Fatal(err)
+	}
+	zero := 0.0
+	if err := s.TorrentOpts.SetSeedRule(inst.ID, torrentopts.SeedRule{Hours: &zero}); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.clientShareLimits(id); got.Set() {
+		t.Fatalf("no limits at all must send nothing: %+v", got)
+	}
+}

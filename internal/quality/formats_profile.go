@@ -26,10 +26,19 @@ type ScoredFormat struct {
 
 // FormatScore is a release title's format score and the formats it matched.
 func (p Profile) FormatScore(title string) (int, []string) {
+	return p.formatScore(lazyFor(title))
+}
+
+// FormatScoreRel is FormatScore for a title that is already parsed.
+func (p Profile) FormatScoreRel(title string, rel parser.Release) (int, []string) {
+	return p.formatScore(knownRel(title, rel))
+}
+
+func (p Profile) formatScore(l *lazyRel) (int, []string) {
 	if len(p.Formats) == 0 {
 		return 0, nil
 	}
-	in := InputFor(title)
+	in := FormatInput{Title: l.title, Release: l.get()}
 	in.OriginalLanguage = p.OriginalLanguage
 	total := 0
 	var names []string
@@ -70,12 +79,12 @@ func isSeasonPack(r parser.Release) bool {
 }
 
 // formatRestrictions are the format and season-pack checks TitleAllowed adds.
-func (p Profile) formatRestrictions(title string) (bool, string) {
-	if p.NoSeasonPacks && isSeasonPack(parser.Parse(title)) {
+func (p Profile) formatRestrictions(l *lazyRel) (bool, string) {
+	if p.NoSeasonPacks && isSeasonPack(l.get()) {
 		return false, fmt.Sprintf("is a season pack, which the %q profile never downloads", p.Name)
 	}
 	if p.usesFormats() {
-		if score, _ := p.FormatScore(title); score < p.MinFormatScore {
+		if score, _ := p.formatScore(l); score < p.MinFormatScore {
 			return false, fmt.Sprintf("scores %d with custom formats, and the %q profile needs at least %d", score, p.Name, p.MinFormatScore)
 		}
 	}
@@ -99,7 +108,11 @@ func (p Profile) WantsFormatUpgrade(currentRelease string) bool {
 // than the current file's release and that file is still below the
 // profile's format cutoff.
 func (p Profile) IsUpgradeOver(currentTier Tier, currentRelease, candidateTitle string) bool {
-	candidate := parser.Parse(candidateTitle)
+	return p.IsUpgradeOverRel(currentTier, currentRelease, candidateTitle, parser.Parse(candidateTitle))
+}
+
+// IsUpgradeOverRel is IsUpgradeOver for a candidate that is already parsed.
+func (p Profile) IsUpgradeOverRel(currentTier Tier, currentRelease, candidateTitle string, candidate parser.Release) bool {
 	if p.IsUpgradeOverTier(currentTier, candidate) {
 		return true
 	}
@@ -110,7 +123,7 @@ func (p Profile) IsUpgradeOver(currentTier Tier, currentRelease, candidateTitle 
 		return false
 	}
 	current, _ := p.FormatScore(currentRelease)
-	next, _ := p.FormatScore(candidateTitle)
+	next, _ := p.FormatScoreRel(candidateTitle, candidate)
 	return next > current
 }
 

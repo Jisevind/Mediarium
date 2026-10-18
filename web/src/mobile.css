@@ -30,9 +30,10 @@
   /* the console: just the avatar */
   .top-actions { padding: 0; background: none; box-shadow: none; gap: 0; flex: none; margin-left: 0; }
   .top-actions .top-theme, .top-actions .demo-chip { display: none; }
+  .top-actions .avatar { width: 40px; height: 40px; min-height: 40px; }
 
   /* menu drawer: the theme button joins the coloured buttons */
-  .sidebar .side-tools .top-icon { width: 34px; height: 34px; min-height: 34px; border-radius: 10px; border: 0; color: var(--text-dim); background: color-mix(in srgb, var(--text-dim) 14%, transparent); }
+  .sidebar .side-tools .top-icon { width: 40px; height: 40px; min-height: 40px; border-radius: 10px; border: 0; color: var(--text-dim); background: color-mix(in srgb, var(--text-dim) 14%, transparent); }
   .sidebar .side-tools { padding: 10px 6px 4px; }
 }
 
@@ -188,8 +189,10 @@
 
 @media (max-width: 700px) {
   /* the episode list scrolls sideways inside its own box instead of being cut off at the screen edge */
-  .ep-table, .lib-list { display: block; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .ep-table, .lib-list { display: block; position: relative; max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
   .ep-table th, .ep-table td { white-space: nowrap; }
+  /* a long label (Russian, German, Polish) wraps inside a full-width button instead of running off the card */
+  button.btn-with-icon, .ms-plex-btn { max-width: 100%; white-space: normal; text-align: center; }
   .lib-list th { white-space: nowrap; }
 }
 
@@ -219,4 +222,25 @@
 }
 @media (horizontal-viewport-segments: 2) {
   .content { padding-inline: 20px; }
+}
+
+/* Size limits: on a phone the quality and the two inputs share a row and the
+   film-length hint goes underneath, so nothing scrolls sideways. */
+@media (max-width: 640px) {
+  .size-table-wrap { overflow-x: visible !important; }
+  .size-table, .size-table thead, .size-table tbody { display: block; }
+  .size-table tr { display: grid; grid-template-columns: minmax(64px, auto) minmax(0, 1fr) minmax(0, 1fr); gap: 0 8px; align-items: center; }
+  .size-table th, .size-table td { padding-inline: 0; }
+  .size-table th:nth-child(4) { display: none; }
+  .size-table td:nth-child(4) { grid-column: 1 / -1; padding-top: 0; }
+  .size-table td:nth-child(4) small:empty { display: none; }
+  .size-table input { width: 100% !important; min-width: 0; }
+}
+
+/* More fingers: the calendar's month arrows and the "Browse more" links in the
+   Discover rows are 40px to tap. The link keeps its look and its place: the
+   extra height is padding that a negative margin takes back. */
+@media (max-width: 700px) {
+  .prog-round { width: 40px; height: 40px; }
+  .rail-head .rail-more { padding-block: 10px; margin-block: -6px; }
 }

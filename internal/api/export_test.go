@@ -130,6 +130,15 @@ func (s *Server) TestRouteAccess() map[string]string {
 // TestBackfillGenres runs the scheduled genre backfill once.
 func (s *Server) TestBackfillGenres(ctx context.Context) { s.backfillGenres(ctx) }
 
+// TestAgeSessions makes every stored browser session look as if it was last
+// used d ago.
+func (s *Server) TestAgeSessions(d time.Duration) {
+	_, _ = s.db.Exec(`UPDATE sessions SET last_used_at = ?`, time.Now().Add(-d).UTC().Format(time.RFC3339Nano))
+}
+
+// TestBackfillCountries runs the scheduled origin-country backfill once.
+func (s *Server) TestBackfillCountries(ctx context.Context) { s.backfillCountries(ctx) }
+
 // TestKickImportWorker starts the import details worker (as the scheduled
 // job does, also after a restart) and TestBackfillImportedAddedDates runs
 // the one-off added-date fix. TestSetImportWorker overrides how many titles

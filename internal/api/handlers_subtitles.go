@@ -119,7 +119,7 @@ func (s *Server) searchSubtitles(w http.ResponseWriter, r *http.Request, kind st
 	}
 	results, err := s.findSubtitles(r.Context(), q, true)
 	if err != nil {
-		writeError(w, http.StatusBadGateway, "Couldn't search for subtitles: "+err.Error())
+		writeError(w, http.StatusBadGateway, fmt.Sprintf("Couldn't search for subtitles: %s", err.Error()))
 		return
 	}
 	if forcedOnly {
@@ -209,7 +209,7 @@ func (s *Server) downloadSubtitle(w http.ResponseWriter, r *http.Request, kind s
 	// A source switched off is never asked, not even to hand over a subtitle an
 	// earlier search listed.
 	if on, name := s.sourceOnFor(req.Source); !on {
-		writeError(w, http.StatusConflict, name+" switched off, so that subtitle can't be downloaded. Switch it on in Settings > Info, lists and subtitles > Subtitles, or search again.")
+		writeError(w, http.StatusConflict, fmt.Sprintf("%s switched off, so that subtitle can't be downloaded. Switch it on in Settings > Info, lists and subtitles > Subtitles, or search again.", name))
 		return
 	}
 	path, err := s.writeSubtitle(r.Context(), it, req.Language, subtitlePick{fileID: req.FileID, source: req.Source, link: req.Link, chosen: true, videoHash: videoHash(it.filePath), variant: variant})
@@ -218,7 +218,7 @@ func (s *Server) downloadSubtitle(w http.ResponseWriter, r *http.Request, kind s
 		writeError(w, http.StatusTooManyRequests, err.Error())
 		return
 	case err != nil:
-		writeError(w, http.StatusBadGateway, "Couldn't download the subtitle: "+err.Error())
+		writeError(w, http.StatusBadGateway, fmt.Sprintf("Couldn't download the subtitle: %s", err.Error()))
 		return
 	}
 	// The file name only: any account may download a subtitle, and the folder

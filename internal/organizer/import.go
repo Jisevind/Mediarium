@@ -345,8 +345,15 @@ func copyFile(src, dest string, srcInfo os.FileInfo) (err error) {
 		}
 	}()
 
-	if _, err = io.Copy(out, in); err != nil {
+	n, err := io.Copy(out, in)
+	if err != nil {
 		return fmt.Errorf("copy contents: %w", err)
+	}
+	if n != srcInfo.Size() {
+		// A short copy (a full disk that did not say so, a file that changed
+		// while it was read) is never published as the finished file.
+		err = fmt.Errorf("copy contents: %d of %d bytes were written", n, srcInfo.Size())
+		return err
 	}
 	if err = out.Sync(); err != nil {
 		return fmt.Errorf("flush destination: %w", err)

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rdborg/mediarium/internal/netproxy"
+	"github.com/rdborg/mediarium/internal/parser"
 	"github.com/rdborg/mediarium/internal/problems"
 )
 
@@ -258,6 +259,8 @@ func MergeResults(outcomes []Outcome) []Result {
 	// anime's season and absolute number) often bring back the same release
 	// from the same indexer: it is listed once.
 	seen := map[[3]string]bool{}
+	// The same release often comes from several indexers: parse each name once.
+	parsed := map[string]*parser.Release{}
 	for _, o := range outcomes {
 		if o.Err != nil {
 			continue
@@ -268,6 +271,13 @@ func MergeResults(outcomes []Outcome) []Result {
 				continue
 			}
 			seen[key] = true
+			p := parsed[r.Title]
+			if p == nil {
+				rel := parser.Parse(r.Title)
+				p = &rel
+				parsed[r.Title] = p
+			}
+			r.parsed = p
 			all = append(all, r)
 		}
 	}

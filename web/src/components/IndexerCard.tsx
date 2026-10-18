@@ -119,6 +119,7 @@ export default function IndexerCard({ indexer: i, onChanged, onToggle, onRemove 
               {i.limitNote ? st(i.limitNote) : t('{used} of {limit} requests today', { used: i.requestsToday ?? 0, limit: i.dailyLimit })}
             </small>
           )}
+          {!!i.rssNote && <small className="indexer-health ok">{st(i.rssNote)}</small>}
           {!result && i.lastTestAt && (
             <small className={`indexer-health ${i.lastTestError ? 'bad' : 'ok'}`}>
               {i.lastTestError ? t('Last test failed {when}: {error}', { when: timeAgo(i.lastTestAt), error: friendlyIndexerError(i.lastTestError) }) : t('Last test passed {when}', { when: timeAgo(i.lastTestAt) })}

@@ -4,6 +4,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log/slog"
@@ -44,6 +45,7 @@ import (
 )
 
 type Server struct {
+	resumeStop  context.CancelFunc // ends the resume of interrupted downloads (resume_interrupted.go)
 	streamPause streamPauseState  // pause while someone is watching (stream_pause.go)
 	libStats    libraryStatsCache // the Statistics page's answer, kept for a few minutes (stats_library.go)
 	appFrames   atomic.Value      // []string: the origins of add-ons shown in a frame, kept in memory so the security headers never wait for the database (app_links.go)
@@ -147,6 +149,7 @@ type Server struct {
 	grabMu sync.Mutex     // makes "is this already being downloaded?" and "queue it" one step (see grab_claim.go)
 	bg     sync.WaitGroup // download pipelines and automatic retries still running (see grab_claim.go)
 
+	unpacking    unpackTracker     // how far the running unpacks have come, for the Activity page (unpack_progress.go)
 	pipelines    pipelineRegistry  // running download pipelines, so removing a title can cancel its downloads
 	dispatch     *queue.Dispatcher // the download line: starts the next waiting download when a place is free (dispatch.go)
 	bulk         bulkState         // whether a batch search from the Library page is running (handlers_bulk.go)
@@ -301,13 +304,9 @@ func (s *Server) TMDB() *metadata.Client {
 
 // SetTMDBAPIKey updates both the persisted setting and the live client.
 func (s *Server) SetTMDBAPIKey(key string) error {
-	if err := s.Settings.Set(settings.KeyTMDBAPIKey, key, true); err != nil {
-		return err
-	}
-	s.tmdbMu.Lock()
-	s.tmdb.SetAPIKey(key)
-	s.tmdbMu.Unlock()
-	return nil
+	t := &settingsSave{}
+	s.stageTMDBAPIKey(t, key)
+	return s.commitSettings(t)
 }
 
 // Subtitles returns the current OpenSubtitles client, safe to call
@@ -330,20 +329,16 @@ func (s *Server) SubDL() *subtitles.SubDL {
 
 // SetSubDLAPIKey saves the SubDL key ("" removes it) and applies it.
 func (s *Server) SetSubDLAPIKey(key string) error {
-	if err := s.Settings.Set(settings.KeySubDLAPIKey, key, true); err != nil {
-		return err
-	}
-	s.rebuildSubtitles()
-	return nil
+	t := &settingsSave{}
+	s.stageSubDLAPIKey(t, key)
+	return s.commitSettings(t)
 }
 
 // SetOpenSubtitlesAPIKey updates both the persisted setting and the live client.
 func (s *Server) SetOpenSubtitlesAPIKey(key string) error {
-	if err := s.Settings.Set(settings.KeyOpenSubtitlesAPIKey, key, true); err != nil {
-		return err
-	}
-	s.rebuildSubtitles()
-	return nil
+	t := &settingsSave{}
+	s.stageOpenSubtitlesAPIKey(t, key)
+	return s.commitSettings(t)
 }
 
 // Trakt returns the current Trakt client, safe to call concurrently with
@@ -358,16 +353,9 @@ func (s *Server) Trakt() *trakt.Client {
 // empty id clears the person's own client ID and puts the built-in one (if this
 // release ships one) back in use.
 func (s *Server) SetTraktClientID(id string) error {
-	if err := s.Settings.Set(settings.KeyTraktClientID, id, true); err != nil {
-		return err
-	}
-	if id == "" {
-		id = s.builtin.TraktClientID
-	}
-	s.traktMu.Lock()
-	s.trakt.SetClientID(id)
-	s.traktMu.Unlock()
-	return nil
+	t := &settingsSave{}
+	s.stageTraktClientID(t, id)
+	return s.commitSettings(t)
 }
 
 // Routes builds the full handler: public onboarding/auth endpoints, then
@@ -492,6 +480,7 @@ func (s *Server) protectedRoutes() *routeTable {
 	member.HandleFunc("GET /api/tmdb/movies/{tmdbId}", s.handleTMDBMovieDetail)
 	member.HandleFunc("GET /api/tmdb/movies/{tmdbId}/similar", s.handleTMDBSimilarMovies)
 	member.HandleFunc("GET /api/tmdb/tv/{tmdbId}", s.handleTMDBTVDetail)
+	member.HandleFunc("GET /api/tmdb/people/{personId}", s.handleTMDBPerson)
 	releases.HandleFunc("GET /api/search", s.handleSearch)
 	releases.HandleFunc("POST /api/search/grab", s.handleSearchGrab)
 	// The add dialog lists the profiles to choose from.
@@ -524,6 +513,7 @@ func (s *Server) protectedRoutes() *routeTable {
 	manage.HandleFunc("POST /api/series/{id}/search-now", s.handleSeriesSearchNow)
 	releases.HandleFunc("POST /api/series/{id}/grab", s.handleGrabSeries)
 	manage.HandleFunc("PUT /api/series/{id}/monitored", s.handleSetSeriesMonitored)
+	manage.HandleFunc("POST /api/series/{id}/monitor-mode", s.handleSetSeriesMonitorMode)
 	manage.HandleFunc("PUT /api/series/{id}/type", s.handleSetSeriesType)
 	member.HandleFunc("GET /api/series/{id}/numbering", s.handleSeriesNumbering)
 	manage.HandleFunc("POST /api/series/{id}/numbering/refresh", s.handleRefreshSeriesNumbering)
@@ -717,6 +707,7 @@ func (s *Server) protectedRoutes() *routeTable {
 	admin.HandleFunc("PUT /api/series/{id}/sources", s.handleSetSeriesSources)
 	admin.HandleFunc("PUT /api/series/{id}/profile", s.handleSetSeriesProfile)
 	admin.HandleFunc("PUT /api/series/{id}/no-upgrade", s.handleSetSeriesNoUpgrade)
+	admin.HandleFunc("PUT /api/series/{id}/season-pack", s.handleSetSeriesSeasonPack)
 	admin.HandleFunc("PUT /api/library/bulk/monitored", s.handleBulkMonitored)
 	admin.HandleFunc("PUT /api/library/bulk/no-upgrade", s.handleBulkNoUpgrade)
 	admin.HandleFunc("PUT /api/library/bulk/profile", s.handleBulkProfile)
@@ -893,6 +884,7 @@ func (s *Server) protectedRoutes() *routeTable {
 	admin.HandleFunc("POST /api/auth/ldap/test", s.handleTestLDAP)
 	admin.HandleFunc("GET /api/auth/proxy-signin", s.handleGetProxySignIn)
 	admin.HandleFunc("PUT /api/auth/proxy-signin", s.handlePutProxySignIn)
+	s.registerIdleSignOut(admin) // GET and PUT /api/auth/idle-signout
 	admin.HandleFunc("DELETE /api/users/{id}/two-step", s.handleUserTwoStepOff)
 	member.HandleFunc("GET /api/auth/two-step", s.handleTwoStepStatus)
 	member.HandleFunc("POST /api/auth/two-step/setup", s.handleTwoStepSetup)

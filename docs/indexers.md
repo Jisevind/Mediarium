@@ -50,9 +50,11 @@ Free indexers often allow only a few requests a day, 25 for example, and answer 
 - **What counts.** Every request Mediarium makes to the indexer: searches, feed reads, the Test button, the connection watch and fetching a release you grabbed. The card shows "12 of 25 requests today" once a limit is known. Requests made by other programs with the same key aren't seen, but the count catches up as soon as the indexer reports its own.
 - **What happens at the limit.** Automatic searches, feed reads and connection checks stop two requests before the limit (so a search you start by hand still has room) and the card says "Daily limit of 25 reached. It is used again after midnight (UTC)." They start again by themselves when the day turns. A search you start yourself from a movie, show or album still asks the indexer, and warns you that it may be refused.
 
+- **Checking for new releases (RSS).** The regular check for new releases reads each indexer's latest releases again and again, which would use up a small daily limit before the searches for specific titles run. For an indexer with a known limit (set or learned), that check uses at most about a third of the limit a day, spread over the day: with a limit of 25 that is about 8 reads, roughly every 3 hours (every 6 hours when movies and shows are both on, as each run asks twice). It also never uses the last 40% of the day's limit, which is kept for searches. The card says how often it checks, for example "New releases are checked about every 3 hours". With a limit of 1, or one too small to fit a run, only the searches look for new releases. Indexers with no limit are read on every run.
+
 The connection watch ([Notifications](./notifications.md#connection-watch)) doesn't use up searches: see the page for what it asks.
 
-Scripts: `GET /api/indexers` adds `requestsPerDay` (what you set), `dailyLimit` (the limit in use), `limitLearned`, `requestsToday` and `limitNote`; `PUT /api/indexers/{id}` takes `requestsPerDay`. In a settings file an indexer can have `requestsPerDay: 25`.
+Scripts: `GET /api/indexers` adds `requestsPerDay` (what you set), `dailyLimit` (the limit in use), `limitLearned`, `requestsToday`, `limitNote`, `rssEveryMinutes` and `rssNote`; `PUT /api/indexers/{id}` takes `requestsPerDay`. In a settings file an indexer can have `requestsPerDay: 25`.
 
 ## How each indexer is doing
 

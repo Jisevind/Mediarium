@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import type { DiscoverMovie } from '../api'
 import { comingLabel, fetchPage, sourceToQuery, type Kind, type Source } from '../discoverSources'
+import { withNameTag } from '../format'
 import { useGridColumns } from '../useGridColumns'
 import { useHideOwned } from '../useHideOwned'
 import { useNearViewport } from '../useNearViewport'
@@ -30,7 +31,7 @@ export function DiscoverCards({ items, kind, owned, onAdd }: { items: DiscoverMo
             key={m.tmdbId}
             to={path}
             poster={m.posterUrl}
-            title={m.title}
+            title={withNameTag(m.title, m.nameTag, m.year)}
             meta={coming ? <span className="coming-soon">{coming}</span> : m.year || undefined}
             genres={m.genres}
             rating={coming ? undefined : m.rating}

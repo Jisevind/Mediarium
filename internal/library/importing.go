@@ -674,10 +674,18 @@ type SeriesDetails struct {
 	// (SeriesAnime for Japanese animation). A show this import adds starts
 	// with it.
 	GuessedType string
+	// Daily is true when the files this import found say the show is a daily
+	// one (see LooksDaily). A show this import adds then gets the Daily
+	// numbering type, unless it already has another type.
+	Daily bool
 	// SceneMap says which episode of the show a season and episode of another
 	// numbering (TheTVDB's, as anime releases use it) stands for. Nil when
 	// nothing is known about the show's other numberings.
 	SceneMap func(season, episode int) (int, int, bool)
+	// TVDBMap says which episode of the show a TheTVDB season and episode
+	// (Sonarr's numbering) stands for, from the anime lists. Nil when the
+	// lists don't know the show.
+	TVDBMap func(season, episode int) (int, int, bool)
 }
 
 // SeriesImportResult counts what a show's import did with its files.
@@ -686,19 +694,17 @@ type SeriesImportResult struct {
 	Skipped  int // episodes that already were
 	Unknown  int // episodes on disk that the movie database does not list
 	Remapped int // episodes found through their absolute number or the show's other numbering
+	BySeason int // episodes found through TheTVDB's season numbers
 }
 
 // ImportPlacer returns a function that says which episodes of a show a file
-// is, by the rules of resolveImportFile: as named when the show lists them,
-// and for an anime also by the absolute number in the name or the show's
-// other numbering. ok is false when no rule names them for certain.
-func ImportPlacer(episodes []Episode, anime bool, scene func(season, episode int) (int, int, bool)) func(ImportFile) (season int, eps []int, ok bool) {
-	listed := map[[2]int]bool{}
-	for _, e := range episodes {
-		listed[[2]int{e.Season, e.Episode}] = true
-	}
-	order := AbsoluteOrder(episodes)
-	has := func(season, episode int) bool { return listed[[2]int{season, episode}] }
+// is, by the rules of importRules: as named when the show lists them, and for
+// an anime also by the absolute number in the name, the show's other
+// numberings, and TheTVDB's season numbers. files are all the files placed
+// together, which some of the rules read. ok is false when no rule names the
+// episodes for certain.
+func ImportPlacer(episodes []Episode, anime bool, maps ImportMaps, files []ImportFile) func(ImportFile) (season int, eps []int, ok bool) {
+	rules := newImportRules(episodes, anime, maps, files)
 	var byDate map[string][]Episode
 	return func(f ImportFile) (int, []int, bool) {
 		if f.AirDate != "" && len(f.Episodes) == 0 {
@@ -711,7 +717,7 @@ func ImportPlacer(episodes []Episode, anime bool, scene func(season, episode int
 			}
 			return e.Season, []int{e.Episode}, true
 		}
-		t, ok, _ := resolveImportFile(f, has, order, anime, scene)
+		t, ok, _ := rules.resolve(f)
 		return t.season, t.episodes, ok
 	}
 }
@@ -726,55 +732,11 @@ type importTarget struct {
 // season and episode the show lists is taken as named. A file of an anime
 // whose season and episode the show does not list (TheTVDB counts One Piece
 // in 23 seasons, the movie database in one) is looked up by the number counted
-// from the first episode that its name carries, against the show's episode
-// order, or else through the show's other numbering. Nothing is guessed:
-// an episode that no rule names for certain stays unresolved.
-func resolveImportFile(f ImportFile, has func(season, episode int) bool, order []Episode, anime bool, scene func(season, episode int) (int, int, bool)) (importTarget, bool, bool) {
-	listed := false
-	for _, n := range f.Episodes {
-		listed = listed || has(f.Season, n)
-	}
-	if listed {
-		return importTarget{f.Season, f.Episodes}, true, false
-	}
-	if !anime || f.Season < 0 || (f.Season == 0 && len(f.Episodes) > 0) {
-		return importTarget{}, false, false
-	}
-	if len(f.Absolute) > 0 {
-		t := importTarget{}
-		for _, n := range f.Absolute {
-			if n < 1 || n > len(order) {
-				t = importTarget{}
-				break
-			}
-			e := order[n-1]
-			if t.season != 0 && e.Season != t.season {
-				t = importTarget{}
-				break
-			}
-			t.season = e.Season
-			t.episodes = append(t.episodes, e.Episode)
-		}
-		if t.season > 0 && len(t.episodes) > 0 {
-			return t, true, true
-		}
-	}
-	if scene != nil && f.Season > 0 {
-		t := importTarget{}
-		for _, n := range f.Episodes {
-			s, e, ok := scene(f.Season, n)
-			if !ok || !has(s, e) || (t.season != 0 && s != t.season) {
-				t = importTarget{}
-				break
-			}
-			t.season = s
-			t.episodes = append(t.episodes, e)
-		}
-		if t.season > 0 && len(t.episodes) > 0 {
-			return t, true, true
-		}
-	}
-	return importTarget{}, false, false
+// from the first episode that its name carries, through the show's other
+// numberings, or by TheTVDB's season numbers. Nothing is guessed: an episode
+// that no rule names for certain stays unresolved.
+func resolveImportFile(f ImportFile, rules *importRules) (importTarget, bool, placedHow) {
+	return rules.resolve(f)
 }
 
 // CompleteSeriesImport stores a show's details and full episode list and
@@ -828,6 +790,15 @@ func (r *Repo) CompleteSeriesImport(item ImportItem, d SeriesDetails, episodes [
 		}
 		seriesType = SeriesAnime
 	}
+	// A show added with most of its files named by air date is a daily show;
+	// a type that is already something else (anime, or one chosen by hand)
+	// is left as it is.
+	if newShow && seriesType == SeriesStandard && d.Daily {
+		if _, err := tx.Exec(`UPDATE series SET series_type = ? WHERE id = ? OR copy_of = ?`, SeriesDaily, item.TitleID, item.TitleID); err != nil {
+			return out, fmt.Errorf("set show type: %w", err)
+		}
+		seriesType = SeriesDaily
+	}
 	monitorNew := monitored
 	if newShow {
 		monitorNew = wantMissing
@@ -879,12 +850,11 @@ func (r *Repo) CompleteSeriesImport(item ImportItem, d SeriesDetails, episodes [
 	for key := range byNumber {
 		listed = append(listed, Episode{Season: key[0], Episode: key[1]})
 	}
-	order := AbsoluteOrder(listed)
-	has := func(season, episode int) bool { _, ok := byNumber[[2]int{season, episode}]; return ok }
+	rules := newImportRules(listed, anime, ImportMaps{Scene: d.SceneMap, TVDB: d.TVDBMap}, item.Files)
 	// What the files left out were numbered by, to tell the person what to do.
 	var leftByNumber, leftByAbsolute int
 	for _, f := range item.Files {
-		target, resolved, remapped := resolveImportFile(f, has, order, anime, d.SceneMap)
+		target, resolved, how := resolveImportFile(f, rules)
 		if !resolved {
 			left := len(f.Episodes)
 			if left == 0 {
@@ -914,14 +884,17 @@ func (r *Repo) CompleteSeriesImport(item ImportItem, d SeriesDetails, episodes [
 				k.status = string(StatusDownloaded)
 				byNumber[[2]int{target.season, n}] = k
 				out.Imported++
-				if remapped {
+				switch how {
+				case placedRemapped:
 					out.Remapped++
+				case placedBySeason:
+					out.BySeason++
 				}
 			}
 		}
 	}
 
-	note := leftOutNote(out.Unknown, leftByAbsolute > 0, leftByNumber > 0, anime)
+	note := importNote(out.BySeason, leftOutNote(out.Unknown, leftByAbsolute > 0, leftByNumber > 0, anime))
 	if _, err := tx.Exec(`INSERT INTO activity (series_id, event_type, message) VALUES (?, 'imported', ?)`,
 		item.TitleID, fmt.Sprintf("%s: registered %s that were already on disk", d.Title, countOf(out.Imported, "episode"))); err != nil {
 		return out, fmt.Errorf("log import: %w", err)

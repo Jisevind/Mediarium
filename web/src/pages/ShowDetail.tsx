@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import AddDialog from '../components/AddDialog'
 import Icon from '../components/Icon'
 import TitleHero from '../components/TitleHero'
-import { CastCard, SeasonsCard, titleLinks } from '../components/TitlePreview'
+import { CastCard, PeopleLinks, SeasonsCard, titleLinks } from '../components/TitlePreview'
+import { crewWith } from '../people'
 import { api, type TVDetail } from '../api'
 import { useDocumentTitle } from '../documentTitle'
 import { t } from '../i18n'
@@ -32,14 +33,15 @@ export default function ShowDetail() {
   if (error) return <p className="error-text">{error}</p>
   if (!show) return <div className="skeleton" style={{ height: 380, borderRadius: 22 }} />
 
+  const creators = crewWith(show.crew, 'Creator')
   const facts = [
-    show.creators?.length ? { label: show.creators.length > 1 ? t('Creators') : t('Creator'), value: show.creators.join(', ') } : null,
+    creators.length ? { label: creators.length > 1 ? t('Creators') : t('Creator'), value: <PeopleLinks people={creators} /> } : null,
     show.firstAirDate ? { label: t('First aired'), value: show.firstAirDate } : null,
     show.seasons ? { label: t('Seasons'), value: String(show.seasons) } : null,
     show.episodes ? { label: t('Episodes'), value: String(show.episodes) } : null,
     show.networks?.length ? { label: t('Network'), value: show.networks.join(', ') } : null,
     show.releaseStatus ? { label: t('Status'), value: show.releaseStatus } : null,
-  ].filter(Boolean) as { label: string; value: string }[]
+  ].filter(Boolean) as { label: string; value: ReactNode }[]
 
   return (
     <div>

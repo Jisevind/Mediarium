@@ -49,6 +49,7 @@ func (s *Server) StartAutomation() *automation.Scheduler {
 		automation.Job{Name: "music-refresh", Interval: musicRefreshInterval, Run: s.heavy(s.refreshMusicArtists)},
 		automation.Job{Name: "subtitle-sweep", Interval: subtitleSweepInterval, Run: s.heavy(s.subtitleSweepJob)},
 		automation.Job{Name: "genre-backfill", Interval: genreBackfillInterval, Run: s.heavy(s.backfillGenres)},
+		automation.Job{Name: "country-backfill", Interval: countryBackfillInterval, Run: s.heavy(s.backfillCountries)},
 		automation.Job{Name: "collections", Interval: collectionsInterval, Run: s.heavy(s.collectionsJob)}, // finds the collection of each movie; adds new films of followed collections
 		automation.Job{Name: "title-names", Interval: titleNamesInterval, Run: s.heavy(s.titleNamesJob)},   // picks the other titles of each movie and show, when a language besides English is wanted
 		automation.Job{Name: "cleanup", Interval: cleanupCheckInterval, Run: s.cleanupJob},
@@ -322,6 +323,11 @@ func (s *Server) rssSync(ctx context.Context) {
 	if err != nil || len(instances) == 0 {
 		return
 	}
+	// An indexer with a daily limit is read only as often as a third of that
+	// limit allows, so the searches for specific titles still find requests left.
+	if instances = s.rssInstances(instances); len(instances) == 0 {
+		return
+	}
 	if s.tvEnabled() {
 		s.rssSyncTV(ctx, instances, profiles)
 	}
@@ -367,7 +373,7 @@ func (s *Server) rssSync(ctx context.Context) {
 func matchingResults(results []indexers.Result, m library.Movie) []indexers.Result {
 	var out []indexers.Result
 	for _, res := range results {
-		if matchesMovie(res.Title, m) {
+		if matchesMovieRel(res.Parsed(), m) {
 			out = append(out, res)
 		}
 	}
@@ -394,11 +400,11 @@ func pickBestFor(results []indexers.Result, profile quality.Profile, wantYear in
 	var best *indexers.Result
 	var bestKey pickKey
 	for i := range results {
-		release := parser.Parse(results[i].Title)
+		release := results[i].Parsed()
 		if !profile.Accepts(release) {
 			continue
 		}
-		if ok, _ := profile.TitleAllowed(results[i].Title); !ok {
+		if ok, _ := profile.TitleAllowedRel(results[i].Title, release); !ok {
 			continue
 		}
 		if wantYear != 0 && release.Year != 0 && release.Year != wantYear {
@@ -425,11 +431,11 @@ func pickUpgradeResult(results []indexers.Result, profile quality.Profile, curre
 	var best *indexers.Result
 	var bestKey pickKey
 	for i := range results {
-		release := parser.Parse(results[i].Title)
-		if !profile.IsUpgradeOver(currentTier, currentRelease, results[i].Title) {
+		release := results[i].Parsed()
+		if !profile.IsUpgradeOverRel(currentTier, currentRelease, results[i].Title, release) {
 			continue
 		}
-		if ok, _ := profile.TitleAllowed(results[i].Title); !ok {
+		if ok, _ := profile.TitleAllowedRel(results[i].Title, release); !ok {
 			continue
 		}
 		if wantYear != 0 && release.Year != 0 && release.Year != wantYear {
@@ -457,7 +463,11 @@ func pickUpgradeResult(results []indexers.Result, profile quality.Profile, curre
 // film added under its English one) is the movie too. The year rule is the
 // same for every title, and only this movie's own other titles are tried.
 func matchesMovie(releaseTitle string, movie library.Movie) bool {
-	release := parser.Parse(releaseTitle)
+	return matchesMovieRel(parser.Parse(releaseTitle), movie)
+}
+
+// matchesMovieRel is matchesMovie for a release that is already parsed.
+func matchesMovieRel(release parser.Release, movie library.Movie) bool {
 	if release.Year != 0 && movie.Year != 0 && release.Year != movie.Year {
 		return false
 	}

@@ -10,6 +10,31 @@ export interface ReleaseNotes {
 
 export const WHATS_NEW: ReleaseNotes[] = [
   {
+    version: '3.2.0',
+    items: [
+      t("Click an actor, director or writer on a movie or show page to see their photo, life and other work, and add it from there."),
+      t("A big unpack is much faster on network shares and Unraid, and Activity shows how far it is."),
+      t("Set a temporary download folder on a fast disk, and pick a category in your torrent client for each kind of download."),
+      t("Shows you already have can be set to only watch episodes that haven't aired yet, and Rescan finds episodes you added by hand."),
+    ],
+  },
+  {
+    version: '3.1.3',
+    items: [
+      t('Titles with accents or in other alphabets, such as Pokémon, Amélie or Japanese titles, are now found and matched.'),
+      t('Big libraries load much faster, and password-protected RAR downloads now open with their password.'),
+      t('Keep the original file names if you like, locate a renamed file, change a show\'s folder, set your own book cover and sign out your other devices.'),
+      t('Safer by default: the setup code can\'t be skipped, sign-in limits hold, and a site entry can\'t be pointed at your home network.'),
+    ],
+  },
+  {
+    version: '3.1.2',
+    items: [
+      t('Mediarium now learns the daily request limit of an indexer, stops before it is used up, and shows the requests used on the indexer\'s card.'),
+      t('The connection check of an indexer no longer uses up the daily requests of free indexers.'),
+    ],
+  },
+  {
     version: '3.1.1',
     items: [
       t('More subtitle and audio languages, searching under other titles, and a switch to take only the languages you list.'),
@@ -61,6 +86,13 @@ export const WHATS_NEW: ReleaseNotes[] = [
     ],
   },
 ]
+
+// titleVersion is the version the dialog names: the one running, without a
+// pre-release tag or a trailing .0 ("3.1.3-beta.2" -> "3.1.3", "3.1.0" -> "3.1").
+export function titleVersion(current: string): string {
+  const p = parts(current)
+  return p ? p.join('.').replace(/\.0$/, '') : current
+}
 
 export const SEEN_KEY = 'mediarium-seen-version'
 

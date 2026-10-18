@@ -33,6 +33,12 @@ function AutomationSection() {
     (saved) => (saved ? t('Saved: finished shows stop being monitored once complete.') : t('Saved: finished shows stay monitored.')),
     false,
   )
+  const seasonPacks = useAutosaveSetting<boolean>(
+    (s) => s.seasonPacks ?? false,
+    (v) => ({ seasonPacks: v }),
+    (saved) => (saved ? t('Saved: season packs are preferred once a season has ended.') : t('Saved: episodes are fetched one by one.')),
+    false,
+  )
 
   return (
     <section className="card">
@@ -62,6 +68,13 @@ function AutomationSection() {
         disabled={!unmonitorFinished.loaded || unmonitorFinished.saving}
         label={t('Stop monitoring a show once it has ended and every episode is in')}
         description={t("Checked when the show's details are refreshed and after each import. Shows that are still running stay monitored.")}
+      />
+      <Switch
+        checked={seasonPacks.value}
+        onChange={seasonPacks.change}
+        disabled={!seasonPacks.loaded || seasonPacks.saving}
+        label={t('Prefer season packs once a season has ended')}
+        description={t("While a season is airing, episodes are fetched one by one. Once it has ended, Mediarium looks for a season pack and takes it if it's the same quality or better than the episodes. A show can choose for itself on its page.")}
       />
     </section>
   )

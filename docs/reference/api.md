@@ -32,6 +32,8 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | POST | `/api/auth/ereader/kobo/resync` | any account | POST /api/auth/ereader/kobo/resync: forgets what was sent to the Kobo, so the next sync sends every book again. |
 | DELETE | `/api/auth/ereader/opds` | any account | DELETE /api/auth/ereader/opds |
 | POST | `/api/auth/ereader/opds` | any account | POST /api/auth/ereader/opds: makes a new e-reader password. |
+| GET | `/api/auth/idle-signout` | admin |  |
+| PUT | `/api/auth/idle-signout` | admin |  |
 | GET | `/api/auth/ldap` | admin | GET /api/auth/ldap |
 | PUT | `/api/auth/ldap` | admin | PUT /api/auth/ldap saves the setup. |
 | POST | `/api/auth/ldap/test` | admin | POST /api/auth/ldap/test {config..., testUsername, testPassword}: connects with the details sent (not yet saved), finds the user and shows what was found. |
@@ -641,6 +643,7 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | GET | `/api/series/{id}/files` | any account | lists the files in a show's folder on disk, season folders included; episode files carry their episode id. |
 | PUT | `/api/series/{id}/folder` | any account | is the same for a show. |
 | POST | `/api/series/{id}/grab` | any account | grabs a release for a series — a single episode, a multi-episode release, or a whole-season pack, decided by the release's own title. |
+| POST | `/api/series/{id}/monitor-mode` | any account | applies the add-time choice of which episodes to monitor (all, only the ones that have not aired yet, none) to a show that is already in the library. |
 | PUT | `/api/series/{id}/monitored` | any account |  |
 | PUT | `/api/series/{id}/no-upgrade` | admin |  |
 | GET | `/api/series/{id}/numbering` | any account | answers GET /api/series/{id}/numbering: the ids and links, and what the numbering services say about the show. |
@@ -650,6 +653,7 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | POST | `/api/series/{id}/rescan` | admin | looks at every downloaded file of a show again. |
 | GET | `/api/series/{id}/search` | any account | is the interactive search for one season or one episode of a library show: queries every indexer, then keeps only releases that are actually for this show an... |
 | POST | `/api/series/{id}/search-now` | any account | searches for everything wanted in a series (or one season, or one episode) right now, even if unmonitored. |
+| PUT | `/api/series/{id}/season-pack` | admin | saves a show's own choice about season packs. |
 | DELETE | `/api/series/{id}/seasons/{season}/files` | admin | deletes the files of every downloaded episode of a season. |
 | PUT | `/api/series/{id}/seasons/{season}/monitored` | any account |  |
 | PUT | `/api/series/{id}/sources` | admin |  |
@@ -746,6 +750,7 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 |---|---|---|---|
 | GET | `/api/tmdb/movies/{tmdbId}` | any account | gives everything the movie page shows from a TMDB id alone, so it works for titles whether or not they are in the library yet; library membership is looked u... |
 | GET | `/api/tmdb/movies/{tmdbId}/similar` | any account | lists movies like a given one from its TMDB id alone. |
+| GET | `/api/tmdb/people/{personId}` | any account | gives a person's page in one answer: who they are and every movie and show they are credited on, most popular first. |
 | GET | `/api/tmdb/search` | any account | is a plain TMDB title search for either kind, used by the import review to fix a wrong or missing automatic match. |
 | GET | `/api/tmdb/tv/{tmdbId}` | any account | gives everything the TV page shows from a TMDB id alone, plus library membership if the show has been added. |
 
@@ -843,4 +848,4 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | PUT | `/api/watched/settings` | admin | PUT /api/watched/settings {"sync": true, "cleanup": {...}} |
 | POST | `/api/watched/sync` | admin | POST /api/watched/sync: read what's been watched now. |
 
-503 routes.
+508 routes.

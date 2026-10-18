@@ -127,6 +127,7 @@ type Trailer struct {
 
 // CastMember is one billed actor.
 type CastMember struct {
+	ID          int    `json:"id"`
 	Name        string `json:"name"`
 	Character   string `json:"character"`
 	ProfilePath string `json:"profile_path"`
@@ -139,8 +140,10 @@ type videosBlock struct {
 
 // CrewMember is one credited crew member (only the fields the pages use).
 type CrewMember struct {
-	Name string `json:"name"`
-	Job  string `json:"job"`
+	ID          int    `json:"id"`
+	Name        string `json:"name"`
+	Job         string `json:"job"`
+	ProfilePath string `json:"profile_path"`
 }
 
 type creditsBlock struct {
@@ -163,6 +166,14 @@ func namesWithJob(crew []CrewMember, job string, n int) []string {
 		}
 	}
 	return out
+}
+
+// ProfileLargeURL is ProfileURL for the person's own page, where the photo is bigger.
+func ProfileLargeURL(profilePath string) string {
+	if profilePath == "" {
+		return ""
+	}
+	return "https://image.tmdb.org/t/p/w342" + profilePath
 }
 
 // ProfileURL builds an actor photo URL (small size, these are thumbnails).
@@ -290,6 +301,47 @@ func (d *MovieDetail) Writers() []string {
 	return out
 }
 
+// WriterCrew are the people credited with the script or the story, at most
+// five, with their ids and photos.
+func (d *MovieDetail) WriterCrew() []CrewMember {
+	out := []CrewMember{}
+	seen := map[int]bool{}
+	for _, c := range d.Credits.Crew {
+		switch c.Job {
+		case "Screenplay", "Writer", "Story", "Novel", "Characters":
+		default:
+			continue
+		}
+		if c.Name == "" || seen[c.ID] {
+			continue
+		}
+		seen[c.ID] = true
+		out = append(out, CrewMember{ID: c.ID, Name: c.Name, Job: "Writer", ProfilePath: c.ProfilePath})
+		if len(out) == 5 {
+			break
+		}
+	}
+	return out
+}
+
+// DirectorCrew are the people credited as director, at most three, with their
+// ids and photos.
+func (d *MovieDetail) DirectorCrew() []CrewMember {
+	out := []CrewMember{}
+	seen := map[int]bool{}
+	for _, c := range d.Credits.Crew {
+		if c.Job != "Director" || c.Name == "" || seen[c.ID] {
+			continue
+		}
+		seen[c.ID] = true
+		out = append(out, c)
+		if len(out) == 3 {
+			break
+		}
+	}
+	return out
+}
+
 // Studios are the production companies' names.
 func (d *MovieDetail) Studios() []string {
 	out := []string{}
@@ -351,7 +403,9 @@ type ShowFull struct {
 		Name string `json:"name"`
 	} `json:"networks"`
 	CreatedBy []struct {
-		Name string `json:"name"`
+		ID          int    `json:"id"`
+		Name        string `json:"name"`
+		ProfilePath string `json:"profile_path"`
 	} `json:"created_by"`
 	ExternalIDs struct {
 		IMDBID string `json:"imdb_id"`
@@ -380,6 +434,17 @@ func (c *Client) GetShowFull(ctx context.Context, tmdbID int) (*ShowFull, error)
 	}
 	c.pages.put(key, &d)
 	return &d, nil
+}
+
+// CreatorCrew are the people the show is created by, with their ids and photos.
+func (d *ShowFull) CreatorCrew() []CrewMember {
+	out := []CrewMember{}
+	for _, c := range d.CreatedBy {
+		if c.Name != "" {
+			out = append(out, CrewMember{ID: c.ID, Name: c.Name, Job: "Creator", ProfilePath: c.ProfilePath})
+		}
+	}
+	return out
 }
 
 // Creators are the people the show is created by.

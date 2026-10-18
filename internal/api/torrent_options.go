@@ -92,14 +92,22 @@ func queueKind(it queue.Item) string {
 // workDirFor is the working folder of queue item id: directly in the working
 // folder, or inside its category's folder when the built-in torrent client
 // filed it under one.
+//
+// A download that already has a folder keeps using it, wherever that is (the
+// downloads folder or a temporary download folder, now or earlier); one that
+// has not started goes where new downloads go (see newWorkRoot).
 func (s *Server) workDirFor(id int64) string {
-	root := s.downloadsIncompleteDir()
-	if s.TorrentOpts != nil {
-		if o, ok, _ := s.TorrentOpts.Get(id); ok && o.Subfolder != "" {
-			return filepath.Join(root, o.Subfolder, fmt.Sprintf("queue-%d", id))
-		}
+	if d, ok := s.existingWorkDir(id); ok {
+		return d
 	}
-	return filepath.Join(root, fmt.Sprintf("queue-%d", id))
+	return s.workDirIn(s.newWorkRoot(), id)
+}
+
+// defaultWorkDirFor is workDirFor for a download that must stay in the
+// downloads folder (an external client's links, which are never worked on in the
+// temporary folder).
+func (s *Server) defaultWorkDirFor(id int64) string {
+	return s.workDirIn(s.downloadsIncompleteDir(), id)
 }
 
 // categoryFolders lists the folders inside the working folder that hold
@@ -161,8 +169,13 @@ func (s *Server) assignTorrentDir(queueID int64) string {
 		return s.workDirFor(queueID)
 	}
 	name, sub := "", ""
-	plain := filepath.Join(s.downloadsIncompleteDir(), fmt.Sprintf("queue-%d", queueID))
-	if !fileExists(plain) { // files an earlier version left stay where they are
+	plainExists := false
+	for _, root := range s.workRoots() {
+		if fileExists(filepath.Join(root, fmt.Sprintf("queue-%d", queueID))) {
+			plainExists = true
+		}
+	}
+	if !plainExists { // files an earlier version left stay where they are
 		if item, err := s.QueueRepo.Get(queueID); err == nil {
 			if cat, ok := s.torrentCategoryConfig().For(queueKind(item)); ok {
 				name, sub = cat.Name, cat.Subfolder
@@ -325,7 +338,7 @@ func (s *Server) handlePutTorrentOptions(w http.ResponseWriter, r *http.Request)
 		}
 		var err error
 		if cats, err = cats.Validate(); err != nil {
-			writeError(w, http.StatusBadRequest, "Categories: "+err.Error()+".")
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("Categories: %s.", err.Error()))
 			return
 		}
 	}

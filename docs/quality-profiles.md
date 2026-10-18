@@ -131,12 +131,25 @@ When a torrent indexer says a release has no seeders, Mediarium only picks it wh
 
 **Quiet for a while** is under the numbers: **1 hour**, **4 hours** or **Until morning** (8:00 in your browser's time) holds the heavy background work, the searches, library and show refreshes, the subtitle sweep, picture fetching, list and watchlist checks, so a small server isn't busy while a film plays or a game is running. A search that comes due during the quiet time isn't lost: it waits and runs when the quiet time is over. Downloads that are running or waiting, imports, backups and anything you start yourself carry on. **Back to normal** ends it. It's kept in `automation.quiet_until` (a restart doesn't end it early); scripts use `GET` and `PUT /api/automation/quiet` (`{"minutes": 60}`, `0` to end it, 4320 at most).
 
-Two more switches, both off at first, decide what happens to monitoring once something is in:
+Two switches, both off at first, decide what happens to monitoring once something is in:
 
 - **Stop monitoring a movie once it's downloaded** (`library.unmonitor_downloaded`, or `unmonitorDownloaded`). The movie is no longer searched for, not even for a better version, so a file you delete isn't fetched again. Switch monitoring back on from the movie's page.
 - **Stop monitoring a show once it has ended and every episode is in** (`library.unmonitor_finished_shows`, or `unmonitorFinished`). A show TMDB lists as ended or cancelled stops being monitored when every monitored episode (specials aside) is downloaded. It's checked when the show's details are refreshed, which happens daily, and straight after each import. A show that's still running stays monitored, so new episodes keep coming.
 
 Activity notes each title that stops being monitored this way.
+
+### Season packs once a season has ended
+
+While a season is still airing, its episodes are fetched one by one as they come out. **Prefer season packs once a season has ended** (`library.season_packs`, or `seasonPacks`; off at first) changes what happens after the finale. Once every episode of a season has aired, and the last one aired at least two days ago, the hunt looks for a season pack of that season before it goes back to single episodes. It does this when:
+
+- some of the season's monitored episodes are still missing, or
+- the episodes you have are below the profile's cutoff and better versions are switched on, so a better pack would be an upgrade.
+
+A pack is only taken when it is the same quality or better than the episodes already there. A pack that is worse than the best file you have for the season is never taken, and a pack never replaces a better file with a worse one. Everything else works as for any search: the blocklist, the indexer limits, the size limits, the audio language rules and a profile that never downloads season packs all still apply. If the pack fills the missing episodes and is better than the files you had, the old files are replaced the way any upgrade replaces them, after the new ones are in place.
+
+A season is left alone when one of its episodes is downloading already (that may be the pack itself), when a season pack was taken for it before, or when it was searched for less than a week ago. A search that finds no pack is remembered, and the season is looked at again a week later. Meanwhile the missing episodes are fetched one by one as usual. Activity notes each search with "Season 2 has ended: looking for a season pack".
+
+A show can choose for itself under **Season packs** on its page: **Default** follows the switch above, **Prefer packs once a season has ended** or **Episode by episode** decides for that show. Searches you start by hand, and the RSS check, never wait for or look for a pack this way.
 
 ## Wait for a better protocol
 

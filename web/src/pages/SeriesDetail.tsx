@@ -8,6 +8,7 @@ import WatchedLine from '../components/WatchedLine'
 import NumberingCard from '../components/NumberingCard'
 import SeriesTypePicker from '../components/SeriesTypePicker'
 import Switch from '../components/Switch'
+import MonitorModePicker from '../components/MonitorModePicker'
 import TitleHero from '../components/TitleHero'
 import WatchLinks from '../components/WatchLinks'
 import FolderLine from '../components/FolderLine'
@@ -23,10 +24,11 @@ import SubtitlesPanel from '../components/SubtitlesPanel'
 import { useAuth } from '../AuthContext'
 import { useModules } from '../ModulesContext'
 import { api, can, isAdmin, isViewer, type Episode, type SearchResult, type SeriesDetail as SeriesDetailData, type TVDetail } from '../api'
-import { formatBytes, qualityText } from '../format'
+import { formatBytes, qualityText, withNameTag } from '../format'
 import { showStatusLabel } from '../showStatus'
 import { rescanMessage } from '../rescanMessage'
-import { titleLinks } from '../components/TitlePreview'
+import { CastCard, PeopleLinks, titleLinks } from '../components/TitlePreview'
+import { crewWith } from '../people'
 import { useLive } from '../useLive'
 import { useConfirm } from '../components/ConfirmProvider'
 import { removeOption } from '../diskUsage'
@@ -295,6 +297,7 @@ function SeriesPage() {
 
   if (!series) return loadError || error ? <p className="error-text">{loadError || error}</p> : <p>{t('Loading…')}</p>
 
+  const creators = crewWith(tv?.crew, 'Creator')
   const today = localDate(new Date())
   const isMissing = (e: { status: string; airDate?: string }) => e.status === 'missing' && !!e.airDate && e.airDate <= today
   // The next episode still to air, for the facts at the top.
@@ -323,13 +326,14 @@ function SeriesPage() {
         info={{
           ...(tv ?? {}),
           kind: 'tv',
-          title: series.title,
+          title: withNameTag(series.title, series.nameTag, series.year),
           year: series.year,
           posterUrl: series.posterUrl,
           overview: series.overview,
           certification: tv?.contentRating,
           links: titleLinks('tv', series.tmdbId, tv?.imdbId, tv?.homepage),
           facts: [
+            ...(creators.length ? [{ label: creators.length > 1 ? t('Creators') : t('Creator'), value: <PeopleLinks people={creators} /> }] : []),
             ...(series.showStatus ? [{ label: t('Status'), value: showStatusLabel(series.showStatus) }] : []),
             { label: t('Episodes'), value: t('{done} of {total} downloaded', { done: series.downloadedCount, total: series.episodeCount }) },
             ...(nextText ? [{ label: t('Next episode'), value: nextText }] : []),
@@ -350,8 +354,8 @@ function SeriesPage() {
               </button>
             )}
             {!viewer && <InfoTip text={t('Fetches the episode list again, so new episodes, new seasons and changed air dates show up.')} />}
-            {admin && series.downloadedCount > 0 && (
-              <button className="btn-with-icon" onClick={() => void rescan()} disabled={rescanning} title={t('Looks at the files on your disk again: a file that was deleted by hand makes its episode wanted again, and a file that was renamed is found.')}>
+            {admin && (
+              <button className="btn-with-icon" onClick={() => void rescan()} disabled={rescanning} title={t("Looks at the files on your disk again: a file that was deleted by hand makes its episode wanted again, a file that was renamed is found, and a video file you put in the show's folder goes on its episode.")}>
                 <Icon name="folder" size={16} /> {rescanning ? t('Checking…') : t('Rescan files')}
               </button>
             )}
@@ -369,6 +373,7 @@ function SeriesPage() {
           <ProfilePicker kind="series" itemId={seriesId}>
             <TitleTags kind="tv" id={seriesId} />
           </ProfilePicker>
+          {canManage && <MonitorModePicker id={seriesId} onDone={load} />}
           {canManage && <SeriesTypePicker id={seriesId} value={series.seriesType ?? 'standard'} onChange={(type) => setSeries((cur) => (cur ? { ...cur, seriesType: type } : cur))} />}
         </div>
         {admin && series.folderPath && (
@@ -562,6 +567,8 @@ function SeriesPage() {
           </section>
         )
       })}
+
+      <CastCard cast={tv?.cast ?? []} />
 
       {!series.copyOf && <TitleRequestActions kind="tv" tmdbId={series.tmdbId} libraryId={series.id} title={series.title} />}
       {!series.copyOf && <CopiesCard kind="series" id={series.id} admin={admin} />}

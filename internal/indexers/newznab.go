@@ -16,6 +16,7 @@ import (
 
 	"github.com/rdborg/mediarium/internal/netguard"
 	"github.com/rdborg/mediarium/internal/netproxy"
+	"github.com/rdborg/mediarium/internal/parser"
 )
 
 // Result is a single normalized search result, regardless of which
@@ -45,6 +46,19 @@ type Result struct {
 	// protocol the indexer was added with: a Torznab feed from Prowlarr that
 	// was added as a Usenet indexer still hands out torrents.
 	Torrent bool
+
+	// parsed is the parse of Title, filled in by MergeResults so the checks
+	// that follow do not parse the same name again and again.
+	parsed *parser.Release
+}
+
+// Parsed is the release name parsed. A merged result already carries it; any
+// other result is parsed on the spot.
+func (r Result) Parsed() parser.Release {
+	if r.parsed != nil {
+		return *r.parsed
+	}
+	return parser.Parse(r.Title)
 }
 
 // NewznabClient talks to a single Newznab/Torznab-compatible API endpoint.

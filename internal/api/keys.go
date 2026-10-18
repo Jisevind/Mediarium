@@ -88,14 +88,9 @@ func (s *Server) usingOwnKey(settingKey string) bool {
 // SetOpenSubtitlesAccount stores the optional OpenSubtitles.com login.
 // Empty values clear it.
 func (s *Server) SetOpenSubtitlesAccount(username, password string) error {
-	if err := s.Settings.Set(settings.KeyOpenSubtitlesUsername, username, false); err != nil {
-		return err
-	}
-	if err := s.Settings.Set(settings.KeyOpenSubtitlesPassword, password, true); err != nil {
-		return err
-	}
-	s.rebuildSubtitles()
-	return nil
+	t := &settingsSave{}
+	s.stageOpenSubtitlesAccount(t, username, password, false)
+	return s.commitSettings(t)
 }
 
 type testServiceRequest struct {

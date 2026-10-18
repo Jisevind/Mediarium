@@ -2,6 +2,27 @@ package library
 
 import "fmt"
 
+// importNote is the note of a show's import item: what was placed by
+// TheTVDB's season numbers, so the person knows why those episodes sit where
+// they do, then what was left out. Each is a sentence of its own on its own
+// line, so the screen can show both in the reader's language.
+func importNote(bySeason int, leftOut string) string {
+	var placed string
+	switch {
+	case bySeason == 1:
+		placed = "Placed 1 episode by the TheTVDB season numbers."
+	case bySeason > 1:
+		placed = fmt.Sprintf("Placed %d episodes by the TheTVDB season numbers.", bySeason)
+	}
+	switch {
+	case placed == "":
+		return leftOut
+	case leftOut == "":
+		return placed
+	}
+	return placed + "\n" + leftOut
+}
+
 // leftOutNote is the import report's note for a show whose files named
 // episodes the movie database doesn't list: how many, and what to do about
 // it when the names say. byAbsolute is true when some of those files were

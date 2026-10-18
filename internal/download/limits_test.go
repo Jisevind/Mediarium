@@ -30,11 +30,17 @@ type limitedNNTP struct {
 	bodyDelay time.Duration // how long each article takes
 	hang      bool          // never answer BODY
 	refuseAll bool          // refuse every connection
+	// clientOpen, when set, says how many places the downloader itself holds
+	// for this login. A refusal for being full while the downloader holds no
+	// more places than the login allows is the server not yet having noticed
+	// a connection that was closed: not the downloads going over the limit.
+	clientOpen func() int
 
 	mu        sync.Mutex
 	articles  map[string][]byte
 	accepted  int
 	refused   int
+	over      int // refused for being full while the downloader held more places than the login allows
 	active    int
 	peak      int
 	working   int // connections that were let in
@@ -80,6 +86,9 @@ func (s *limitedNNTP) enter() (ok bool) {
 	full := s.max > 0 && s.working >= s.max
 	if full || s.refuseAll || s.refuseNth[s.accepted] {
 		s.refused++
+		if full && s.clientOpen != nil && s.clientOpen() > s.max {
+			s.over++
+		}
 		return false
 	}
 	s.working++
@@ -103,6 +112,12 @@ func (s *limitedNNTP) stats() (accepted, refused, peak int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.accepted, s.refused, s.peak
+}
+
+func (s *limitedNNTP) overLimit() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.over
 }
 
 func (s *limitedNNTP) workingPeak() int {
@@ -357,6 +372,16 @@ func TestTwoDownloadsShareOneLoginsConnections(t *testing.T) {
 	srv := newLimitedNNTP(t, &limitedNNTP{max: 4, bodyDelay: 3 * time.Millisecond}, articlesA)
 	cfg := ClientConfig{Host: srv.addr, Port: srv.port, Username: "shared", Password: "x", Connections: 4}
 
+	host := srv.addr + ":" + strconv.Itoa(srv.port)
+	srv.clientOpen = func() int {
+		for _, st := range ServerStates() {
+			if st.Host == host {
+				return st.InUse
+			}
+		}
+		return 0
+	}
+
 	var wg sync.WaitGroup
 	for i := 0; i < 2; i++ {
 		wg.Add(1)
@@ -371,13 +396,14 @@ func TestTwoDownloadsShareOneLoginsConnections(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-	// The provider may briefly still count a connection that was just closed,
-	// so one or two refusals are not the downloads going over the limit. What
-	// matters: they never had more than 4 working at once, they did not fight
-	// for places, and the limit was not lowered by mistake.
-	_, refused, _ := srv.stats()
-	if refused > 2 {
-		t.Errorf("the provider refused %d connections: the downloads went over its limit", refused)
+	// The provider may still count a connection that was just closed for a
+	// moment (how long depends on how busy the machine is), so it can refuse
+	// one that opens straight after. That is not the downloads going over the
+	// limit. They are over it only when the downloader held more than 4 places
+	// when a refusal came, and that must never happen. Also: no more than 4
+	// connections working at once, and the limit not lowered by mistake.
+	if n := srv.overLimit(); n > 0 {
+		t.Errorf("the downloads held more than 4 places at once %d times", n)
 	}
 	if peak := srv.workingPeak(); peak > 4 {
 		t.Errorf("%d connections were working at once, the login allows 4", peak)

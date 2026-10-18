@@ -9,7 +9,7 @@ import { st, t } from './i18n.ts'
 import type { Diagnostics } from './supportReport'
 import type { ProblemCounts, ProblemList } from './problemsView'
 import { BASE_PATH, rebasePictures, withBase } from './base'
-import { noteSessionEnded, sessionEnded } from './sessionEnd'
+import { noteEndReason, noteSessionEnded, sessionEnded } from './sessionEnd'
 import { wantedPagePath } from './wantedPage'
 import { namingPreviewPath } from './namingPreview'
 
@@ -94,6 +94,7 @@ async function send<T>(path: string, init?: ReadOptions): Promise<T> {
   } finally {
     endRead?.()
   }
+  noteEndReason(res.status, text)
   if (sessionEnded(path, res.status, text)) noteSessionEnded()
   let data: { error?: string; busy?: boolean } | null = null
   try {
@@ -602,6 +603,8 @@ export interface Settings {
   moviesPath: string
   tvPath?: string
   downloadsPath: string
+  // Where the unfinished part of downloads is worked on; '' = in the downloads folder.
+  downloadsTempPath?: string
   namingPreset: string
   movieNameFormat: string
   episodeNameFormat?: string
@@ -641,6 +644,7 @@ export interface Settings {
   trailerSound?: boolean // start that trailer with its sound on (off by default)
   unmonitorDownloaded?: boolean // stop monitoring a movie once it is downloaded (off by default)
   unmonitorFinished?: boolean // stop monitoring a show once it has ended and every episode is in (off by default)
+  seasonPacks?: boolean // look for a season pack once a season has ended (off by default)
   hasOpenSubtitlesAccount?: boolean
   openSubtitlesAccountName?: string
   tmdbKeyBuiltIn?: boolean
@@ -675,6 +679,7 @@ export interface Settings {
   backupKeep?: number
   speedLimitMB?: number
   newestFirst?: boolean // among the automatic downloads, newer releases start first
+  resumeInterrupted?: boolean // downloads a restart interrupted carry on by themselves
   speedLimitHours?: string
   speedSchedule?: SpeedRule[] // lines of the speed schedule; the first that fits the moment sets the limit
   downloadHours?: string // when new downloads may start, "1-7"; "" = any time
@@ -741,6 +746,10 @@ export interface IndexerConfig {
   requestsToday?: number
   // Set while automatic searches leave the indexer alone, in plain words.
   limitNote?: string
+  // How often the check for new releases reads this indexer when its daily limit
+  // makes that less often than the general setting, and the same in plain words.
+  rssEveryMinutes?: number
+  rssNote?: string
 }
 
 // The delay profile (Settings > Languages and automation): how long automatic
@@ -825,6 +834,10 @@ export interface DownloadClientSettings {
   username: string
   hasPassword: boolean
   category: string
+  categoryMovies: string
+  categoryTv: string
+  categoryMusic: string
+  categoryBooks: string
   remotePath: string
   localPath: string
   removeAfterImport: boolean
@@ -872,6 +885,8 @@ export interface UsenetServer {
   connections: number
   priority: number
   enabled: boolean
+  // secretError says the saved password can't be read (a secret.key that doesn't belong to this database).
+  secretError?: string
 }
 
 export interface UsenetServerInput {
@@ -1203,6 +1218,9 @@ export interface AddSeriesOptions {
   fourK?: boolean
 }
 
+/** A show's own choice about taking a season pack once a season has ended: "" follows the setting. */
+export type SeasonPackChoice = '' | 'on' | 'off'
+
 export interface Series {
   id: number
   rootPath?: string // the library folder chosen for it (left out = the main one)
@@ -1211,6 +1229,7 @@ export interface Series {
   copies?: number // how many second copies a main show has
   tags?: string[]
   sources?: SourcePref
+  seasonPack?: SeasonPackChoice // the show's own choice about season packs once a season has ended
   profileId?: number
   tmdbId: number
   title: string
@@ -1228,6 +1247,8 @@ export interface Series {
   firstAirDate?: string // "2022-02-18", for sorting
   sizeBytes?: number // the downloaded episodes on disk
   showStatus?: 'ended' | 'continuing' | 'upcoming' // where the show stands; left out until it has been refreshed once
+  originCountry?: string[] // where it comes from ("US", "GB"); empty until the show is refreshed
+  nameTag?: string // tells it from another show of the same name in the library ("US", "UK" or the year)
 }
 
 export interface Episode {
@@ -1367,6 +1388,16 @@ export interface QueueItem {
   codec?: string // x264, x265...
   language?: string // the audio languages the release names
   note?: string // a sentence from the server the status alone does not say (low disk space, a held-back release)
+  unpack?: QueueUnpack // while the archives of a download are being unpacked
+}
+
+// How far unpacking has come: archive `index` of `count`, and the bytes done out
+// of the total of that archive (0 when the total is not known).
+export interface QueueUnpack {
+  doneBytes: number
+  totalBytes: number
+  index: number
+  count: number
 }
 
 // One folder of the file picker: the folders and video files inside the
@@ -1399,6 +1430,11 @@ export interface RescanReport {
   added?: string
   looked?: string
   busy?: boolean
+  // For a show: episodes that took a file put in its folder by hand, and the
+  // names (at most ten of notMatchedTotal) of the video files that matched none.
+  addedEpisodes?: number
+  notMatched?: string[]
+  notMatchedTotal?: number
 }
 
 export interface BlocklistEntry {
@@ -1429,6 +1465,7 @@ export interface DiscoverMovie {
   voteCount?: number
   mediaType?: 'movie' | 'tv'
   releaseDate?: string // YYYY-MM-DD, release or first air date
+  nameTag?: string // tells a show from another of the same name in the results ("US", "UK" or the year)
 }
 
 // Moving from Radarr, Sonarr, Prowlarr and SABnzbd (read-only on their side).
@@ -1661,6 +1698,8 @@ export interface MediaServer {
   machineIdentifier?: string
   lastError?: string
   lastCheckedAt?: string
+  // secretError says the saved token can't be read (a secret.key that doesn't belong to this database).
+  secretError?: string
 }
 
 export interface MediaServerInput {
@@ -1723,9 +1762,41 @@ export interface Trailer {
 }
 
 export interface CastMember {
+  id?: number // TMDB person id; opens the person's page
   name: string
   character?: string
   profileUrl?: string
+}
+
+// A director, writer or creator of a title.
+export interface CrewPerson {
+  id?: number
+  name: string
+  job: 'Director' | 'Writer' | 'Creator'
+  profileUrl?: string
+}
+
+// One title on a person's page: a Discover card plus what they did on it.
+export interface PersonCredit extends DiscoverMovie {
+  roles: WorkKind[]
+  character?: string
+}
+
+export type WorkKind = 'acting' | 'directing' | 'writing' | 'other'
+
+export interface PersonPage {
+  id: number
+  name: string
+  biography?: string
+  birthday?: string // YYYY-MM-DD
+  deathday?: string
+  placeOfBirth?: string
+  photoUrl?: string
+  imdbId?: string
+  knownFor?: string
+  workKinds: Exclude<WorkKind, 'other'>[] // the kinds of work they have credits in
+  movies: PersonCredit[]
+  shows: PersonCredit[]
 }
 
 // One season of a show, as the page of a show you do not have yet lists it.
@@ -1739,6 +1810,7 @@ export interface SeasonInfo {
 export interface TitleDetails {
   directors?: string[] // movies
   creators?: string[] // shows
+  crew?: CrewPerson[] // directors and writers, or the creators, with ids
   seasonList?: SeasonInfo[]
   genres?: string[]
   rating?: number
@@ -1871,6 +1943,8 @@ export interface VPNConfig {
   localAddresses: string[]
   dns?: string[]
   active: boolean
+  // secretError says the saved keys can't be read; the config can only be removed.
+  secretError?: string
 }
 
 export interface VPNStatus {
@@ -1893,6 +1967,8 @@ export interface NotificationTarget {
   events?: string[]
   config?: Record<string, string>
   hasSecrets?: Record<string, boolean>
+  // secretError says the saved passwords can't be read; nothing is sent until they are entered again.
+  secretError?: string
 }
 
 export interface NotifyField {
@@ -1927,6 +2003,7 @@ export interface ImportCandidate {
   title: string
   year: number
   posterUrl?: string
+  nameTag?: string // tells it from another candidate of the same name ("US", "UK" or the year)
 }
 
 export interface ImportItem {
@@ -2766,6 +2843,12 @@ export interface PasskeyCeremony {
   options: { publicKey: Record<string, unknown> }
 }
 
+// Settings > Account & Access > Security: sign out browsers that sit unused.
+export interface IdleSignOut {
+  days: number // 0 = off
+  maxDays: number // the longest limit that can be set
+}
+
 export interface ProxySignIn {
   header: string // "" = off
   addresses: string // where the proxy connects from (addresses or CIDR ranges)
@@ -2870,6 +2953,12 @@ export interface UpdateState {
 // A subtitle add-on: a site reached through a small web service. The host is
 // shown; the rest of its address can hold a key and stays on the server.
 export type SubtitleAddon = { id: string; name: string; host: string }
+
+export type MonitorMode = 'all' | 'future' | 'none'
+export interface MonitorChange {
+  stopped: number
+  started: number
+}
 
 export const api = {
   version: () => get<{ version: string }>('/version'),
@@ -2996,6 +3085,7 @@ export const api = {
   discoverSearch: (q: string, signal?: AbortSignal) => request<TitleResult[]>(`/discover/search?q=${encodeURIComponent(q)}`, { signal }),
   setMovieSources: (id: number, sources: SourcePref) => put<null>(`/movies/${id}/sources`, { sources }),
   setSeriesSources: (id: number, sources: SourcePref) => put<null>(`/series/${id}/sources`, { sources }),
+  setSeriesSeasonPack: (id: number, seasonPack: SeasonPackChoice) => put<null>(`/series/${id}/season-pack`, { seasonPack }),
   // What "delete everything on disk" would remove for a title, before it is asked.
   movieDiskUsage: (id: number) => get<DiskUsage>(`/movies/${id}/disk-usage`),
   seriesDiskUsage: (id: number) => get<DiskUsage>(`/series/${id}/disk-usage`),
@@ -3008,6 +3098,7 @@ export const api = {
   similarMovies: (movieId: number) => get<DiscoverMovie[]>(`/movies/${movieId}/similar`),
   tmdbMovieDetail: (tmdbId: number) => get<MovieDetail>(`/tmdb/movies/${tmdbId}`),
   tmdbTVDetail: (tmdbId: number) => get<TVDetail>(`/tmdb/tv/${tmdbId}`),
+  tmdbPerson: (id: number) => get<PersonPage>(`/tmdb/people/${id}`),
   tmdbSimilarMovies: (tmdbId: number) => get<DiscoverMovie[]>(`/tmdb/movies/${tmdbId}/similar`),
 
   movieSubtitleStatus: (id: number) => get<SubtitleStatus>(`/movies/${id}/subtitles/status`),
@@ -3082,6 +3173,8 @@ export const api = {
   setSeriesFolder: (id: number, rootPath: string) => put<{ rootPath: string }>(`/series/${id}/folder`, { rootPath }),
   setMovieMonitored: (id: number, monitored: boolean) => put<null>(`/movies/${id}/monitored`, { monitored }),
   setSeriesMonitored: (id: number, monitored: boolean) => put<null>(`/series/${id}/monitored`, { monitored }),
+  // Which episodes of a show are monitored: all, only the ones that have not aired yet, or none. dryRun only counts.
+  setSeriesMonitorMode: (id: number, mode: MonitorMode, dryRun = false) => post<MonitorChange>(`/series/${id}/monitor-mode`, { mode, dryRun }),
   setSeriesType: (id: number, type: SeriesType) => put<{ type: SeriesType }>(`/series/${id}/type`, { type }),
   seriesNumbering: (id: number) => get<SeriesNumbering>(`/series/${id}/numbering`),
   refreshSeriesNumbering: (id: number) => post<SeriesNumbering>(`/series/${id}/numbering/refresh`),
@@ -3332,6 +3425,8 @@ export const api = {
     post<{ removed: LibraryCleanupItem[]; failed: LibraryCleanupItem[]; more: number }>('/watched/cleanup/run', items ? { items: items.map((i) => ({ kind: i.kind, id: i.id })) } : {}),
   watched: () => get<{ movies: Record<string, WatchedTitle>; series: Record<string, WatchedTitle> }>('/watched'),
   putProxySignIn: (header: string, addresses: string) => put<ProxySignIn>('/auth/proxy-signin', { header, addresses }),
+  getIdleSignOut: () => get<IdleSignOut>('/auth/idle-signout'),
+  putIdleSignOut: (days: number) => put<IdleSignOut>('/auth/idle-signout', { days }),
   restartApp: (safe = false) => post<{ ok: boolean; restarting: boolean; safe: boolean }>(`/system/restart${safe ? '?safe=true' : ''}`),
   shutdownApp: () => post<{ ok: boolean }>('/system/shutdown'),
   movieEvents: (id: number) => get<TitleEvent[]>(`/movies/${id}/events`),

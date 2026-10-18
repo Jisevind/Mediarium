@@ -92,6 +92,9 @@ func main() {
 		}
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "reset-key" {
+		os.Exit(runResetKey(os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
+	}
 	if len(os.Args) > 1 && os.Args[1] == "reset-two-step" {
 		if err := resetTwoStep(os.Args[2:]); err != nil {
 			log.Fatalf("mediarium: %v", err)
@@ -192,6 +195,9 @@ func run() error {
 		return fmt.Errorf("initialize server: %w", err)
 	}
 	restartWanted = server.RestartWanted
+	// Passwords and keys that can't be read are named in the log (never their
+	// values) and on the Health list, so none of them goes quiet.
+	server.LogUnreadableSecrets()
 	// Download addresses queued by older versions were kept in plain text.
 	if n, err := server.QueueRepo.EncryptStoredURLs(); err != nil {
 		log.Printf("warning: could not encrypt the saved download addresses: %v", err)

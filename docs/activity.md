@@ -124,7 +124,7 @@ Administrators have a **Download clients** tab next to Queue. It is the one plac
 **Connected clients.** Inside the torrent card, under the built-in client, a section for each client you set up under **Settings > Downloading > Torrents > Use your own torrent client** (qBittorrent, RDT-Client or Decypharr) and for your **debrid** account (Real-Debrid or TorBox):
 
 - **Torrent client:** each torrent has its state in words (Downloading, Waiting for peers, Checking the files, Paused, Seeding, Finished, Problem), a progress bar, the speed down and up, the time left, how many seeds and peers are connected and how many the swarm has, the ratio, when it was added and its size. A torrent that has moved no data for 30 minutes says so ("No data for 2 h. It may be dead.").
-- **Added by Mediarium** shows the torrents Mediarium put in the client (its category, `mediarium` unless you changed it); **Everything in qBittorrent** shows all of them, yours too, marked with their own category.
+- **Added by Mediarium** shows the torrents Mediarium put in the client (its category, `mediarium` unless you changed it, or the category you set for that kind of download); **Everything in qBittorrent** shows all of them, yours too, marked with their own category.
 - **Buttons:** **Pause** and **Resume**, **Check the files again**, **Remove, keep the files** and **Remove and delete the files** (both ask first). On a torrent Mediarium added, **Give up and search again** stops that download, puts the release on the [blocklist](#when-a-release-turns-out-to-be-bad), removes the torrent and its files and looks for another release.
 - **Debrid:** the torrents on the account with their state, progress, speed and seeders, and a button to remove one.
 
@@ -181,7 +181,9 @@ Every download in progress, Usenet or torrent, has **Pause** and **Stop**. Only 
 | **Pause all** / **Resume all** | Do the same for every download at once. |
 | **Pick** (the small box on a download's picture) | Pick several downloads (in progress, failed or stopped), then use the bar that appears above the list: **To the front**, **Pause**, **Resume**, **Stop** or **Remove** for all of them, **Pick all**, **Pick paused**, or **Clear**. **Remove** takes the picked downloads off the list (a running one, or one waiting in line, is refused and named: pause or stop it first). One that can't be changed (pausing a download that's already paused, say) is named in the message, and the rest still go through. Picked downloads keep the order they're shown in when you send them to the front. |
 
-A download that's unpacking or importing pauses or stops when the current step ends. The row says **Pausing…** or **Stopping…** until then.
+A download that's importing pauses or stops when the current step ends. The row says **Pausing…** or **Stopping…** until then. One that's unpacking stops the unpacking at once: the file that was being written is removed, and unpacking starts over when you resume.
+
+While archives are being unpacked, the row says **Unpacking** and shows how much is done, for example `Unpacking: 31.2 GB of 75.0 GB`, with the speed and the time left. The bar and the percentage follow the unpacking too, instead of sitting at 100%. With more than one archive in the download the line names the one being unpacked (`Unpacking archive 2 of 3: ...`).
 
 ### After a restart
 
@@ -189,7 +191,16 @@ A paused download is still paused after Mediarium restarts, whatever the mode. T
 
 A download that was only **waiting in line** is still waiting after a restart, in the same order, and starts about a minute after Mediarium starts when a place is free. In safe mode it comes back paused instead, because safe mode starts nothing by itself.
 
-A download that was running when Mediarium stopped (an update, a crash, the NAS switching off) comes back as **Partly downloaded, stopped**, with the saved part kept. Press **Resume** to carry on, **Stop** to give up, or the remove button.
+A download that was running when Mediarium stopped (an update, a crash, the NAS switching off) comes back as **Partly downloaded, stopped**, with the saved part kept. By default the Usenet and built-in torrent downloads that were **downloading** then carry on by themselves: about 15 seconds after the start, one at a time, a few seconds apart, and only when there is a free place in the line. Their activity line says **Resumed after a restart**. Usenet carries on from the articles it already has, a torrent from its files (it checks what is there first).
+
+They stay stopped, and you press **Resume** yourself (or **Stop**, or the remove button), when:
+
+- **Resume interrupted downloads after a restart** is off (Settings > Downloading > Download rules);
+- Mediarium started in safe mode;
+- the download uses an outside download client or a debrid service, was unpacking or importing, or you had paused it;
+- it is a torrent and your VPN isn't up after 10 minutes (with the kill switch, or a VPN switched on). It waits for the VPN, it never goes out without it.
+
+With **Pause downloads while someone is watching** on, and someone watching, they are held with the other paused downloads and come back when nobody is.
 
 At every start Mediarium also fixes titles that got stuck. A movie, episode or album marked "downloading" with no download behind it goes back to downloaded (if its file is there) or missing. A movie or episode marked missing whose file is on disk is marked downloaded. A waiting download for a title that's downloaded and set to **Leave what I have alone** is removed.
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -221,9 +222,11 @@ func (s *Server) handleListMovies(w http.ResponseWriter, r *http.Request) {
 	copies, _ := s.MovieRepo.CopyCounts("movies")
 	out := make([]moviePayload, len(list))
 	now := time.Now()
+	movieFolders := s.movieFolders()
 	for i, m := range list {
 		out[i] = toMoviePayload(m, who)
 		out[i].FilePath = fileLabel(r, m.FilePath)
+		out[i].RootPath = folderShown(r, movieFolders, m.RootPath)
 		if brief {
 			out[i].Overview = ""
 		}
@@ -253,6 +256,7 @@ func (s *Server) handleGetMovie(w http.ResponseWriter, r *http.Request) {
 	}
 	out := toMoviePayload(m, s.accountNames())
 	out.FilePath = fileLabel(r, m.FilePath)
+	out.RootPath = folderShown(r, s.movieFolders(), m.RootPath)
 	out.SizeBytes = fileSize(m.FilePath)
 	if isAdminRequest(r) { // only administrators see where the files lie
 		out.FolderPath = s.movieFolderFor(m)
@@ -396,7 +400,7 @@ func (s *Server) handleAddMovie(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	} else if ok {
-		writeError(w, http.StatusConflict, existing.Title+" is already in your library")
+		writeError(w, http.StatusConflict, fmt.Sprintf("%s is already in your library", existing.Title))
 		return
 	}
 	tmdbMovie, err := s.TMDB().GetMovie(r.Context(), req.TMDBID)
@@ -436,7 +440,9 @@ func (s *Server) handleAddMovie(w http.ResponseWriter, r *http.Request) {
 	if req.SearchNow {
 		go s.searchMovieInBackground(created.ID)
 	}
-	writeJSON(w, http.StatusCreated, toMoviePayload(created, s.accountNames()))
+	added := toMoviePayload(created, s.accountNames())
+	added.RootPath = folderShown(r, s.movieFolders(), created.RootPath)
+	writeJSON(w, http.StatusCreated, added)
 }
 
 // searchMovieInBackground runs the automatic search for a just-added movie,
@@ -476,6 +482,9 @@ type discoverPayload struct {
 	Genres      []string `json:"genres"`
 	Rating      float64  `json:"rating"` // TMDB vote average, one decimal
 	VoteCount   int      `json:"voteCount"`
+	// NameTag tells a search result from another of the same name in the
+	// results ("US", "UK" or the year); left out when no other has its name.
+	NameTag string `json:"nameTag,omitempty"`
 }
 
 // isoDate passes a TMDB "YYYY-MM-DD" date through, or "" for anything else

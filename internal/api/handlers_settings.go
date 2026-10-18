@@ -33,6 +33,9 @@ type settingsPayload struct {
 	MovieCopiesPath  *string   `json:"movieCopiesPath,omitempty"`
 	TVCopiesPath     *string   `json:"tvCopiesPath,omitempty"`
 	DownloadsPath    string    `json:"downloadsPath"`
+	// DownloadsTempPath is the temporary download folder ("" clears it, so it
+	// is a pointer): where the unfinished part of downloads is worked on.
+	DownloadsTempPath *string `json:"downloadsTempPath,omitempty"`
 	NamingPreset     string    `json:"namingPreset"`
 	MovieNameFormat  string    `json:"movieNameFormat"`
 	// EpisodeNameFormat is the custom file name format for episodes.
@@ -137,6 +140,9 @@ type settingsPayload struct {
 	// not allow it keeps it muted, and each browser can choose for itself).
 	TrailerSound      *bool `json:"trailerSound,omitempty"`
 	UnmonitorFinished *bool `json:"unmonitorFinished,omitempty"`
+	// SeasonPacks looks for a season pack once a season has ended (off unless
+	// switched on; a show can say otherwise for itself).
+	SeasonPacks *bool `json:"seasonPacks,omitempty"`
 
 	// Optional OpenSubtitles.com account (raises the daily download limit).
 	OpenSubtitlesUsername    *string `json:"openSubtitlesUsername,omitempty"`
@@ -244,6 +250,9 @@ type settingsPayload struct {
 	// NewestFirst: among the downloads the automatic searches added, the
 	// movie that came out (or the episode that aired) latest starts first.
 	NewestFirst *bool `json:"newestFirst,omitempty"`
+	// ResumeInterrupted: downloads that were running when Mediarium stopped
+	// carry on by themselves after a restart. On unless switched off.
+	ResumeInterrupted *bool `json:"resumeInterrupted,omitempty"`
 
 	// Checks on releases (Settings > Downloading). UsenetRetentionDays: Usenet
 	// posts older than this many days are not taken (0 = no limit).
@@ -325,6 +334,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	sources := s.subtitleSources()
 	osEnabled, subdlEnabled, addonsEnabled := sources.OpenSubtitles.Switch, sources.SubDL.Switch, sources.Addons.Switch
 	unmonitorDownloaded, unmonitorFinished := s.unmonitorDownloaded(), s.unmonitorFinished()
+	seasonPacks := s.seasonPackDefault()
 	qualityLanguageOnly := s.languageOnly()
 	showAdvanced := s.showAdvanced()
 	trailerBackground := s.trailerBackground()
@@ -370,6 +380,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	musicEnabled := s.musicEnabled()
 	downloadsAtOnce := s.downloadsAtOnce()
 	newestFirst := s.newestFirstOn()
+	resumeInterrupted := s.resumeInterruptedOn()
 	huntHours, releaseMinutes := s.huntHours(), s.releaseCheckMinutes()
 	retention, rejectExe, skipDupes, precheck := s.retentionDays(), s.rejectExecutables(), s.skipDuplicates(), s.precheckEnabled()
 
@@ -381,6 +392,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		MovieCopiesPath:          ptr(s.movieCopiesRoot()),
 		TVCopiesPath:             ptr(s.tvCopiesRoot()),
 		DownloadsPath:            downloadsPath,
+		DownloadsTempPath:        ptr(s.tempBase()),
 		NamingPreset:             namingPreset,
 		MovieNameFormat:          movieFormat,
 		EpisodeNameFormat:        episodeFormat,
@@ -419,6 +431,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		TrailerBackground:        &trailerBackground,
 		TrailerSound:             &trailerSound,
 		UnmonitorFinished:        &unmonitorFinished,
+		SeasonPacks:              &seasonPacks,
 		HasOpenSubtitlesAccount:  s.Subtitles().HasCredentials(),
 		OpenSubtitlesAccountName: osUser,
 		TMDBKeyBuiltIn:           s.builtin.TMDB != "",
@@ -456,6 +469,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		DigestHour:               &digestHour,
 		DownloadsAtOnce:          &downloadsAtOnce,
 		NewestFirst:              &newestFirst,
+		ResumeInterrupted:        &resumeInterrupted,
 		UsenetRetentionDays:      &retention,
 		RejectExecutables:        &rejectExe,
 		SkipDuplicates:           &skipDupes,
@@ -546,6 +560,24 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		folderSets = append(folderSets, pendingSet{c.key, v})
 	}
 
+	// The temporary download folder. "" switches it off. A value that is already
+	// saved is not checked again, so a drive that is away for a moment doesn't
+	// stop other settings from being saved.
+	tempChange, tempNew, tempOld := false, "", s.tempBase()
+	if req.DownloadsTempPath != nil {
+		tempNew = strings.TrimSpace(*req.DownloadsTempPath)
+		if tempNew != "" {
+			tempNew = filepath.Clean(tempNew)
+		}
+		tempChange = tempNew != tempOld
+		if tempChange && tempNew != "" {
+			if m := s.checkTempFolder(tempNew); m != "" {
+				writeError(w, http.StatusBadRequest, m)
+				return
+			}
+		}
+	}
+
 	// Wanted audio languages: names separated by commas, best first.
 	if req.QualityLanguage != "" {
 		req.QualityLanguage = strings.Join(quality.ParseLanguages(req.QualityLanguage), ",")
@@ -576,10 +608,48 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		subtitleProfilesValue = profiles.Encode()
 	}
 
-	// Everything that can be refused has been checked: from here on the writes
-	// only fail when the database does.
+	// Everything that can be refused has been checked. The values are collected
+	// and stored together at the end, in one transaction, so an update that fails
+	// part way (a refused module change, a database error) saves none of it.
+	tx := &settingsSave{}
+
+	// A library folder a person has just chosen is the real one: it gets its
+	// marker once the save is done (see library_roots.go).
+	var chosenRoots []string
+	for _, f := range []struct{ key, value string }{
+		{settings.KeyMoviesPath, req.MoviesPath}, {settings.KeyTVPath, req.TVPath}, {settings.KeyMusicPath, req.MusicPath},
+		{settings.KeyEbooksPath, req.EbooksPath}, {settings.KeyAudiobooksPath, req.AudiobooksPath},
+	} {
+		if f.value != "" && s.changed(f.key, f.value) {
+			chosenRoots = append(chosenRoots, f.value)
+		}
+	}
 	for _, f := range folderSets {
-		if err := s.Settings.Set(f.key, f.value, false); err != nil {
+		if f.value == "" {
+			continue
+		}
+		var list []string
+		if json.Unmarshal([]byte(f.value), &list) != nil {
+			list = []string{f.value}
+		}
+		for _, p := range list {
+			if s.changed(f.key, f.value) {
+				chosenRoots = append(chosenRoots, p)
+			}
+		}
+	}
+	for _, f := range folderSets {
+		if err := tx.Set(f.key, f.value, false); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+
+	if tempChange {
+		// The folder being left stays known, so downloads that began there carry
+		// on, finish and are cleaned up from there.
+		s.rememberTempBaseIn(tx, tempOld)
+		if err := tx.Set(settings.KeyDownloadsTempDir, tempNew, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -611,27 +681,29 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if set.value == "" {
 			continue
 		}
-		if err := s.Settings.Set(set.key, set.value, false); err != nil {
+		if err := tx.Set(set.key, set.value, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 	// The other titles kept for each movie and show were picked for the old
 	// languages: they are picked again as titles are searched for.
-	if s.audioLanguageList() != languagesBefore {
-		if err := s.MovieRepo.ClearTitleNames(); err != nil {
-			slog.Warn("settings: couldn't forget the other titles after the audio languages changed", "err", err)
+	tx.then(func() {
+		if s.audioLanguageList() != languagesBefore {
+			if err := s.MovieRepo.ClearTitleNames(); err != nil {
+				slog.Warn("settings: couldn't forget the other titles after the audio languages changed", "err", err)
+			}
 		}
-	}
+	})
 
 	if len(req.SubtitleLanguages) > 0 {
-		if err := s.Settings.Set(settings.KeySubtitleLanguages, strings.Join(req.SubtitleLanguages, ","), false); err != nil {
+		if err := tx.Set(settings.KeySubtitleLanguages, strings.Join(req.SubtitleLanguages, ","), false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 	if req.SubtitleProfiles != nil {
-		if err := s.Settings.Set(settings.KeySubtitleProfiles, subtitleProfilesValue, false); err != nil {
+		if err := tx.Set(settings.KeySubtitleProfiles, subtitleProfilesValue, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -641,7 +713,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if !*req.SubtitlesEnabled {
 			value = "0"
 		}
-		if err := s.Settings.Set(settings.KeySubtitlesEnabled, value, false); err != nil {
+		if err := tx.Set(settings.KeySubtitlesEnabled, value, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -651,7 +723,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if !*req.SubtitleAutoDownload {
 			value = "0"
 		}
-		if err := s.Settings.Set(settings.KeySubtitleAutoDownload, value, false); err != nil {
+		if err := tx.Set(settings.KeySubtitleAutoDownload, value, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -661,78 +733,85 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if !*req.SubtitleUpgrade {
 			value = "0"
 		}
-		if err := s.Settings.Set(settings.KeySubtitleUpgrade, value, false); err != nil {
+		if err := tx.Set(settings.KeySubtitleUpgrade, value, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 	if req.KeepOriginalNames != nil {
-		if err := setBool(s.Settings, settings.KeyKeepOriginalNames, *req.KeepOriginalNames); err != nil {
+		if err := setBool(tx, settings.KeyKeepOriginalNames, *req.KeepOriginalNames); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 	if req.NumberingLookup != nil {
-		if err := setBool(s.Settings, settings.KeyNumberingLookup, *req.NumberingLookup); err != nil {
+		if err := setBool(tx, settings.KeyNumberingLookup, *req.NumberingLookup); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
-	if err := s.saveSourceSwitches(&req); err != nil {
+	if err := s.saveSourceSwitches(tx, &req); err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 	if req.SubtitleCountEmbedded != nil {
-		if err := setBool(s.Settings, settings.KeySubtitleCountEmbedded, *req.SubtitleCountEmbedded); err != nil {
+		if err := setBool(tx, settings.KeySubtitleCountEmbedded, *req.SubtitleCountEmbedded); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 	if req.SubtitleWizdom != nil {
-		if err := setBool(s.Settings, settings.KeySubtitleWizdom, *req.SubtitleWizdom); err != nil {
+		if err := setBool(tx, settings.KeySubtitleWizdom, *req.SubtitleWizdom); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 	if req.TrailerSound != nil {
-		if err := setBool(s.Settings, settings.KeyTrailerSound, *req.TrailerSound); err != nil {
+		if err := setBool(tx, settings.KeyTrailerSound, *req.TrailerSound); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 	if req.TrailerBackground != nil {
-		if err := setBool(s.Settings, settings.KeyTrailerBackground, *req.TrailerBackground); err != nil {
+		if err := setBool(tx, settings.KeyTrailerBackground, *req.TrailerBackground); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 	if req.ShowAdvanced != nil {
-		if err := setBool(s.Settings, settings.KeyShowAdvanced, *req.ShowAdvanced); err != nil {
+		if err := setBool(tx, settings.KeyShowAdvanced, *req.ShowAdvanced); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 	if req.QualityLanguageOnly != nil {
-		if err := setBool(s.Settings, settings.KeyQualityLanguageOnly, *req.QualityLanguageOnly); err != nil {
+		if err := setBool(tx, settings.KeyQualityLanguageOnly, *req.QualityLanguageOnly); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 	if req.UnmonitorDownloaded != nil {
-		if err := setBool(s.Settings, settings.KeyUnmonitorDownloaded, *req.UnmonitorDownloaded); err != nil {
+		if err := setBool(tx, settings.KeyUnmonitorDownloaded, *req.UnmonitorDownloaded); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 	if req.UnmonitorFinished != nil {
-		if err := setBool(s.Settings, settings.KeyUnmonitorFinished, *req.UnmonitorFinished); err != nil {
+		if err := setBool(tx, settings.KeyUnmonitorFinished, *req.UnmonitorFinished); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+
+	if req.SeasonPacks != nil {
+		if err := setBool(s.Settings, settings.KeySeasonPacks, *req.SeasonPacks); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 
 	if req.DefaultSources != "" {
-		if err := s.Settings.Set(settings.KeyDefaultSources, req.DefaultSources, false); err != nil {
+		if err := tx.Set(settings.KeyDefaultSources, req.DefaultSources, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -743,13 +822,13 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if *req.DefaultTVProfileID != 0 {
 			val = strconv.FormatInt(*req.DefaultTVProfileID, 10)
 		}
-		if err := s.Settings.Set(settings.KeyDefaultTVProfileID, val, false); err != nil {
+		if err := tx.Set(settings.KeyDefaultTVProfileID, val, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 	if req.DefaultProfileID != 0 {
-		if err := s.Settings.Set(settings.KeyDefaultProfileID, strconv.FormatInt(req.DefaultProfileID, 10), false); err != nil {
+		if err := tx.Set(settings.KeyDefaultProfileID, strconv.FormatInt(req.DefaultProfileID, 10), false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -760,17 +839,14 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if !*req.AutomationEnabled {
 			value = "0"
 		}
-		if err := s.Settings.Set(settings.KeyAutomationEnabled, value, false); err != nil {
+		if err := tx.Set(settings.KeyAutomationEnabled, value, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 
 	if req.TorrentEnabled != nil {
-		if err := s.setTorrentsEnabled(*req.TorrentEnabled); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
+		s.stageTorrentsEnabled(tx, *req.TorrentEnabled)
 	}
 
 	if req.MonitorIntervalMinutes != nil {
@@ -778,7 +854,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if n > 0 && n < minMonitorMinutes {
 			n = minMonitorMinutes
 		}
-		if err := s.Settings.Set(settings.KeyMonitorIntervalMinutes, strconv.Itoa(n), false); err != nil {
+		if err := tx.Set(settings.KeyMonitorIntervalMinutes, strconv.Itoa(n), false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -791,7 +867,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if n.val == nil {
 			continue
 		}
-		if err := s.Settings.Set(n.key, strconv.Itoa(*n.val), false); err != nil {
+		if err := tx.Set(n.key, strconv.Itoa(*n.val), false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -801,7 +877,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		req.LegalAcknowledgedAt = time.Now().UTC().Format(time.RFC3339)
 	}
 	if req.LegalAcknowledgedAt != "" {
-		if err := s.Settings.Set(settings.KeyLegalAcknowledgedAt, req.LegalAcknowledgedAt, false); err != nil {
+		if err := tx.Set(settings.KeyLegalAcknowledgedAt, req.LegalAcknowledgedAt, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -812,7 +888,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if !*req.RequireVPNForTorrents {
 			value = "0"
 		}
-		if err := s.Settings.Set(settings.KeyVPNRequireForTorrents, value, false); err != nil {
+		if err := tx.Set(settings.KeyVPNRequireForTorrents, value, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -822,60 +898,48 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if !*req.RouteIndexersThroughVPN {
 			value = "0"
 		}
-		if err := s.Settings.Set(settings.KeyVPNRouteIndexers, value, false); err != nil {
+		if err := tx.Set(settings.KeyVPNRouteIndexers, value, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		s.applyVPNRoutes()
+		tx.then(s.applyVPNRoutes)
 	}
 
 	if req.TMDBAPIKey != "" {
-		if err := s.SetTMDBAPIKey(req.TMDBAPIKey); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
+		s.stageTMDBAPIKey(tx, req.TMDBAPIKey)
 	}
 	if req.OpenSubtitlesUsername != nil {
 		user := strings.TrimSpace(*req.OpenSubtitlesUsername)
 		pass := req.OpenSubtitlesPassword
+		keep := false
 		if user == "" {
 			pass = "" // clearing the username removes the account
 		} else if pass == "" {
-			// Same username with the password left blank keeps the saved one.
-			pass, _ = s.Settings.Get(settings.KeyOpenSubtitlesPassword)
+			// Same username with the password left blank keeps the saved one,
+			// as it is stored: one that can't be read is never replaced by an
+			// empty password.
+			keep = true
 		}
-		if err := s.SetOpenSubtitlesAccount(user, pass); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
+		s.stageOpenSubtitlesAccount(tx, user, pass, keep)
 	}
 	if req.OpenSubtitlesAPIKey != nil {
-		if err := s.SetOpenSubtitlesAPIKey(strings.TrimSpace(*req.OpenSubtitlesAPIKey)); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
+		s.stageOpenSubtitlesAPIKey(tx, strings.TrimSpace(*req.OpenSubtitlesAPIKey))
 	}
 	if req.SubDLAPIKey != nil {
 		key := strings.TrimSpace(*req.SubDLAPIKey)
-		if err := s.SetSubDLAPIKey(key); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
+		s.stageSubDLAPIKey(tx, key)
 	}
 	if req.TraktClientID != nil {
-		if err := s.SetTraktClientID(strings.TrimSpace(*req.TraktClientID)); err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
+		s.stageTraktClientID(tx, strings.TrimSpace(*req.TraktClientID))
 	}
 	if req.FlareSolverrURL != nil {
-		if err := s.Settings.Set(settings.KeyFlareSolverrURL, *req.FlareSolverrURL, false); err != nil {
+		if err := tx.Set(settings.KeyFlareSolverrURL, *req.FlareSolverrURL, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 	if req.PublicURL != nil {
-		if err := s.Settings.Set(settings.KeyPublicURL, *req.PublicURL, false); err != nil {
+		if err := tx.Set(settings.KeyPublicURL, *req.PublicURL, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -885,26 +949,26 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if !*req.CleanupAuto {
 			value = "0"
 		}
-		if err := s.Settings.Set(settings.KeyCleanupAuto, value, false); err != nil {
+		if err := tx.Set(settings.KeyCleanupAuto, value, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 	if req.SpeedLimitMB != nil || req.SpeedLimitHours != nil {
 		if req.SpeedLimitMB != nil {
-			if err := s.Settings.Set(settings.KeySpeedLimitMB, strconv.Itoa(*req.SpeedLimitMB), false); err != nil {
+			if err := tx.Set(settings.KeySpeedLimitMB, strconv.Itoa(*req.SpeedLimitMB), false); err != nil {
 				writeError(w, http.StatusInternalServerError, err.Error())
 				return
 			}
 		}
 		if req.SpeedLimitHours != nil {
 			h := strings.TrimSpace(*req.SpeedLimitHours)
-			if err := s.Settings.Set(settings.KeySpeedLimitHours, h, false); err != nil {
+			if err := tx.Set(settings.KeySpeedLimitHours, h, false); err != nil {
 				writeError(w, http.StatusInternalServerError, err.Error())
 				return
 			}
 		}
-		s.applySpeedLimit(time.Now())
+		tx.then(func() { s.applySpeedLimit(time.Now()) })
 	}
 	if req.SpeedSchedule != nil {
 		rules := *req.SpeedSchedule
@@ -918,19 +982,19 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 			b, _ := json.Marshal(rules)
 			val = string(b)
 		}
-		if err := s.Settings.Set(settings.KeySpeedSchedule, val, false); err != nil {
+		if err := tx.Set(settings.KeySpeedSchedule, val, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		s.applySpeedLimit(time.Now())
+		tx.then(func() { s.applySpeedLimit(time.Now()) })
 	}
 	if req.DownloadHours != nil {
 		h := strings.TrimSpace(*req.DownloadHours)
-		if err := s.Settings.Set(settings.KeyDownloadHours, h, false); err != nil {
+		if err := tx.Set(settings.KeyDownloadHours, h, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		s.kickDownloads()
+		tx.then(s.kickDownloads)
 	}
 	if req.DigestDay != nil || req.DigestHour != nil {
 		day, hour := s.digestWhen()
@@ -944,18 +1008,18 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if day >= 0 {
 			dayVal = strconv.Itoa(day)
 		}
-		if err := s.Settings.Set(settings.KeyDigestDay, dayVal, false); err != nil {
+		if err := tx.Set(settings.KeyDigestDay, dayVal, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		if err := s.Settings.Set(settings.KeyDigestHour, strconv.Itoa(hour), false); err != nil {
+		if err := tx.Set(settings.KeyDigestHour, strconv.Itoa(hour), false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 	if req.NotifyQuietHours != nil {
 		h := strings.TrimSpace(*req.NotifyQuietHours)
-		if err := s.Settings.Set(settings.KeyNotifyQuietHours, h, false); err != nil {
+		if err := tx.Set(settings.KeyNotifyQuietHours, h, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -966,48 +1030,48 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if h < 0 {
 			v = "" // back to each client's own default
 		}
-		if err := s.Settings.Set(settings.KeyStallHours, v, false); err != nil {
+		if err := tx.Set(settings.KeyStallHours, v, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 	if req.MinFreeGB != nil {
-		if err := s.Settings.Set(settings.KeyMinFreeGB, strconv.Itoa(*req.MinFreeGB), false); err != nil {
+		if err := tx.Set(settings.KeyMinFreeGB, strconv.Itoa(*req.MinFreeGB), false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		s.dispatch.Kick()
+		tx.then(func() { s.dispatch.Kick() })
 	}
 	if req.BackupAuto != nil {
 		v := "1"
 		if !*req.BackupAuto {
 			v = "0"
 		}
-		if err := s.Settings.Set(settings.KeyBackupAuto, v, false); err != nil {
+		if err := tx.Set(settings.KeyBackupAuto, v, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 	if req.BackupKeep != nil {
-		if err := s.Settings.Set(settings.KeyBackupKeep, strconv.Itoa(*req.BackupKeep), false); err != nil {
+		if err := tx.Set(settings.KeyBackupKeep, strconv.Itoa(*req.BackupKeep), false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 	if req.TrashDays != nil {
-		if err := s.Settings.Set(settings.KeyTrashDays, strconv.Itoa(*req.TrashDays), false); err != nil {
+		if err := tx.Set(settings.KeyTrashDays, strconv.Itoa(*req.TrashDays), false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 	if req.HistoryRetentionDays != nil {
-		if err := s.Settings.Set(settings.KeyHistoryRetentionDays, strconv.Itoa(*req.HistoryRetentionDays), false); err != nil {
+		if err := tx.Set(settings.KeyHistoryRetentionDays, strconv.Itoa(*req.HistoryRetentionDays), false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 	if req.UsenetRetentionDays != nil {
-		if err := s.Settings.Set(settings.KeyRetentionDays, strconv.Itoa(*req.UsenetRetentionDays), false); err != nil {
+		if err := tx.Set(settings.KeyRetentionDays, strconv.Itoa(*req.UsenetRetentionDays), false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -1024,7 +1088,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if !*f.on {
 			v = f.off
 		}
-		if err := s.Settings.Set(f.key, v, false); err != nil {
+		if err := tx.Set(f.key, v, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -1034,41 +1098,59 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if *req.NewestFirst {
 			val = "1"
 		}
-		if err := s.Settings.Set(settings.KeyNewestFirst, val, false); err != nil {
+		if err := tx.Set(settings.KeyNewestFirst, val, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		queue.SetNewestFirst(*req.NewestFirst)
-		s.dispatch.Kick()
+		newestFirst := *req.NewestFirst
+		tx.then(func() { queue.SetNewestFirst(newestFirst) })
+		tx.then(func() { s.dispatch.Kick() })
+	}
+	if req.ResumeInterrupted != nil {
+		val := "0"
+		if *req.ResumeInterrupted {
+			val = "1"
+		}
+		if err := s.Settings.Set(settings.KeyResumeInterrupted, val, false); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 	if req.DownloadsAtOnce != nil {
-		if err := s.Settings.Set(settings.KeyDownloadsConcurrent, strconv.Itoa(*req.DownloadsAtOnce), false); err != nil {
+		if err := tx.Set(settings.KeyDownloadsConcurrent, strconv.Itoa(*req.DownloadsAtOnce), false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		// More places may be free now. Fewer never stops a running download:
 		// nothing new starts until enough of them have finished.
-		s.dispatch.Kick()
+		tx.then(func() { s.dispatch.Kick() })
 	}
 	if req.MusicEnabled != nil {
-		if err := s.setModules(moduleChanges{Music: req.MusicEnabled}); err != nil {
+		if err := s.setModulesIn(tx, moduleChanges{Music: req.MusicEnabled}); err != nil {
 			writeModulesError(w, err)
 			return
 		}
 	}
 	if req.MusicDefaultProfileID != 0 {
-		if err := s.Settings.Set(settings.KeyMusicDefaultProfileID, strconv.FormatInt(req.MusicDefaultProfileID, 10), false); err != nil {
+		if err := tx.Set(settings.KeyMusicDefaultProfileID, strconv.FormatInt(req.MusicDefaultProfileID, 10), false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 	if req.OnboardingDone {
-		if err := s.Settings.Set(settings.KeyOnboardingDone, "1", false); err != nil {
+		if err := tx.Set(settings.KeyOnboardingDone, "1", false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 
+	if err := s.commitSettings(tx); err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	for _, p := range chosenRoots {
+		s.confirmLibraryRoot(p, true)
+	}
 	s.handleGetSettings(w, r)
 }
 

@@ -18,6 +18,10 @@ const blank: DownloadClientInput = {
   username: '',
   password: '',
   category: 'mediarium',
+  categoryMovies: '',
+  categoryTv: '',
+  categoryMusic: '',
+  categoryBooks: '',
   remotePath: '',
   localPath: '',
   removeAfterImport: false,
@@ -31,6 +35,10 @@ function toInput(s: DownloadClientSettings): DownloadClientInput {
     username: s.username,
     password: '',
     category: s.category,
+    categoryMovies: s.categoryMovies,
+    categoryTv: s.categoryTv,
+    categoryMusic: s.categoryMusic,
+    categoryBooks: s.categoryBooks,
     remotePath: s.remotePath,
     localPath: s.localPath,
     removeAfterImport: s.removeAfterImport,
@@ -147,6 +155,23 @@ export default function DownloadClientCard() {
               <input value={form.category} onChange={(e) => set('category', e.target.value)} placeholder="mediarium" autoComplete="off" spellCheck={false} />
               <small className="field-help">{form.kind === 'transmission' ? t('Torrents get this label, so they are easy to find in Transmission (it needs version 3 or newer).') : t('Torrents are added in this category, so they are easy to find in the client.')}</small>
             </label>
+            <label>
+              {t('Category for movies')}
+              <input value={form.categoryMovies} onChange={(e) => set('categoryMovies', e.target.value)} autoComplete="off" spellCheck={false} />
+            </label>
+            <label>
+              {t('Category for TV shows')}
+              <input value={form.categoryTv} onChange={(e) => set('categoryTv', e.target.value)} autoComplete="off" spellCheck={false} />
+            </label>
+            <label>
+              {t('Category for music')}
+              <input value={form.categoryMusic} onChange={(e) => set('categoryMusic', e.target.value)} autoComplete="off" spellCheck={false} />
+            </label>
+            <label>
+              {t('Category for books')}
+              <input value={form.categoryBooks} onChange={(e) => set('categoryBooks', e.target.value)} autoComplete="off" spellCheck={false} />
+            </label>
+            <small className="field-help" style={{ gridColumn: '1 / -1' }}>{t('The four categories above are optional. Fill one in to keep that kind of download apart in the client (a label in Transmission). An empty one uses the main category.')}</small>
           </>
         )}
       </div>

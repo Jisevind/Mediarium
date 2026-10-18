@@ -461,11 +461,8 @@ func (s *Server) arrAddSeries(w http.ResponseWriter, r *http.Request) {
 			_ = s.MovieRepo.SetSeasonMonitored(created.ID, ep.Season, want)
 		}
 	case req.AddOptions != nil:
-		switch strings.ToLower(req.AddOptions.Monitor) {
-		case "future":
-			_ = s.MovieRepo.MonitorFromDate(created.ID, today())
-		case "none":
-			_ = s.MovieRepo.SetAllEpisodesMonitored(created.ID, false)
+		if mode := strings.ToLower(req.AddOptions.Monitor); mode == library.MonitorFuture || mode == library.MonitorNone {
+			_, _ = s.MovieRepo.ApplyMonitorMode(created.ID, mode, today(), false)
 		}
 	}
 	if req.Monitored != nil && !*req.Monitored {

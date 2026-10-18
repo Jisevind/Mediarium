@@ -6,7 +6,7 @@ It takes about ten minutes. You don't need to know Docker well: you copy one fil
 
 Using a NAS? There are step-by-step guides for [Synology](./synology.md) (including running it next to Radarr, Sonarr and SABnzbd), [Unraid](./unraid.md) and [QNAP](./qnap.md). Plain Linux: [linux.md](./linux.md).
 
-**On a NAS, create every folder you map before you start Mediarium.** If a mapped folder doesn't exist, Docker stops with an error like `Bind mount failed: '/volume1/Media/downloads' does not exist`.
+**On a NAS, create every folder you map before you start Mediarium.** If a mapped folder doesn't exist, Docker stops with an error like `Bind mount failed: '/volume1/Media/downloads' does not exist`. A library folder on a share that isn't connected when Mediarium runs is not written into: imports wait and Health says which folder it is (see [When a drive isn't connected](./library.md#when-a-drive-isnt-connected)).
 
 Mediarium does not host or provide any content. See [LEGAL.md](./LEGAL.md).
 
@@ -206,6 +206,7 @@ A good layout looks like this:
   ```
   Folder names are case sensitive (`Movies` is not `movies`). You can add what is already in your library, and Mediarium never deletes or overwrites existing files on its own.
 - **Other download apps use the same downloads folder?** (SABnzbd, NZBGet, qBittorrent, Transmission...) Give Mediarium a folder of its own inside it, like `DOWNLOADS_DIR=/data/downloads/mediarium` above. Mediarium tidies up leftover files in its own `incomplete` folder, so it must not share that folder with another app. Hardlinks still work, because it is all inside `/data`.
+- **Want the unfinished downloads on a fast drive?** Map one more folder, for example `- /mnt/cache/mediarium-temp:/temp-downloads`, create it on the host first, and enter `/temp-downloads` under **Settings > Downloading > Download rules > Temporary download folder**. See [Temporary download folder](downloads.md#temporary-download-folder).
 - **Use full paths** on a real server (`/srv/data`, `/volume1/data`, `/mnt/user/data`). The `./config` and `./data` in the example mean "next to the compose file", which is handy for a first try.
 - **Disk format:** the disk must support hardlinks. ext4, XFS, Btrfs, ZFS and NTFS all do; exFAT and FAT (common on USB sticks) do not.
 - Moving over from Radarr, Sonarr, Prowlarr or SABnzbd? Use the same folders they use: see [Move from Radarr, Sonarr, Prowlarr, SABnzbd and other apps](./migrate.md).
@@ -433,6 +434,7 @@ Run these in the folder with your `docker-compose.yml`:
 | Start it again | `docker compose start` |
 | Apply changes to the compose file | `docker compose up -d` |
 | Reset a forgotten password | `docker exec -it -u 1000:1000 mediarium /app/app reset-password yourusername` (use your own `PUID:PGID` instead of `1000:1000`; on the `-full` image the program is `/opt/mediarium/app`) |
+| Carry on after losing `secret.key` | Stop Mediarium, then `docker run --rm -it -v /your/config:/config ghcr.io/rdborg/mediarium:latest /app/app reset-key` (see [When `secret.key` is lost](#when-secretkey-is-lost)), then start it again |
 
 ## Using it as an app on a phone, tablet or computer
 
@@ -519,11 +521,25 @@ Maintainers can use `tools/push-update.sh`, which builds the program from the co
 
 ## Backup and restore
 
-Everything that is not a media file lives in `/config`. The two files that matter are `app.db` (settings, library, history, accounts) and `secret.key`. **Keep the two together:** `secret.key` unlocks the passwords and keys saved in `app.db`. If `app.db` holds saved passwords, keys or accounts and `secret.key` is missing, Mediarium won't start (it would only write a new key that can't open anything). Put the old `secret.key` back; if it is gone for good, move `app.db` away to start again from scratch. If the `secret.key` is there but belongs to another `app.db` (for example you copied only the database to a new install), Mediarium says so in the log and on Health, and an indexer whose saved key can't be read is named on Health and left out of searches while the others keep working: open it and enter the key again. The folder also holds caches (for example music covers and the list of torrent sites) and, if you use one, the `update` folder.
+Everything that is not a media file lives in `/config`. The two files that matter are `app.db` (settings, library, history, accounts) and `secret.key`. **Keep the two together:** `secret.key` unlocks the passwords and keys saved in `app.db`. If `app.db` holds saved passwords, keys or accounts and `secret.key` is missing, Mediarium won't start (it would only write a new key that can't open anything). Put the old `secret.key` back; if it is gone for good, move `app.db` away to start again from scratch. If the `secret.key` is there but belongs to another `app.db` (for example you copied only the database to a new install), Mediarium says so in the log and on Health, and an indexer whose saved key can't be read is named on Health and left out of searches while the others keep working: open it and enter the key again. The same goes for a Usenet server (password), a VPN connection (keys), a media server (token), a notification target (passwords) and the keys saved in other settings (the debrid key, the download client password, the OpenSubtitles login and so on): the one that can't be read is marked on its Settings page and named on Health (and in the log at start, never with its value), it is not used, and everything else keeps working. What is stored is never replaced by an empty value when you save something else, so putting the old `secret.key` back brings it all back; to carry on without it, enter the password or key again. If the `secret.key` is gone for good, see [When `secret.key` is lost](#when-secretkey-is-lost). The folder also holds caches (for example music covers and the list of torrent sites) and, if you use one, the `update` folder.
 
 **From the app (easiest):** administrators can download a backup zip with **Download a backup** on **Settings > System > Backup and restore**. It is safe to make while downloads are running. The zip holds `app.db`, `secret.key` and a small note about the version, and no media files. It contains your encryption key, so keep it as private as a password. To restore, choose the zip in the **Restore** box on the same page and press **Restore this backup**: Mediarium checks it (a backup made by a newer version of Mediarium than yours is refused; a backup can be up to 1 GB), restarts, and keeps your previous files in a `before-restore-<date>` folder inside `/config`. After the restart you sign in again (with an account from the backup), and the sign-in page says the backup was restored. Restoring needs something that starts Mediarium again, like `restart: unless-stopped`; otherwise start it yourself and the restore is applied then.
 
 **Automatic backups:** every night, and just before every update, Mediarium saves the same zip in `/config/backups` and keeps the newest 7 (change it to 3, 5, 14 or 30 in the **Backup** box). The box lists them with the time and size, each with **Download**, and has **Back up now**. To restore one, download it and choose it under **Restore**. Switch the nightly backup off with **Save a backup every night** (stored as `backup.auto`; how many are kept is `backup.keep`). The files sit next to your database, so also keep a copy somewhere else: switch on [cloud backups](#cloud-backups), or copy one by hand now and then. A backup on the same disk does not help if that disk fails. A backup that was cut short (the container was stopped while it was being written) leaves no file behind: half-written files are removed at the next start. If a nightly backup can't be saved, it is listed in Logs and errors. Scripts: `GET /api/system/backups`, `POST /api/system/backups` and `GET /api/system/backups/{name}` (the last two need a signed-in administrator, not an API key, because a backup holds every stored secret).
+
+### When `secret.key` is lost
+
+The passwords and keys saved in `app.db` can only be opened with the `secret.key` they were saved with. The best fix is to put that file back, from a backup zip or a cloud copy (both hold it). If it is gone for good, you don't have to start from scratch: your library, accounts, history and settings stay, and only the passwords and keys have to be typed in again.
+
+1. Stop Mediarium (`docker compose stop`).
+2. Run `reset-key` with the same `/config` folder: `docker run --rm -it -v /your/config:/config ghcr.io/rdborg/mediarium:latest /app/app reset-key`. Use your own folder and image name; with the program on your path it is just `app reset-key`.
+3. It lists every saved password and key that can't be read (by name, never by value) and waits for you to type `yes`. `--yes` skips the question.
+4. First it saves a copy of the database as `app.db.before-reset-key-<date>` and, if there is one, of the old key as `secret.key.before-reset-key-<date>`, both in `/config`. If the copy fails, nothing is changed.
+5. Then it clears the ones that can't be read: indexers, Usenet servers, media servers, notification targets, import lists and IRC connections stay but are switched off (enter the key or password again, then switch them on), VPN connections and similar entries that are useless without their key are removed (add them again), and an account's two-step sign-in is switched off so the account isn't locked out. A saved setting is cleared (the TMDB key, a debrid key, the OpenSubtitles login and so on). Everything is done in one go: if anything fails, nothing is cleared.
+6. If there is no `secret.key` (or it is damaged) it makes a new one. A `secret.key` that is there and works is kept, and only what it can't read is cleared.
+7. Start Mediarium. The Health list on the dashboard shows what is still missing.
+
+Stop Mediarium first: a running Mediarium keeps the old key in memory and would save new passwords with it.
 
 ### Cloud backups
 

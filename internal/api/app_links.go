@@ -162,7 +162,7 @@ func (s *Server) handlePutAppLinks(w http.ResponseWriter, r *http.Request) {
 		}
 		u, err := url.Parse(a.URL)
 		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" || u.User != nil {
-			writeError(w, http.StatusBadRequest, "The address of "+a.Name+" must start with http:// or https:// and not contain a name or password.")
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("The address of %s must start with %s or %s and not contain a name or password.", a.Name, "http://", "https://"))
 			return
 		}
 		if _, ok := appOrigin(a.URL); !ok {

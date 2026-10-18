@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rdborg/mediarium/internal/download"
+	"github.com/rdborg/mediarium/internal/fsinfo"
 	"github.com/rdborg/mediarium/internal/indexers"
 	"github.com/rdborg/mediarium/internal/organizer"
 	"github.com/rdborg/mediarium/internal/store"
@@ -77,6 +78,12 @@ func (s *Server) collectHealth() []healthItem {
 			"", "")
 	}
 
+	// With the wrong key every secret is unreadable, which the item above says
+	// once; otherwise each one that can't be read is named.
+	if !keyMismatch {
+		items = append(items, s.unreadableSecretItems()...)
+	}
+
 	instances, listErr := s.IndexerRepo.List()
 	torrentsOn := s.torrentReleasesOn()
 	var usenetIndexers, torrentIndexers, unreadable int
@@ -127,7 +134,7 @@ func (s *Server) collectHealth() []healthItem {
 		}
 	}
 
-	servers, _ := s.ClientRepo.List()
+	servers, _ := s.ClientRepo.ListAll() // a server with an unreadable password is named on its own Health item
 	if usenetIndexers > 0 && len(servers) == 0 {
 		addHealth("no-usenet-server", "warn", "No Usenet provider added",
 			"Your Usenet indexer finds releases but there's nowhere to download them from. Add your provider's news server.",
@@ -311,6 +318,15 @@ func (s *Server) collectHealth() []healthItem {
 					"Downloads and imports fail when it runs out of space.",
 					"See folders", "/settings/media")
 			}
+		}
+	}
+	// A library folder that has lost its marker file is most likely a drive that
+	// isn't connected. Imports into it wait, so nothing lands on the machine's own disk.
+	for i, root := range s.writableRoots() {
+		if p := s.libraryRootProblem(root); p != nil && p.gone {
+			addHealth("library-root-gone-"+strconv.Itoa(i), "error", fmt.Sprintf("The library folder %s looks disconnected", root),
+				fmt.Sprintf("It has lost its %s file, which usually means its drive isn't connected. Nothing is imported or moved into it until it's back, so no files end up on the wrong disk. If the folder is the right one, add an empty file with that name to it.", fsinfo.RootMarker),
+				"See folders", "/settings/media")
 		}
 	}
 	// One whole heading per folder, so the screen can show it in the

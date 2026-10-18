@@ -210,7 +210,12 @@ func (s *Server) diskSpaceShort() (dir, message string, short bool) {
 	if floor == 0 {
 		return "", "", false
 	}
-	dir = s.downloadsRoot()
+	// New downloads are worked on in the temporary download folder when there is
+	// one, so that is the disk that fills up.
+	dir, where := s.downloadsRoot(), false
+	if b := s.tempBase(); b != "" {
+		dir, where = b, true
+	}
 	if dir == "" {
 		return "", "", false
 	}
@@ -220,6 +225,9 @@ func (s *Server) diskSpaceShort() (dir, message string, short bool) {
 	}
 	if u.FreeBytes >= uint64(floor)<<30 {
 		return "", "", false
+	}
+	if where {
+		return dir, fmt.Sprintf("Downloads are waiting: only %s free in the temporary download folder, less than the %d GB you asked to keep.", humanBytes(int64(u.FreeBytes)), floor), true
 	}
 	return dir, fmt.Sprintf("Downloads are waiting: only %s free in the downloads folder, less than the %d GB you asked to keep.", humanBytes(int64(u.FreeBytes)), floor), true
 }

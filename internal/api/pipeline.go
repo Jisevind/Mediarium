@@ -199,7 +199,7 @@ func (s *Server) runPipeline(queueID, movieID int64, movieTitle string, movieYea
 	s.cleanupWorkDir(incompleteDir, protocol)
 	// Earlier failed tries for this movie are settled now.
 	_, _ = s.QueueRepo.ClearFailedForMovie(movieID, queueID)
-	importedMessage := fmt.Sprintf("%s imported to %s", movieTitle, result.DestPath)
+	importedMessage := fmt.Sprintf("%s imported to %s", movieTitle, result.DestPath) + s.copiedFromTempNote(videoFile, result)
 	_ = s.QueueRepo.LogActivity(movieID, "imported", importedMessage)
 	importedItem := s.movieItemByID(movieID, movieTitle, movieYear, tmdbID)
 	importedItem.Quality, importedItem.SizeBytes, importedItem.Path = string(tier), fileSize(result.DestPath), result.DestPath
@@ -216,9 +216,19 @@ func (s *Server) runPipeline(queueID, movieID int64, movieTitle string, movieYea
 // failure handling.
 func (s *Server) prepareDownload(ctx context.Context, queueID int64, downloadURL string, protocol indexers.Protocol) (string, error) {
 	incompleteDir := s.workDirFor(queueID)
+	if protocol == indexers.ProtocolTorrent && s.downloadClientOn() {
+		// An external client's folder only holds links to its files: it stays in
+		// the downloads folder, never in the temporary download folder.
+		if _, started := s.existingWorkDir(queueID); !started {
+			incompleteDir = s.defaultWorkDirFor(queueID)
+		}
+	}
 	if protocol == indexers.ProtocolTorrent && !s.downloadClientOn() && !s.debridOn() {
 		// The built-in client files a torrent under its category's folder.
 		incompleteDir = s.assignTorrentDir(queueID)
+	}
+	if err := s.checkTempReady(incompleteDir); err != nil {
+		return "", err
 	}
 
 	// The same release for the same title (by name and size) is not fetched a
@@ -282,7 +292,10 @@ func (s *Server) prepareDownload(ctx context.Context, queueID int64, downloadURL
 	}
 	// Archives are unpacked into the download's own folder (for a download
 	// client, next to the links to its files, never into the client's folder).
-	if err := s.unpackStep(queueID, incompleteDir); err != nil {
+	if err := s.unpackStep(ctx, queueID, incompleteDir); err != nil {
+		if ctx.Err() != nil {
+			return "", ctx.Err() // paused or stopped part-way: the unpack starts over next time
+		}
 		return "", unpackFailure(err)
 	}
 	// What came out of the archives (or came as it is) is looked at once more
@@ -336,6 +349,13 @@ func (s *Server) downloadUsenet(ctx context.Context, queueID int64, nzbURL, inco
 		return 0, fmt.Errorf("couldn't load your Usenet servers: %w", err)
 	}
 	if len(servers) == 0 {
+		if all, err := s.ClientRepo.ListAll(); err == nil {
+			for _, sc := range all {
+				if sc.Enabled && sc.SecretUnreadable {
+					return 0, fmt.Errorf("Mediarium can't read the saved password of your Usenet server, so nothing can be downloaded. Enter the password again in Settings > Downloading > Usenet.")
+				}
+			}
+		}
 		return 0, fmt.Errorf("no Usenet server is set up. Add your provider's server in Settings > Downloading > Usenet first")
 	}
 	configs := make([]download.ClientConfig, len(servers))
@@ -980,20 +1000,39 @@ func verifyAndRepair(dir string, missing int) error {
 // are unpacked natively; only .7z needs the external 7z tool (Extract
 // returns organizer.ErrSevenZipMissing if one turns up without it).
 func unpackArchives(dir string) error {
+	_, _, err := unpackArchivesWatched(context.Background(), dir, nil)
+	return err
+}
+
+// unpackArchivesWatched is unpackArchives that stops when ctx ends and tells w
+// how far it has come. It returns how many bytes of archives it unpacked and
+// how long that took.
+func unpackArchivesWatched(ctx context.Context, dir string, w *unpackWatch) (int64, time.Duration, error) {
 	extractor := organizer.NewExtractor()
+	extractor.Context = ctx
 	extractor.Password = readArchivePassword(dir)
 	// Archives inside a folder of the download count too (a torrent keeps its
 	// files in a folder of its own); each is unpacked next to where it lies.
 	archives, err := organizer.FindPrimaryArchivesDeep(dir)
 	if err != nil {
-		return err
+		return 0, 0, err
 	}
-	for _, a := range archives {
+	var bytes int64
+	var took time.Duration
+	for i, a := range archives {
+		if w != nil {
+			w.begin(i+1, len(archives))
+			extractor.Progress = w.report
+		}
 		if err := extractor.Extract(a, filepath.Dir(a)); err != nil {
-			return err
+			return bytes, took, err
+		}
+		if w != nil {
+			n, d := w.end()
+			bytes, took = bytes+n, took+d
 		}
 	}
-	return nil
+	return bytes, took, nil
 }
 
 // archivePasswordFile holds the password of a download's archives, inside the

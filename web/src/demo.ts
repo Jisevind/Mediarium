@@ -13,6 +13,8 @@ import type {
   Episode,
   Movie,
   MovieDetail,
+  PersonCredit,
+  PersonPage,
   QueueItem,
   Series,
   SeriesDetail,
@@ -292,6 +294,30 @@ function seriesDetail(id: number): SeriesDetail | null {
   return { ...s, episodes: eps }
 }
 
+const DEMO_CAST = [
+  { id: 9001, name: 'Actor One', character: 'Lead' },
+  { id: 9002, name: 'Actor Two', character: 'Support' },
+  { id: 9003, name: 'Actor Three', character: 'Villain' },
+  { id: 9004, name: 'Actor Four', character: 'Friend' },
+]
+
+// A made-up person with an acting career and a few titles directed.
+const demoPerson = (id: number): PersonPage => {
+  const name = DEMO_CAST.find((c) => c.id === id)?.name ?? (id === 9101 ? 'Director One' : id === 9102 ? 'Creator One' : 'Actor One')
+  const movies = discoverPool(id % 5, false).map((m, i): PersonCredit => ({ ...m, roles: i % 3 === 2 ? ['directing'] : ['acting'], character: i % 3 === 2 ? undefined : 'Lead' }))
+  const shows = discoverPool(id % 5, true).slice(0, 4).map((m): PersonCredit => ({ ...m, roles: ['acting'], character: 'Guest' }))
+  return {
+    id,
+    name,
+    biography: 'A made-up person for demo mode. They have worked on a handful of invented films and shows, none of which exist.',
+    birthday: '1980-04-12',
+    placeOfBirth: 'Sampletown',
+    workKinds: ['acting', 'directing'],
+    movies,
+    shows,
+  }
+}
+
 const titleDetail = (m: Movie): MovieDetail => {
   const seed = MOVIE_SEEDS.find((x) => x.id === m.id)!
   return {
@@ -312,12 +338,8 @@ const titleDetail = (m: Movie): MovieDetail => {
     certification: 'PG-13',
     releaseDate: `${m.year}-03-01`,
     language: 'en',
-    cast: [
-      { name: 'Actor One', character: 'Lead' },
-      { name: 'Actor Two', character: 'Support' },
-      { name: 'Actor Three', character: 'Villain' },
-      { name: 'Actor Four', character: 'Friend' },
-    ],
+    cast: DEMO_CAST,
+    crew: [{ id: 9101, name: 'Director One', job: 'Director' }],
     trailers: [{ name: 'Official Trailer', site: 'YouTube', key: 'demo', url: 'https://www.youtube.com/results?search_query=' + encodeURIComponent(m.title + ' official trailer'), official: true }],
   } as MovieDetail
 }
@@ -342,7 +364,8 @@ const tvDetail = (tmdbId: number): TVDetail | null => {
     episodes: seed.episodes,
     networks: ['Sample Network'],
     releaseStatus: 'Returning Series',
-    cast: [{ name: 'Actor One', character: 'Lead' }, { name: 'Actor Two', character: 'Support' }],
+    cast: DEMO_CAST.slice(0, 2),
+    crew: [{ id: 9102, name: 'Creator One', job: 'Creator' }],
     trailers: [{ name: 'Official Trailer', site: 'YouTube', key: 'demo', url: 'https://www.youtube.com/results?search_query=' + encodeURIComponent(seed.title + ' official trailer'), official: true }],
   }
 }
@@ -503,6 +526,8 @@ export function installDemo() {
         const d = tvDetail(Number(p.split('/').pop()))
         return d ? json(d) : json({ tmdbId: 8802, title: 'Sample Series', year: 2020, overview: OV, posterUrl: poster(32), genres: ['Drama'], rating: 7.9 })
       }
+      case /^\/api\/tmdb\/people\/\d+$/.test(p):
+        return json(demoPerson(Number(p.split('/').pop())))
       case /^\/api\/tmdb\/movies\/\d+\/similar$/.test(p):
         return json(discoverPool(4, false).slice(0, 8))
       // Every other Discover list and filter: made-up titles, never the real
