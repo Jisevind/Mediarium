@@ -1820,6 +1820,16 @@ export interface SeasonInfo {
   airDate?: string
 }
 
+// The cinema and digital dates of a movie ("YYYY-MM-DD") in the person's country.
+// cinemaRegion / digitalRegion name the country a date came from when it was not that one.
+export interface MovieReleaseDates {
+  cinema?: string
+  digital?: string
+  region?: string
+  cinemaRegion?: string
+  digitalRegion?: string
+}
+
 export interface TitleDetails {
   directors?: string[] // movies
   creators?: string[] // shows
@@ -1870,6 +1880,7 @@ export interface MovieDetail extends TitleDetails {
   folderPath?: string // the full folder of its files, as Mediarium sees it
   // The series of films this one is part of, when it is.
   collection?: CollectionRef
+  releaseDates?: MovieReleaseDates
 }
 
 // One subtitle source and where it stands: "on", "off" (set up but switched off),
@@ -1938,6 +1949,7 @@ export interface SubtitleResult {
   score: number
   fileId: number
   source?: 'subdl' | 'addon' // empty for OpenSubtitles
+  sourceName?: string // an add-on's own name
   link?: string // SubDL's download path
   language: string
   release: string
@@ -2211,6 +2223,7 @@ export interface CalendarEntry {
   title: string
   subtitle?: string
   releaseDate: string
+  release?: 'cinema' | 'digital' // a movie with both dates on different days shows twice: which date this is
   status: 'missing' | 'downloading' | 'downloaded'
   posterUrl?: string // the poster or cover, when there is one
   backdropUrl?: string // a wide still, once it has been fetched (the calendar's Backdrops view)

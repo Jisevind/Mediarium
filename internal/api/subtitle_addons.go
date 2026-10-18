@@ -198,7 +198,10 @@ func (s *Server) findAddonSubtitles(ctx context.Context, q subtitles.Query) (res
 	if len(list) == 0 {
 		return nil, 0, nil
 	}
-	imdb := s.addonImdbID(ctx, q)
+	imdb := q.IMDBID
+	if imdb == "" {
+		imdb = s.addonImdbID(ctx, q)
+	}
 	if imdb == "" {
 		return nil, len(list), nil // nothing to ask them with: asked, found nothing, not a failure
 	}
@@ -224,7 +227,7 @@ func (s *Server) findAddonSubtitles(ctx context.Context, q subtitles.Query) (res
 			if release == "" {
 				release = a.Name
 			}
-			results = append(results, subtitles.Result{Language: f.Language, Release: release, Source: subtitles.SourceAddon, Link: sealed, HearingImpaired: f.HearingImpaired, ForeignPartsOnly: f.Forced && !f.HearingImpaired})
+			results = append(results, subtitles.Result{Language: f.Language, Release: release, Source: subtitles.SourceAddon, SourceName: a.Name, Link: sealed, HearingImpaired: f.HearingImpaired, ForeignPartsOnly: f.Forced && !f.HearingImpaired})
 		}
 	}
 	return results, asked, errs

@@ -34,6 +34,7 @@ import { useLive } from '../useLive'
 import { useConfirm } from '../components/ConfirmProvider'
 import { removeOption } from '../diskUsage'
 import ReleaseNotice from '../components/ReleaseNotice'
+import { releaseFacts } from '../releaseDates'
 import type { Unanswered } from '../releaseHint'
 import { useDocumentTitle } from '../documentTitle'
 import { plural, t } from '../i18n'
@@ -261,7 +262,7 @@ function MoviePage() {
           facts: [
             ...(directors.length ? [{ label: directors.length > 1 ? t('Directors') : t('Director'), value: <PeopleLinks people={directors} /> }] : []),
             ...(writers.length ? [{ label: writers.length > 1 ? t('Writers') : t('Writer'), value: <PeopleLinks people={writers} /> }] : []),
-            ...(movie.releaseDate ? [{ label: t('Released'), value: movie.releaseDate }] : []),
+            ...releaseFacts(movie.releaseDates, movie.releaseDate),
             ...(movie.releaseStatus ? [{ label: t('Status'), value: movie.releaseStatus }] : []),
           ],
           links: titleLinks('movie', movie.tmdbId, movie.imdbId, movie.homepage),

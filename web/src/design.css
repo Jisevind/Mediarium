@@ -510,6 +510,8 @@ a.hero-pill:hover { text-decoration: none; transform: translateY(-2px); }
 .title-facts div { display: grid; gap: 1px; }
 .title-facts dt { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); }
 .title-facts dd { margin: 0; font-weight: 500; }
+.title-facts .release-until, .title-facts .release-none { color: var(--text-dim); font-weight: 400; }
+.title-facts .release-date { white-space: nowrap; }
 .title-links { display: flex; flex-wrap: wrap; gap: 8px; }
 .link-pill { display: inline-flex; align-items: center; gap: 7px; padding: 7px 14px; border-radius: 999px; font-size: 0.85rem; font-weight: 500; color: var(--text); background: var(--surface-2); border: 1px solid var(--border); text-decoration: none; transition: transform 0.15s ease, border-color 0.15s ease; }
 .link-pill:hover { text-decoration: none; transform: translateY(-2px); border-color: var(--hc); color: var(--hc); }

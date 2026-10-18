@@ -8,6 +8,23 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.2.3] - 2026-10-18
+
+In short: release dates on the movie page, and fixes for second copies and for subtitles.
+- A movie's page shows when it is in cinemas and when it comes out digitally, and the calendar shows both days.
+- A release that may not replace your file is no longer imported next to it under another name (this left second copies with TRaSH-style names).
+- The subtitle search asks each site by TMDB id, IMDb id and title, reads more pages, and shows an error instead of "No subtitles found".
+
+### Fixed
+- A release that is not allowed to replace the file you have is no longer imported next to it when its file name differs (for example with TRaSH-style names). Before, a worse release, or any release for a title set to keep its file, landed beside the good file and became the one Mediarium pointed at, leaving two copies. It is now turned away with "Kept the file you already have." (reported by dxtrlws on GitHub, #84)
+- A file whose quality is not stored is now read from its name, including bracketed names like `[Bluray-1080p]` and `[Remux-2160p]`; a file whose quality cannot be told is never counted as worse than a new release.
+- When a new version replaces a file under another name, the old file goes to the recycle bin (when it is on) together with the subtitles and other files named after it, instead of being deleted and leaving them behind. Choosing "Overwrite" on a parked "Ask me each time" conflict now also removes the old file that had another name.
+- Searching for subtitles could say "no subtitles" for well-known titles that OpenSubtitles and SubDL do have. Both sites are now asked by TMDB id first, then by IMDb id, then by title and year, and up to three pages of results are read. A site that fails to answer is now shown as an error instead of "No subtitles found", and a failed search is no longer remembered for days (reported by SanketBaraiya on GitHub, #83).
+- Subtitle results from an add-on show the add-on's own name in the From column, and Rating and Fit are left empty when there is nothing to base them on, instead of a dash or 0.
+
+### Added
+- A movie's page now shows when it is in cinemas and when it comes out digitally (with how long until then when it is still ahead), for your country, and the calendar shows a monitored movie on both days, marked Cinema and Digital. The calendar learns the digital dates a few movies at a time in the background, so right after the update it shows only the cinema dates. Thanks to SanketBaraiya on GitHub, #82.
+
 ## [3.2.2] - 2026-10-18
 
 In short: a tidier indexer page and a round of fixes from a full check of the 3.2 changes.

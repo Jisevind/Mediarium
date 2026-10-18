@@ -4,7 +4,7 @@ import { openNav } from './helpers'
 // Nothing pushes the page wider than the screen, at any of the three sizes
 // (run with --project app, app-tablet or app-phone). Russian has the longest
 // button labels, so it is the one that shows a button running off the card.
-const PAGES = ['/series/101', '/settings/media', '/settings/system', '/settings/services', '/queue', '/library?kind=tv']
+const PAGES = ['/series/101', '/title/9010', '/settings/media', '/settings/system', '/settings/services', '/queue', '/library?kind=tv']
 
 for (const lang of ['en', 'ru']) {
   for (const path of PAGES) {

@@ -149,36 +149,97 @@ func (c *SubDL) get(ctx context.Context, q url.Values) (subdlResponse, error) {
 	return out, nil
 }
 
-// Find searches SubDL for q. A title SubDL doesn't know is no results, not
-// an error.
+// Find searches SubDL for q. SubDL doesn't have every title under its TMDB id,
+// so when that finds nothing the IMDb id and then the title are tried. A title
+// SubDL doesn't know is no results, not an error.
 func (c *SubDL) Find(ctx context.Context, q Query) ([]Result, error) {
-	// hi=1 and comment=1 ask SubDL to include the hearing-impaired flag and the
-	// uploader's comment, which is where a "forced" track is usually said so.
-	v := url.Values{"subs_per_page": {"30"}, "releases": {"1"}, "hi": {"1"}, "comment": {"1"}}
+	episode := q.ParentTMDBID > 0
+	kind := "movie"
+	if episode {
+		kind = "tv"
+	}
+	var lookups []url.Values
 	switch {
-	case q.ParentTMDBID > 0:
-		v.Set("tmdb_id", strconv.Itoa(q.ParentTMDBID))
-		v.Set("type", "tv")
-		v.Set("season_number", strconv.Itoa(q.Season))
-		v.Set("episode_number", strconv.Itoa(q.Episode))
+	case episode:
+		lookups = append(lookups, url.Values{"tmdb_id": {strconv.Itoa(q.ParentTMDBID)}})
 	case q.TMDBID > 0:
-		v.Set("tmdb_id", strconv.Itoa(q.TMDBID))
-		v.Set("type", "movie")
-	case q.Text != "":
-		v.Set("film_name", q.Text)
-	default:
-		return nil, nil
+		lookups = append(lookups, url.Values{"tmdb_id": {strconv.Itoa(q.TMDBID)}})
 	}
-	if q.Language != "" {
-		v.Set("languages", subdlLanguage(q.Language))
+	if q.IMDBID != "" {
+		lookups = append(lookups, url.Values{"imdb_id": {q.IMDBID}})
 	}
-	resp, err := c.get(ctx, v)
-	if err != nil {
-		return nil, err
+	name, year := q.Title, q.Year
+	if name == "" {
+		name, year = q.Text, 0
 	}
-	if !resp.Status {
-		return nil, nil // "can't find movie or tv" and the like
+	if name != "" {
+		v := url.Values{"film_name": {name}}
+		if year > 0 && !episode {
+			v.Set("year", strconv.Itoa(year))
+		}
+		lookups = append(lookups, v)
 	}
+	for _, v := range lookups {
+		// hi=1 and comment=1 ask SubDL to include the hearing-impaired flag and the
+		// uploader's comment, which is where a "forced" track is usually said so.
+		v.Set("subs_per_page", strconv.Itoa(subdlPerPage))
+		v.Set("releases", "1")
+		v.Set("hi", "1")
+		v.Set("comment", "1")
+		v.Set("type", kind)
+		if episode {
+			v.Set("season_number", strconv.Itoa(q.Season))
+			v.Set("episode_number", strconv.Itoa(q.Episode))
+		}
+		if q.Language != "" {
+			v.Set("languages", subdlLanguage(q.Language))
+		}
+		res, err := c.findPages(ctx, v, q)
+		if err != nil {
+			return nil, err
+		}
+		if len(res) > 0 {
+			return res, nil
+		}
+	}
+	return nil, nil
+}
+
+// subdlPerPage is the most SubDL gives per page.
+const subdlPerPage = 30
+
+// findPages reads up to maxSearchPages pages of one search, going on while a
+// page comes back full.
+func (c *SubDL) findPages(ctx context.Context, v url.Values, q Query) ([]Result, error) {
+	var out []Result
+	for page := 1; page <= maxSearchPages; page++ {
+		pv := url.Values{}
+		for k, vals := range v {
+			pv[k] = vals
+		}
+		if page > 1 {
+			pv.Set("page", strconv.Itoa(page))
+		}
+		resp, err := c.get(ctx, pv)
+		if err != nil {
+			if page > 1 {
+				break // the first page worked: use it
+			}
+			return nil, err
+		}
+		if !resp.Status {
+			break // "can't find movie or tv" and the like
+		}
+		out = append(out, c.results(resp, q)...)
+		if len(resp.Subtitles) < subdlPerPage {
+			break
+		}
+	}
+	return out, nil
+}
+
+// results turns one answer into results, leaving out what isn't for q.
+func (c *SubDL) results(resp subdlResponse, q Query) []Result {
 	var out []Result
 	for _, s := range resp.Subtitles {
 		if !ValidSubDLLink(s.URL) {
@@ -204,7 +265,7 @@ func (c *SubDL) Find(ctx context.Context, q Query) ([]Result, error) {
 			HearingImpaired: s.HI || nameHI, ForeignPartsOnly: forced && !s.HI,
 		})
 	}
-	return out, nil
+	return out
 }
 
 // Test checks the key with a search for a film everyone has.

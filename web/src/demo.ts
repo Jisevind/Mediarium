@@ -228,7 +228,8 @@ const discoverPool = (offset: number, tv: boolean): DiscoverMovie[] => {
 const calendar: CalendarEntry[] = [
   { kind: 'episode', id: 1, seriesId: 102, season: 3, episode: 9, title: 'Salt & Static', subtitle: 'S03E09 · Second Service', releaseDate: day(1), status: 'missing', posterUrl: poster(102) },
   { kind: 'episode', id: 2, seriesId: 104, season: 2, episode: 5, title: 'Ember Road', subtitle: 'S02E05 · The Long Fuse', releaseDate: day(2), status: 'missing', posterUrl: poster(104) },
-  { kind: 'movie', id: 3, movieId: 10, tmdbId: 9010, title: 'Tidewalker', releaseDate: day(3), status: 'downloading', posterUrl: poster(10) },
+  { kind: 'movie', id: 3, movieId: 10, tmdbId: 9010, title: 'Tidewalker', releaseDate: day(3), release: 'cinema', status: 'downloading', posterUrl: poster(10) },
+  { kind: 'movie', id: 3, movieId: 10, tmdbId: 9010, title: 'Tidewalker', releaseDate: day(24), release: 'digital', status: 'downloading', posterUrl: poster(10) },
   { kind: 'episode', id: 4, seriesId: 101, season: 3, episode: 1, title: 'The Clean Floor', subtitle: 'S03E01 · Season premiere', releaseDate: day(5), status: 'missing', posterUrl: poster(101) },
   { kind: 'album', id: 21, albumId: 22, artistId: 2, title: 'Mira Calloway — Slow Weather', subtitle: 'Album', releaseDate: day(5), status: 'missing', posterUrl: poster(221) },
   { kind: 'episode', id: 10, seriesId: 106, season: 3, episode: 2, title: 'Glass Orchard', subtitle: 'S03E02 · Root Cellar', releaseDate: day(5), status: 'missing', posterUrl: poster(106) },
@@ -355,6 +356,8 @@ const titleDetail = (m: Movie): MovieDetail => {
     tagline: 'A sample tagline for demo mode.',
     certification: 'PG-13',
     releaseDate: `${m.year}-03-01`,
+    // Some films are still in cinemas with the digital date ahead, others have both behind them.
+    releaseDates: m.id % 2 === 0 ? { cinema: day(3), digital: day(24), region: 'US' } : { cinema: `${m.year}-03-01`, digital: `${m.year}-06-10`, region: 'US' },
     language: 'en',
     cast: DEMO_CAST,
     crew: [{ id: 9101, name: 'Director One', job: 'Director' }],

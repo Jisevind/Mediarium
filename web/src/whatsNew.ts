@@ -10,6 +10,14 @@ export interface ReleaseNotes {
 
 export const WHATS_NEW: ReleaseNotes[] = [
   {
+    version: '3.2.3',
+    items: [
+      t("A movie's page shows when it is in cinemas and when it comes out digitally, and the calendar marks both days."),
+      t("A release that may not replace your file is no longer imported next to it under another name, which stops second copies."),
+      t("Subtitle search tries each site by TMDB id, IMDb id and title, and shows an error instead of saying there are none."),
+    ],
+  },
+  {
     version: '3.2.2',
     items: [
       t("The indexer list is sorted by priority, in two columns, with a filter box when you have many."),
