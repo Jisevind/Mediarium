@@ -39,10 +39,15 @@ export default function Person() {
     setBioOpen(false)
     setPhotoBroken(false)
     setMore({ movies: CREDITS_FIRST, shows: CREDITS_FIRST })
+    // Going from one person to another: the answer for the first must not land on the second.
+    let current = true
     api
       .tmdbPerson(personId)
-      .then(setPerson)
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
+      .then((p) => current && setPerson(p))
+      .catch((e) => current && setError(e instanceof Error ? e.message : String(e)))
+    return () => {
+      current = false
+    }
   }, [personId])
 
   const role = roleFilterFrom(ui.role, person?.workKinds ?? [])

@@ -8,6 +8,7 @@ import (
 
 	"github.com/rdborg/mediarium/internal/fsinfo"
 	"github.com/rdborg/mediarium/internal/organizer"
+	"github.com/rdborg/mediarium/internal/settings"
 )
 
 func TestCheckLibraryRoot(t *testing.T) {
@@ -162,5 +163,43 @@ func TestContainerDiskFolderIsNotMarked(t *testing.T) {
 	l.s.confirmLibraryRoot(l.movies, true)
 	if fsinfo.HasRootMarker(l.movies) {
 		t.Error("a folder on the container's disk got a marker")
+	}
+}
+
+// A library folder inside another one is judged on its own marker: when the
+// inner one is a drive that dropped off, the outer folder's marker says
+// nothing about it.
+func TestCheckLibraryRootUsesInnermostFolder(t *testing.T) {
+	old := onContainerDisk
+	onContainerDisk = func(string) bool { return false }
+	t.Cleanup(func() { onContainerDisk = old })
+	l := newTempLayout(t)
+	tv := filepath.Join(l.movies, "tv")
+	if err := os.MkdirAll(tv, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.s.Settings.Set(settings.KeyTVPath, tv, false); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(tv, "old.mkv"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(l.movies, "old.mkv"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(tv, "Show", "S01E01.mkv")
+	l.s.confirmLibraryRoot(tv, true)
+	if err := l.s.checkLibraryRoot(dest); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.s.checkLibraryRoot(filepath.Join(l.movies, "a.mkv")); err != nil {
+		t.Fatal(err)
+	}
+	// The inner drive goes away; the outer folder is untouched.
+	if err := os.Remove(filepath.Join(tv, fsinfo.RootMarker)); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.s.checkLibraryRoot(dest); !isLibraryRootError(err) {
+		t.Fatalf("a nested folder that lost its marker was allowed: %v", err)
 	}
 }

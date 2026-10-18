@@ -113,7 +113,7 @@ func (s *Server) tvWants(profiles profileSet, scope tvScope) (wants []tvWant, up
 			return nil, nil, err
 		}
 		packsOn := scope.packs && !scope.force && scope.episode == 0 && !scope.specials && s.wantsSeasonPacks(sr)
-		var searches map[int]string // when each season was last searched for a pack, read when first needed
+		var searches map[int]library.PackSearch // the searches for a pack of each season, read when first needed
 		bySeason := map[int][]library.Episode{}
 		var order []int
 		for _, ep := range eps {
@@ -158,7 +158,7 @@ func (s *Server) tvWants(profiles profileSet, scope tvScope) (wants []tvWant, up
 					var err error
 					if searches, err = s.MovieRepo.SeasonPackSearches(sr.ID); err != nil {
 						log.Printf("automation: season pack: %v", err)
-						searches = map[int]string{}
+						searches = map[int]library.PackSearch{}
 					}
 				}
 				if p, ok := s.seasonPackPlan(profile, sr, season, all, searches); ok {

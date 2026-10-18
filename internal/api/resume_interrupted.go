@@ -184,8 +184,7 @@ func (s *Server) resumeDepsFor() resumeDeps {
 			return st.watching > 0, !st.checked.IsZero()
 		},
 		Hold: func(ids []int64) {
-			held := s.pausedForStreaming()
-			s.savePausedForStreaming(append(held, ids...))
+			s.holdForStreaming(ids)
 		},
 		VPN: func(queue.Item) error {
 			_, err := s.torrentTunnel()
@@ -220,5 +219,34 @@ func (s *Server) startResumeInterrupted(items []queue.Item) {
 		if res.Resumed > 0 {
 			_ = s.QueueRepo.LogActivity(0, "resumed", fmt.Sprintf("Mediarium was restarted, so %d of the downloads that were running carried on by themselves.", res.Resumed))
 		}
+		// The ones that could not carry on stay paused: say so, as the
+		// start-up check does when the feature is switched off.
+		skip := map[int64]bool{}
+		if res.Held > 0 {
+			for _, id := range s.pausedForStreaming() {
+				skip[id] = true
+			}
+		}
+		if n := stillInterrupted(s.QueueRepo.Get, items, skip); n > 0 {
+			_ = s.QueueRepo.LogActivity(0, "paused", fmt.Sprintf("Mediarium was restarted, so %d of the downloads that were running could not carry on by themselves and are paused. Press Resume in Activity to carry on.", n))
+		}
 	}()
+}
+
+// stillInterrupted counts the items that are still paused because of the
+// restart and that nobody has dealt with: not resumed, not paused or removed by
+// a person since, and not in skip (held back while someone watches, which has
+// its own way back).
+func stillInterrupted(get func(id int64) (queue.Item, error), items []queue.Item, skip map[int64]bool) int {
+	n := 0
+	for _, it := range items {
+		if skip[it.ID] {
+			continue
+		}
+		cur, err := get(it.ID)
+		if err == nil && cur.Status == queue.StatusPaused && cur.Interrupted {
+			n++
+		}
+	}
+	return n
 }

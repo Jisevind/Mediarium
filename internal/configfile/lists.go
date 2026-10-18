@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -281,7 +282,7 @@ func diffItem(ls ListSection, label string, have, want map[string]any) ([]Change
 				body["settings"] = sub
 			}
 		case ls.Name == "indexers" && k == "priority":
-			if !same(have[k], w) {
+			if !same(have[k], priorityNumber(w)) {
 				changes = append(changes, Change{Section: label, Key: k, Have: show(have[k]), Want: show(w)})
 				// A number from 1 to 50, or one of the old words; the server
 				// checks it.
@@ -295,6 +296,30 @@ func diffItem(ls ListSection, label string, have, want map[string]any) ([]Change
 		}
 	}
 	return changes, body, prio
+}
+
+// priorityNumber turns an indexer priority as a file may write it (one of the
+// old words, or a number in quotes) into the number the server stores, so a
+// file that says "preferred" is not a change for an indexer already at 10.
+// Anything else comes back as it is; the server checks it.
+func priorityNumber(v any) any {
+	s, ok := v.(string)
+	if !ok {
+		return v
+	}
+	s = strings.ToLower(strings.TrimSpace(s))
+	switch strings.NewReplacer("_", " ", "-", " ").Replace(s) {
+	case "preferred":
+		return 10
+	case "normal":
+		return 25
+	case "last resort", "last", "lastresort":
+		return 40
+	}
+	if n, err := strconv.Atoi(s); err == nil {
+		return n
+	}
+	return v
 }
 
 // fixed reports whether k is a value an existing item can't have changed:

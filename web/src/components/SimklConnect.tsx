@@ -18,16 +18,28 @@ export default function SimklConnect({ hasClientId, onChanged }: { hasClientId: 
   const [error, setError] = useState('')
   const stopPoll = useRef<() => void>(() => undefined)
 
+  const gone = useRef(false)
+
   useEffect(() => {
     api.simklStatus().then(setSt).catch(() => setSt({ connected: false, unreadable: false, hasClientId }))
-    return () => stopPoll.current()
   }, [hasClientId])
+
+  // The code is only waited for while this card is on screen. (Not tied to
+  // hasClientId: changing that must not stop the wait and leave the code up.)
+  useEffect(() => {
+    gone.current = false
+    return () => {
+      gone.current = true
+      stopPoll.current()
+    }
+  }, [])
 
   async function connect() {
     setError('')
     setBusy(true)
     try {
       const p = await api.simklStartPin()
+      if (gone.current) return
       setPin({ code: p.code, url: p.url })
       stopPoll.current()
       stopPoll.current = pollPin({

@@ -12,3 +12,12 @@ export function filterIndexers(list: IndexerConfig[], query: string): IndexerCon
   if (!q) return list
   return list.filter((i) => i.name.toLowerCase().includes(q) || i.baseUrl.toLowerCase().includes(q))
 }
+
+// The filter box only shows above this many indexers.
+export const FILTER_FROM = 8
+
+// What the list shows. With few indexers the box is hidden, so a word typed
+// earlier (before indexers were removed) must not keep hiding them.
+export function visibleIndexers(list: IndexerConfig[], query: string): IndexerConfig[] {
+  return list.length > FILTER_FROM ? filterIndexers(list, query) : list
+}

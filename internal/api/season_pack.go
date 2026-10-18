@@ -28,7 +28,21 @@ const (
 	// season counts as ended: packs usually show up a day or two after the
 	// finale, and searching on the day itself would only use up the weekly try.
 	seasonPackGraceDays = 2
+	// seasonPackMaxTries is how many searches in a row may find no pack before
+	// the season is left alone: until an episode is added to it, a pack
+	// setting changes, or seasonPackGiveUp has passed since the last search.
+	seasonPackMaxTries = 6
+	seasonPackGiveUp   = library.SeasonPackGiveUpDays * 24 * time.Hour
 )
+
+// packHistory is what is known of the earlier searches for a pack of one
+// season: when it was last searched for, how many searches in a row found no
+// pack, and how many episodes the season had then.
+type packHistory struct {
+	at       time.Time
+	tries    int
+	episodes int
+}
 
 // seasonPackDefault is the switch in Settings (off by default).
 func (s *Server) seasonPackDefault() bool { return s.settingOn(settings.KeySeasonPacks, false) }
@@ -80,19 +94,35 @@ type packPlan struct {
 	// over is set when no episode is missing, so the pack is only wanted if it
 	// is an upgrade over the lowest of the episodes that could be upgraded.
 	over *upgradeBase
+	// episodes is how many episodes the season has, remembered with the search.
+	episodes int
 }
 
 // planSeasonPack decides whether to look for a pack of one season of a show,
 // and what it has to beat. eps are all the episodes of the season. It returns
 // false when the season has not ended, when it is already covered by a pack
 // (or an episode is being downloaded), when nothing in it would gain from a
-// pack, or when it was searched for less than seasonPackRetry ago.
-func planSeasonPack(profile quality.Profile, sr library.Series, eps []library.Episode, status string, lastSearch time.Time, now time.Time) (packPlan, bool) {
+// pack, when it was searched for less than seasonPackRetry ago, or when
+// seasonPackMaxTries searches in a row found no pack and nothing has changed
+// since (no episode added, less than seasonPackGiveUp since the last search).
+func planSeasonPack(profile quality.Profile, sr library.Series, eps []library.Episode, status string, last packHistory, now time.Time) (packPlan, bool) {
+	plan, ok := planSeasonPackFor(profile, sr, eps, status, last, now)
+	plan.episodes = len(eps)
+	return plan, ok
+}
+
+func planSeasonPackFor(profile quality.Profile, sr library.Series, eps []library.Episode, status string, last packHistory, now time.Time) (packPlan, bool) {
 	if !seasonEnded(eps, status, now) {
 		return packPlan{}, false
 	}
-	if !lastSearch.IsZero() && now.Sub(lastSearch) < seasonPackRetry {
-		return packPlan{}, false
+	if !last.at.IsZero() {
+		since := now.Sub(last.at)
+		if since < seasonPackRetry {
+			return packPlan{}, false
+		}
+		if last.tries >= seasonPackMaxTries && last.episodes == len(eps) && since < seasonPackGiveUp {
+			return packPlan{}, false
+		}
 	}
 	today := now.UTC().Format("2006-01-02")
 	missing := 0
@@ -192,11 +222,13 @@ func (s *Server) handleSetSeriesSeasonPack(w http.ResponseWriter, r *http.Reques
 
 // seasonPackPlan is planSeasonPack for a season of a show, with the time of the
 // last search read from searches (when each season was last searched for a
-// pack, RFC 3339). It is called by tvWants, which has the episodes at hand.
-func (s *Server) seasonPackPlan(profile quality.Profile, sr library.Series, season int, eps []library.Episode, searches map[int]string) (packPlan, bool) {
-	var last time.Time
-	if at, err := time.Parse(time.RFC3339, searches[season]); err == nil {
-		last = at
+// pack). It is called by tvWants, which has the episodes at hand.
+func (s *Server) seasonPackPlan(profile quality.Profile, sr library.Series, season int, eps []library.Episode, searches map[int]library.PackSearch) (packPlan, bool) {
+	var last packHistory
+	if p, ok := searches[season]; ok {
+		if at, err := time.Parse(time.RFC3339, p.At); err == nil {
+			last = packHistory{at: at, tries: p.Tries, episodes: p.Episodes}
+		}
 	}
 	return planSeasonPack(profile, sr, eps, sr.TMDBStatus, last, time.Now())
 }
@@ -211,13 +243,19 @@ func (s *Server) trySeasonPack(w tvWant, search func() ([]indexers.Result, bool)
 	if !searched {
 		return false
 	}
-	if err := s.MovieRepo.NoteSeasonPackSearch(w.series.ID, w.season, time.Now().UTC().Format(time.RFC3339)); err != nil {
-		log.Printf("automation: season pack: %v", err)
-	}
 	_ = s.QueueRepo.LogSeriesActivity(w.series.ID, "searching", fmt.Sprintf("Season %d has ended: looking for a season pack", w.season))
+	// The try is remembered whatever comes of it; searches in a row that
+	// found no pack are counted, and a season that keeps finding none is
+	// given up on (see planSeasonPack).
+	defer func() {
+		if err := s.MovieRepo.NoteSeasonPackSearch(w.series.ID, w.season, time.Now().UTC().Format(time.RFC3339), w.pack.episodes, grabbed); err != nil {
+			log.Printf("automation: season pack: %v", err)
+		}
+	}()
 	best := pickSeasonPack(results, w.series, w.season, w.profile, *w.pack, s.releaseMapper(w.series))
 	if best == nil {
 		return false
 	}
-	return grab(best)
+	grabbed = grab(best)
+	return grabbed
 }

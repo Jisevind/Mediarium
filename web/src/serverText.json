@@ -529,6 +529,7 @@
  "Mediarium was restarted by {0} with automation paused.",
  "Mediarium was restarted by {0}.",
  "Mediarium was restarted, so {0} of the downloads that were running carried on by themselves.",
+ "Mediarium was restarted, so {0} of the downloads that were running could not carry on by themselves and are paused. Press Resume in Activity to carry on.",
  "Mediarium was restarted, so {0} that was downloading is now paused. Press Resume in Activity to carry on.",
  "Mediarium was shut down by {0}.",
  "Mediarium {0} was installed by {1} ({2}, checksum {3}). It restarts to use it.",

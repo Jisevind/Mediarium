@@ -74,6 +74,19 @@ func (f *fakeResume) deps() resumeDeps {
 	}
 }
 
+func TestStillInterruptedCountsOnlyWhatIsLeftForThePerson(t *testing.T) {
+	f := &fakeResume{items: map[int64]queue.Item{
+		1: paused(1, queue.ProtocolUsenet, true),  // could not be resumed: waits for a person
+		2: paused(2, queue.ProtocolUsenet, false), // the person paused it themselves
+		3: {ID: 3, Status: queue.StatusDownloading},
+		4: paused(4, queue.ProtocolUsenet, true), // held back while someone watches
+	}}
+	items := []queue.Item{{ID: 1}, {ID: 2}, {ID: 3}, {ID: 4}, {ID: 5}}
+	if got := stillInterrupted(f.deps().Get, items, map[int64]bool{4: true}); got != 1 {
+		t.Fatalf("stillInterrupted = %d, want 1", got)
+	}
+}
+
 func paused(id int64, p queue.Protocol, interrupted bool) queue.Item {
 	return queue.Item{ID: id, Protocol: p, Status: queue.StatusPaused, Interrupted: interrupted}
 }

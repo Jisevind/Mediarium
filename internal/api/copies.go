@@ -74,7 +74,7 @@ func (s *Server) handleListMovieCopies(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	out := copiesAnswer{Folder: s.movieCopiesRoot(), Items: []copyPayload{}}
+	out := copiesAnswer{Folder: folderShown(r, []string{s.movieCopiesRoot()}, s.movieCopiesRoot()), Items: []copyPayload{}}
 	out.MainProfileID = profiles.resolve(main.ProfileID).ID
 	now := time.Now()
 	for _, c := range copies {
@@ -112,7 +112,7 @@ func (s *Server) handleListSeriesCopies(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	out := copiesAnswer{Folder: s.tvCopiesRoot(), Items: []copyPayload{}}
+	out := copiesAnswer{Folder: folderShown(r, []string{s.tvCopiesRoot()}, s.tvCopiesRoot()), Items: []copyPayload{}}
 	out.MainProfileID = profiles.resolveTV(main.ProfileID).ID
 	for _, c := range copies {
 		out.Items = append(out.Items, copyPayload{

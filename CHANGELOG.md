@@ -8,8 +8,36 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.2.2] - 2026-10-18
+
+In short: a tidier indexer page and a round of fixes from a full check of the 3.2 changes.
+- The indexer list is sorted by priority, in two columns, and the Add card stays in view.
+- The problem report form tells you when a newer version is out, and an indexer error that an update fixed says so.
+- Members no longer see server folder paths, a disconnected library folder is better protected, and settings save all or nothing.
+- Fixes for rescan, same-name shows, season packs and resuming downloads after a restart.
+
 ### Changed
 - The indexer list is sorted by priority (lowest number first) and shown as compact cards in two columns, the Add card stays in view while you scroll, and a filter box appears when you have more than eight indexers. Asked for by SanketBaraiya on GitHub, #80.
+
+### Added
+- The problem report form tells you when a newer version is out (it says which version you are on and which is newest, and that many problems are fixed by updating) before you send it, and says to leave an email or GitHub name if you would like an answer.
+- An indexer that shows a known error from an older version says which version fixed it and to update and press Try again.
+
+### Fixed
+- Shows with the same name: a show you are searching for (monitored) now always gets the releases without a country tag before one you are not searching for. The American-first rule only decides between shows that are all monitored (or all unmonitored).
+- Rescan files on a show: when the show's folder also holds files of other shows, a file is only given to this show when the title in its name is the show's. Files named for another show stay where they are and are listed as not matched.
+- Rescan files on a show: a smaller file for two episodes that you added by hand is no longer dropped as a copy of a bigger file that an episode already has.
+- Season packs: a season that keeps finding no pack is searched for six times (once a week) and then left alone until an episode is added to it, you change the season pack setting, or 60 days have passed.
+- Pause while streaming: the list of paused downloads can no longer lose entries when the restart resume and the stream check change it at the same time.
+- Settings > Downloading: the download client card keeps what you typed when it reloads because another card changed, and says so when its settings can't be loaded.
+- Members no longer see server folder paths in the downloads list (failed-import messages, conflict paths) or the second-copies folder.
+- Imports into a library folder that sits inside another library folder are now checked against that inner folder's own marker.
+- Season packs and the resume-interrupted option are now saved together with the rest of a settings update, so a failed save no longer leaves them half-changed.
+- When a restart interrupted downloads that could not carry on by themselves, Activity now says so and that they stay paused.
+- A settings file that names an indexer priority with an old word ("preferred", "normal", "last resort") or a number in quotes no longer shows a change on every check.
+- Simkl connect: the "waiting for the code" wait is no longer cut short when the client ID box changes, and it stops if you leave the page.
+- Person page: moving from one person to another can no longer show the previous person's details.
+- Settings > Indexers: a leftover filter word can no longer hide a short indexer list.
 
 ## [3.2.1] - 2026-10-18
 

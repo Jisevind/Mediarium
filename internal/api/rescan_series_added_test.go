@@ -148,6 +148,9 @@ func TestRescanShowLeavesOtherTitlesFilesAlone(t *testing.T) {
 	if err := l.server.TestExec(`UPDATE episodes SET status = 'missing', file_path = NULL WHERE series_id = ? AND season = 2`, showID); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.Remove(l.ep2); err != nil { // the fixture's own file for S02E01
+		t.Fatal(err)
+	}
 	file := filepath.Join(l.tv, "Fixture Show", "Fixture Show - S02E01.mkv")
 	putFile(t, file, "video")
 	if err := l.server.TestExec(`UPDATE movies SET file_path = ? WHERE id = ?`, file, int64(l.movieID)); err != nil {

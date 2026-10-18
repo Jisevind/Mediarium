@@ -10,6 +10,14 @@ export interface ReleaseNotes {
 
 export const WHATS_NEW: ReleaseNotes[] = [
   {
+    version: '3.2.2',
+    items: [
+      t("The indexer list is sorted by priority, in two columns, with a filter box when you have many."),
+      t("The problem report form tells you when a newer version is out, so you can update first."),
+      t("Members no longer see server folder paths, and more checks keep a disconnected library drive from being written into."),
+    ],
+  },
+  {
     version: '3.2.1',
     items: [
       t("Indexers have a priority from 1 to 50, like Prowlarr, and Knaben is a built-in site."),

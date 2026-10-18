@@ -24,7 +24,9 @@ const maxNotMatchedListed = 10
 // deleted, no download is queued and an episode's monitored state stays as it
 // is. A file an episode of this show already has, a file that belongs to
 // another title, a file that a link leads out of the library folders with and
-// an episode that still has its own file are all left alone.
+// an episode that still has its own file are all left alone. So is a file
+// whose name carries another show's title (the folder may be shared with
+// other shows); it is listed as not matched.
 func (s *Server) attachHandAddedEpisodes(sr library.Series, rep *rescanReport) {
 	eps, err := s.MovieRepo.ListEpisodes(sr.ID)
 	if err != nil {
@@ -50,19 +52,26 @@ func (s *Server) attachHandAddedEpisodes(sr library.Series, rep *rescanReport) {
 	if root == "" || !libraryAvailable(root) || filepath.Clean(root) == filepath.Clean(folder) || !s.insideLibrary(folder) {
 		return
 	}
-	files, skipped, err := libimport.ScanSeriesFolder(folder)
+	// Files the show or another title already has, and files named for another
+	// show, take no part in removing duplicates, so a hand-added file for two
+	// episodes is not dropped as a copy of a bigger file that is somebody
+	// else's.
+	var taken map[string]bool
+	ours := s.showFileOwner(sr, folder, haveFiles)
+	files, skipped, err := libimport.ScanSeriesFolderSkipping(folder, func(all []string) func(libimport.File) bool {
+		taken = s.filesOfOtherTitles(all, sr.ID, 0)
+		return func(f libimport.File) bool {
+			clean := filepath.Clean(f.Path)
+			return known[clean] || taken[clean] || !ours(f)
+		}
+	})
 	if err != nil {
 		slog.Info("rescan: couldn't read a show's folder", "series", sr.Title, "folder", folder, "err", err)
 		return
 	}
-	paths := make([]string, len(files))
-	for i, f := range files {
-		paths[i] = f.Path
+	if taken == nil {
+		taken = map[string]bool{}
 	}
-	for _, line := range skipped {
-		paths = append(paths, skippedPath(line))
-	}
-	taken := s.filesOfOtherTitles(paths, sr.ID, 0)
 	place := library.ImportPlacer(eps, sr.SeriesType == library.SeriesAnime, s.importMaps(sr), importFilesOf(files))
 
 	var notMatched []string
@@ -91,6 +100,11 @@ func (s *Server) attachHandAddedEpisodes(sr library.Series, rep *rescanReport) {
 	for _, f := range files {
 		clean := filepath.Clean(f.Path)
 		if known[clean] || taken[clean] || !s.insideLibrary(f.Path) {
+			continue
+		}
+		// A shared folder: a file named for another show is not this show's.
+		if !ours(f) {
+			notMatched = append(notMatched, filepath.Base(f.Path))
 			continue
 		}
 		season, numbers, ok := place(library.ImportFile{Path: f.Path, Quality: f.Quality, Season: f.Season, Episodes: f.Episodes, Absolute: f.Absolute, AirDate: f.AirDate, DailyPart: f.DailyPart})

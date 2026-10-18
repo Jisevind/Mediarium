@@ -11,7 +11,7 @@ import { FieldError, FormProblem, useValidation } from '../../useValidation'
 import { url as urlCheck } from '../../validate'
 import { t, tx } from '../../i18n'
 import TipLabel from '../../components/TipLabel'
-import { filterIndexers, sortIndexers } from './indexerOrder'
+import { FILTER_FROM, sortIndexers, visibleIndexers } from './indexerOrder'
 
 // Indexers: search services for releases. One form adds either kind (Usenet or
 // torrent); everything you have added is listed together on the right.
@@ -49,7 +49,7 @@ export default function IndexerSettings() {
   // Blank is fine: it turns the helper off (or falls back to the built-in one).
   const v = useValidation({ flare: urlCheck(flare, { requireScheme: true, example: 'http://flaresolverr:8191' }) })
 
-  const shown = useMemo(() => (list ? filterIndexers(list, query) : []), [list, query])
+  const shown = useMemo(() => (list ? visibleIndexers(list, query) : []), [list, query])
 
   const reload = useCallback(() => {
     // A refresh that fails keeps what is showing instead of claiming there are none.
@@ -125,7 +125,7 @@ export default function IndexerSettings() {
         {list && list.length === 0 && <p style={{ margin: 0, color: 'var(--text-dim)' }}>{t('None yet. Pick a site from the list on the left, or paste a link.')}</p>}
         {list && list.length > 1 && (
           <div className="indexer-toolbar">
-            {list.length > 8 && <input type="search" className="indexer-filter" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('Filter by name')} aria-label={t('Filter by name')} />}
+            {list.length > FILTER_FROM && <input type="search" className="indexer-filter" value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('Filter by name')} aria-label={t('Filter by name')} />}
             <button className="btn-sm" disabled={testingAll} onClick={() => void testAll()}>
               {testingAll ? t('Testing…') : t('Test all')}
             </button>

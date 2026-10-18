@@ -143,7 +143,20 @@ func differentShows(rows []library.Series) bool {
 }
 
 // sameNameWinnerID picks the TMDB id of the show an untagged release goes to.
+// A monitored show is chosen before an unmonitored one, so a monitored show
+// never gives way to a show that is not searched for; the American one, then
+// the one added first, decides among the rest (among all of them when none is
+// monitored).
 func sameNameWinnerID(rows []library.Series) int {
+	var monitored []library.Series
+	for _, r := range rows {
+		if r.Monitored {
+			monitored = append(monitored, r)
+		}
+	}
+	if len(monitored) > 0 {
+		rows = monitored
+	}
 	best := rows[0]
 	for _, r := range rows[1:] {
 		bu, ru := hasCountry(best.OriginCountry, "US"), hasCountry(r.OriginCountry, "US")

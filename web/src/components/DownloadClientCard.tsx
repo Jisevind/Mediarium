@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, TORRENT_ROUTE_EVENT, type DownloadClientInput, type DownloadClientKind, type DownloadClientSettings } from '../api'
 import { t } from '../i18n'
 import Icon from './Icon'
 import { useToast } from './Toast'
 import TipLabel from './TipLabel'
+import { reloadForm } from './downloadClientForm'
 
 const LABEL: Record<Exclude<DownloadClientKind, ''>, string> = {
   qbittorrent: 'qBittorrent',
@@ -57,14 +58,22 @@ export default function DownloadClientCard() {
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState<{ ok: boolean; version?: string; error?: string } | null>(null)
 
+  const [loadFailed, setLoadFailed] = useState(false)
+  // The saved copy the form was last in step with, so a reload keeps what the
+  // person typed and did not save.
+  const savedRef = useRef<DownloadClientSettings | null>(null)
+
   const load = useCallback(() => {
     api
       .downloadClient()
       .then((d) => {
+        const was = savedRef.current ? toInput(savedRef.current) : blank
+        savedRef.current = d
         setSaved(d)
-        setForm(toInput(d))
+        setForm((f) => reloadForm(f, was, toInput(d)))
+        setLoadFailed(false)
       })
-      .catch(() => undefined)
+      .catch(() => setLoadFailed(true))
   }, [])
   useEffect(load, [load])
   useEffect(() => {
@@ -98,6 +107,7 @@ export default function DownloadClientCard() {
     setBusy(true)
     try {
       const d = await api.saveDownloadClient(form)
+      savedRef.current = d
       setSaved(d)
       setForm(toInput(d))
       window.dispatchEvent(new Event(TORRENT_ROUTE_EVENT))
@@ -217,6 +227,11 @@ export default function DownloadClientCard() {
           {t('Save')}
         </button>
       </div>
+      {loadFailed && (
+        <div className="indexer-result bad" role="alert">
+          <Icon name="warning" size={14} /> {t("Couldn't load the download client settings. Try reloading the page.")}
+        </div>
+      )}
       {result && (
         <div className={`indexer-result ${result.ok ? 'ok' : 'bad'}`}>
           <Icon name={result.ok ? 'check' : 'warning'} size={14} /> {result.ok ? t('Connected to {name} {version}.', { name, version: result.version ?? '' }) : result.error}

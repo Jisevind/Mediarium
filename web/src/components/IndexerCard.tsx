@@ -10,6 +10,7 @@ import { apiKey as apiKeyCheck, firstError, maxLength, numberRange, required, ur
 import { plural, t, st } from '../i18n'
 import { untilText } from '../delayText'
 import TipLabel from './TipLabel'
+import KnownFixHint from './KnownFixHint'
 
 // One saved indexer: name, type and address on top, actions underneath, the
 // last test result on its own line, and an inline form to edit it.
@@ -124,6 +125,7 @@ export default function IndexerCard({ indexer: i, onChanged, onToggle, onRemove 
               </TipLabel>
             </small>
           )}
+          {paused && <KnownFixHint error={i.pausedWhy} />}
           {!!i.dailyLimit && (
             <small className={`indexer-health ${i.limitNote ? 'bad' : 'ok'}`}>
               {i.limitNote ? st(i.limitNote) : t('{used} of {limit} requests today', { used: i.requestsToday ?? 0, limit: i.dailyLimit })}
@@ -135,6 +137,7 @@ export default function IndexerCard({ indexer: i, onChanged, onToggle, onRemove 
               {i.lastTestError ? t('Last test failed {when}: {error}', { when: timeAgo(i.lastTestAt), error: friendlyIndexerError(i.lastTestError) }) : t('Last test passed {when}', { when: timeAgo(i.lastTestAt) })}
             </small>
           )}
+          {!result && !!i.lastTestAt && <KnownFixHint error={i.lastTestError} />}
         </div>
         <label className="indexer-priority">
           <TipLabel text={t('Lower number = tried first. Quality always comes first. Between two equally good releases, the one with the lower number wins.')} learnMore="indexers#priority-health-and-test-all">{t('Priority')}</TipLabel>
@@ -167,6 +170,7 @@ export default function IndexerCard({ indexer: i, onChanged, onToggle, onRemove 
       {result && (
         <div className={`indexer-result ${result.ok ? 'ok' : 'bad'}`}>
           <Icon name={result.ok ? 'check' : 'warning'} size={14} /> {st(result.message)}
+          {!result.ok && <KnownFixHint error={result.message} />}
         </div>
       )}
 

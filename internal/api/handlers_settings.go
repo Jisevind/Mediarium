@@ -814,9 +814,16 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if req.SeasonPacks != nil {
-		if err := setBool(s.Settings, settings.KeySeasonPacks, *req.SeasonPacks); err != nil {
+		changed := *req.SeasonPacks != s.seasonPackDefault()
+		if err := setBool(tx, settings.KeySeasonPacks, *req.SeasonPacks); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
+		}
+		if changed {
+			// A changed setting is a reason to look for packs again.
+			if err := s.MovieRepo.ResetSeasonPackTries(0); err != nil {
+				slog.Warn("settings: couldn't reset the season pack searches", "err", err)
+			}
 		}
 	}
 
@@ -1124,7 +1131,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		if *req.ResumeInterrupted {
 			val = "1"
 		}
-		if err := s.Settings.Set(settings.KeyResumeInterrupted, val, false); err != nil {
+		if err := tx.Set(settings.KeyResumeInterrupted, val, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}

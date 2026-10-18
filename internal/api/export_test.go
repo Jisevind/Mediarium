@@ -44,6 +44,13 @@ func (s *Server) TestWaitBackground() { s.bg.Wait() }
 // TestStreamPauseRound makes one check of the pause-while-streaming loop.
 func (s *Server) TestStreamPauseRound(ctx context.Context) { s.streamPauseRound(ctx) }
 
+// TestHoldForStreaming hands downloads to the paused-for-streaming list the way
+// a resumed-after-restart download does, TestForgetStreamPaused takes some off
+// it the way giving them back does, and TestPausedForStreaming reads it.
+func (s *Server) TestHoldForStreaming(ids []int64)   { s.holdForStreaming(ids) }
+func (s *Server) TestForgetStreamPaused(ids []int64) { s.forgetPausedForStreaming(ids) }
+func (s *Server) TestPausedForStreaming() []int64    { return s.pausedForStreaming() }
+
 // TestRunCleanup runs the clean-up as if the time were now, and
 // TestCleanupJob the automation loop's hourly clean-up check.
 func (s *Server) TestRunCleanup(now time.Time) (removed int, prunedQueue, prunedActivity int64) {
