@@ -232,6 +232,11 @@ func (s *Server) collectHealth() []healthItem {
 			"Trakt refused requests because the built-in key is shared and busy. Importing Trakt lists fails until it clears. A free personal Trakt key avoids this.",
 			"Use my own key", "/settings/lists")
 	}
+	if s.usingSharedKey(serviceSimkl) && s.Usage.Stats(serviceSimkl).LimitHits >= 1 {
+		addHealth("simkl-limit", "warn", "The shared Simkl key is at its limit",
+			"Simkl refused requests because the built-in key is shared and busy. Reading Simkl lists fails until it clears. A free personal Simkl key avoids this.",
+			"Use my own key", "/settings/lists")
+	}
 	if s.subtitlesEnabled() && s.useOpenSubtitles() && s.usingSharedKey(serviceOpenSubtitles) {
 		if s.Usage.Stats(serviceOpenSubtitles).LimitHits >= 1 {
 			addHealth("opensubtitles-limit", "warn", "The shared OpenSubtitles key is at its limit",
@@ -242,6 +247,15 @@ func (s *Server) collectHealth() []healthItem {
 				fmt.Sprintf("%d of %d subtitle downloads used today. After that they wait until tomorrow. A free personal OpenSubtitles key gives you your own allowance.", st.Used, st.Limit),
 				"Use my own key", "/settings/subtitles")
 		}
+	}
+
+	// Simkl lists need the account connected; say so only when a list is waiting for it.
+	var simklLists int
+	_ = s.db.QueryRow(`SELECT COUNT(*) FROM import_lists WHERE source = ? AND enabled = 1`, listSimkl).Scan(&simklLists)
+	if st := s.simklState(); simklLists > 0 && (!st.Connected || !st.HasClientID) && !st.Unreadable {
+		addHealth("simkl-off", "warn", "Simkl isn't connected",
+			"A Simkl list is set up but no Simkl account is connected, so it can't be read. Connect your account to start it again.",
+			"Connect Simkl", "/settings/lists")
 	}
 
 	if !s.Trakt().HasClientID() {

@@ -50,10 +50,11 @@ var defaultTMDBAPIKey string
 // up for TMDB, OpenSubtitles or Trakt themselves. Builds from source leave
 // them empty and the app asks for them instead.
 //
-//	go build -ldflags="-X main.defaultOpenSubtitlesAPIKey=... -X main.defaultTraktClientID=..." ./cmd/app
+//	go build -ldflags="-X main.defaultOpenSubtitlesAPIKey=... -X main.defaultTraktClientID=... -X main.defaultSimklClientID=..." ./cmd/app
 var (
 	defaultOpenSubtitlesAPIKey string
 	defaultTraktClientID       string
+	defaultSimklClientID       string
 )
 
 // version identifies the running build (the "version-pinned Docker tags,
@@ -216,6 +217,7 @@ func run() error {
 		TMDB:          defaultTMDBAPIKey,
 		OpenSubtitles: defaultOpenSubtitlesAPIKey,
 		TraktClientID: defaultTraktClientID,
+		SimklClientID: defaultSimklClientID,
 	})
 	if err := server.SetUpdatePublicKey(updatePublicKey); err != nil {
 		log.Printf("warning: %v; installing updates from GitHub is switched off", err)

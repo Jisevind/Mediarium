@@ -265,6 +265,11 @@ func (s *Server) validateSettings(req *settingsPayload) string {
 			return m
 		}
 	}
+	if req.SimklClientID != nil {
+		if m := checkAPIKey(*req.SimklClientID); m != "" {
+			return m
+		}
+	}
 	if req.OpenSubtitlesUsername != nil {
 		u := strings.TrimSpace(*req.OpenSubtitlesUsername)
 		if m := firstProblem(checkMaxLen(u, "The OpenSubtitles username", maxServiceAccountLn), checkNoControl(u, "The OpenSubtitles username")); m != "" {

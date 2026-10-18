@@ -8,6 +8,15 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+### Added
+- **Simkl lists**: import your own Simkl lists (Plan to watch, Watching, Completed, On hold, Dropped; movies, shows and anime). Connect your Simkl account with a short code at simkl.com/pin under Settings > Info, lists and subtitles > Import lists, then add a Simkl list. An idea from nexus4004 on GitHub, through the idea form.
+- **Knaben** is a built-in torrent site now: add it from Settings > Indexers & Search > Torrent > Pick a site from the list. It's public, needs no login, and works with the VPN switch like the other sites. Asked for by SanketBaraiya on GitHub, #73.
+- **Indexer priority is a number from 1 to 50** (like Prowlarr; lower is tried first, 25 by default) instead of Preferred, Normal and Last resort. Existing indexers keep their order (Preferred became 10, Normal 25, Last resort 40), the Prowlarr import carries its numbers over, and the settings file and the API still accept the three old words. Thanks to SanketBaraiya on GitHub, #80.
+
+### Fixed
+- The e-reader catalogue (OPDS) and the Kobo sync no longer load and sort the whole book list for every request. Built pages are kept in memory and rebuilt only when a book is added, removed or changed; saving a reading place does not count. Pages also carry an ETag, so an app that sends If-None-Match gets a 304.
+- On a phone, long button labels and hints in Settings (Russian, German, French, Polish) now wrap instead of pushing the page wider than the screen.
+
 ## [3.2.0] - 2026-10-18
 
 In short: a feature release, built mostly from your reports and ideas.

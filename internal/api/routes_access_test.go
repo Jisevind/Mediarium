@@ -207,6 +207,7 @@ var mustBeAdmin = []string{
 	"POST /api/movies/{id}/copies", "POST /api/series/{id}/copies",
 	"GET /api/import-lists", "POST /api/import-lists", "POST /api/import-lists/preview", "PUT /api/import-lists/{id}", "DELETE /api/import-lists/{id}",
 	"PUT /api/import-lists/{id}/enabled", "POST /api/import-lists/{id}/run", "POST /api/import-lists/{id}/forget", "POST /api/import-lists/plex/{userId}/run",
+	"GET /api/settings/simkl", "DELETE /api/settings/simkl", "POST /api/settings/simkl/pin", "GET /api/settings/simkl/pin/{code}",
 	"GET /api/requests/settings", "PUT /api/requests/settings", "POST /api/issues/{id}/resolve", "POST /api/issues/{id}/reopen", "DELETE /api/issues/{id}",
 	"GET /api/system/backups/cloud", "PUT /api/system/backups/cloud", "POST /api/system/backups/cloud/test", "POST /api/system/backups/cloud/upload", "GET /api/system/backups/cloud/list",
 	"GET /api/usage-stats", "PUT /api/usage-stats", "POST /api/usage-stats/reset-id",

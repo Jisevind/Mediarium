@@ -612,7 +612,7 @@ What you get (all gauges, names start with `mediarium_`):
 | `indexer_up` | `indexer` | 1 if the last check of the indexer worked, 0 if it failed |
 | `usenet_server_up` | `server` | The same for Usenet logins |
 | `indexers` | `state` (enabled, disabled) | Indexers set up |
-| `service_limit_hits` | `service` (tmdb, trakt, opensubtitles) | Times a service said "too many requests" in the last 24 hours |
+| `service_limit_hits` | `service` (tmdb, trakt, simkl, opensubtitles) | Times a service said "too many requests" in the last 24 hours |
 
 `indexer_up` and `usenet_server_up` come from the [connection watch](./notifications.md#connection-watch), so they appear after its first check and stay missing while that is switched off. The wanted counts and the health numbers are worked out at most every 30 seconds, so a faster scrape does not make Mediarium work harder. The older names `library_movies_total` and `queue_items_total` are unchanged.
 
@@ -711,7 +711,7 @@ docker compose up -d --build
 
 [`docker/docker-compose.dev.yml`](../docker/docker-compose.dev.yml) builds the image from the source (the frontend and the Go program are built inside Docker, so you need nothing else installed) and uses `config`, `downloads`, `movies`, `tv` and `music` folders in the top folder of the repository (with commented lines for ebooks and audiobooks folders). The `.env` file (copied from `docker/.env.example`) points Docker at that file and sets the port and other values. Or build the image alone with `docker build -t mediarium:local .` and use `image: mediarium:local` in your compose file.
 
-Optional build arguments `TMDB_API_KEY`, `OPENSUBTITLES_API_KEY` and `TRAKT_CLIENT_ID` build in app-wide keys; without them the wizard asks for your own. Coding conventions and running the tests: [CONTRIBUTING.md](../.github/CONTRIBUTING.md).
+Optional build arguments `TMDB_API_KEY`, `OPENSUBTITLES_API_KEY`, `TRAKT_CLIENT_ID` and `SIMKL_CLIENT_ID` build in app-wide keys; without them the wizard asks for your own. Coding conventions and running the tests: [CONTRIBUTING.md](../.github/CONTRIBUTING.md).
 
 ---
 

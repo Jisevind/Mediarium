@@ -193,6 +193,13 @@
   .ep-table th, .ep-table td { white-space: nowrap; }
   /* a long label (Russian, German, Polish) wraps inside a full-width button instead of running off the card */
   button.btn-with-icon, .ms-plex-btn { max-width: 100%; white-space: normal; text-align: center; }
+  /* any label, in any language, wraps inside the screen: buttons, form controls and flex or grid children can shrink */
+  main.content :is(button, .btn, a.btn, label, .chip, .badge, .pill) { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+  main.content :is(input, select, textarea) { max-width: 100%; }
+  main.content :is(.card, fieldset, li, .credit-top, .row, .field) > :not(button, input, select, a) { min-width: 0; }
+  /* a one-column grid written inline gets a column that may shrink below its widest child (a select with long options) */
+  main.content :is(label, div, section)[style*="display: grid"]:not([style*="grid-template"]) { grid-template-columns: minmax(0, 1fr); }
+  main.content :is(.field-hint, .field-note, .field-help, small, p, li) { overflow-wrap: anywhere; }
   .lib-list th { white-space: nowrap; }
 }
 

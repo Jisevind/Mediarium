@@ -33,7 +33,10 @@ func TestRSSAdvice(t *testing.T) {
 		{name: "limit 25: first run goes, every 3 hours", setLimit: 25, calls: 1, wantLimit: true, wantAllow: true, wantEvery: 3 * time.Hour},
 		{name: "limit 25 with movies and TV: 4 runs a day", setLimit: 25, calls: 2, wantLimit: true, wantAllow: true, wantEvery: 6 * time.Hour},
 		{name: "too soon after the last run", setLimit: 25, calls: 1, wantLimit: true, wantEvery: 3 * time.Hour,
-			steps: func(c *fakeClock, tr *indexers.Tracker) { tr.NoteRSS(id, 1); c.t = c.t.Add(2*time.Hour + 59*time.Minute) }},
+			steps: func(c *fakeClock, tr *indexers.Tracker) {
+				tr.NoteRSS(id, 1)
+				c.t = c.t.Add(2*time.Hour + 59*time.Minute)
+			}},
 		{name: "after the gap it goes again", setLimit: 25, calls: 1, wantLimit: true, wantAllow: true, wantEvery: 3 * time.Hour,
 			steps: func(c *fakeClock, tr *indexers.Tracker) { tr.NoteRSS(id, 1); c.t = c.t.Add(3 * time.Hour) }},
 		{name: "the day's RSS budget is spent", setLimit: 25, calls: 1, wantLimit: true, wantEvery: 3 * time.Hour,

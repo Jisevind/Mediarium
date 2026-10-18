@@ -225,7 +225,7 @@ func planLists(ctx context.Context, c *Client, f File) ([]listResult, []string, 
 }
 
 // diffItem lists what differs between one item and what the file wants.
-func diffItem(ls ListSection, label string, have, want map[string]any) ([]Change, map[string]any, *float64) {
+func diffItem(ls ListSection, label string, have, want map[string]any) ([]Change, map[string]any, any) {
 	var changes []Change
 	body := map[string]any{}
 	if !ls.Partial {
@@ -235,7 +235,7 @@ func diffItem(ls ListSection, label string, have, want map[string]any) ([]Change
 			}
 		}
 	}
-	var prio *float64
+	var prio any
 	keys := make([]string, 0, len(want))
 	for k := range want {
 		keys = append(keys, k)
@@ -283,12 +283,9 @@ func diffItem(ls ListSection, label string, have, want map[string]any) ([]Change
 		case ls.Name == "indexers" && k == "priority":
 			if !same(have[k], w) {
 				changes = append(changes, Change{Section: label, Key: k, Have: show(have[k]), Want: show(w)})
-				if f, ok := w.(int); ok {
-					v := float64(f)
-					prio = &v
-				} else if f, ok := w.(float64); ok {
-					prio = &f
-				}
+				// A number from 1 to 50, or one of the old words; the server
+				// checks it.
+				prio = w
 			}
 		default:
 			if hv, shown := have[k]; !shown || !same(hv, w) {
@@ -439,7 +436,7 @@ func createAction(ls ListSection, item map[string]any) func(context.Context, *Cl
 	}
 }
 
-func updateAction(ls ListSection, have, body map[string]any, prio *float64) func(context.Context, *Client) error {
+func updateAction(ls ListSection, have, body map[string]any, prio any) func(context.Context, *Client) error {
 	return func(ctx context.Context, c *Client) error {
 		id, ok := idOf(have)
 		if !ok {
@@ -456,7 +453,7 @@ func updateAction(ls ListSection, have, body map[string]any, prio *float64) func
 			}
 		}
 		if prio != nil {
-			if _, err := c.do(ctx, http.MethodPut, fmt.Sprintf("%s/%d/priority", ls.Path, id), map[string]any{"priority": *prio}); err != nil {
+			if _, err := c.do(ctx, http.MethodPut, fmt.Sprintf("%s/%d/priority", ls.Path, id), map[string]any{"priority": prio}); err != nil {
 				return fmt.Errorf("set the priority of %v: %w", have["name"], err)
 			}
 		}

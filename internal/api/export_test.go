@@ -11,6 +11,7 @@ import (
 	"github.com/rdborg/mediarium/internal/metadata"
 	"github.com/rdborg/mediarium/internal/notify"
 	"github.com/rdborg/mediarium/internal/settings"
+	"github.com/rdborg/mediarium/internal/simkl"
 	"github.com/rdborg/mediarium/internal/subtitles"
 	"github.com/rdborg/mediarium/internal/trakt"
 )
@@ -69,6 +70,14 @@ func (s *Server) TestSetTraktBaseURL(clientID, baseURL string) {
 	s.trakt = trakt.NewWithBaseURL(clientID, baseURL)
 	s.instrumentTrakt(s.trakt)
 	s.traktMu.Unlock()
+}
+
+// TestSetSimklBaseURL points the live Simkl client at a local fixture server.
+func (s *Server) TestSetSimklBaseURL(clientID, baseURL string) {
+	s.simklMu.Lock()
+	s.simkl = simkl.NewWithBaseURL(clientID, baseURL)
+	s.instrumentSimkl(s.simkl)
+	s.simklMu.Unlock()
 }
 
 func (s *Server) TestSetTMDBBaseURL(apiKey, baseURL string) {

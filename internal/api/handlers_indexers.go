@@ -33,7 +33,7 @@ type indexerPayload struct {
 	StoredSecrets []string       `json:"storedSecrets,omitempty"`
 	LastTestError string         `json:"lastTestError,omitempty"`
 	LastTestAt    string         `json:"lastTestAt,omitempty"`
-	Priority      int            `json:"priority"` // 1 preferred, 2 normal, 3 last resort
+	Priority      int            `json:"priority"` // 1 to 50, lower is tried first
 	// Back-off: set while searches skip the indexer after repeated failures.
 	Failures    int    `json:"failures,omitempty"`    // failures in a row
 	PausedUntil string `json:"pausedUntil,omitempty"` // RFC 3339; searches skip the indexer until then

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -60,8 +61,8 @@ type Instance struct {
 	// never tested); LastTestAt is when it ran.
 	LastTestError string
 	LastTestAt    time.Time
-	// Priority is how much this indexer is preferred: PriorityPreferred,
-	// PriorityNormal (the default) or PriorityLast.
+	// Priority is a number from PriorityMin to PriorityMax; a lower number is
+	// preferred (PriorityDefault when nothing was chosen).
 	Priority int
 	// RequestsPerDay is the daily limit a person set for the indexer; 0 = none
 	// set, so what the indexer itself reported (if anything) is used.
@@ -79,13 +80,55 @@ func (i *Instance) markUnreadable() {
 	i.LastTestError = i.SecretError
 }
 
-// Indexer priorities. Between two equally good releases the one from the
-// more preferred indexer is picked.
+// Indexer priorities are numbers from 1 to 50, like Prowlarr: a lower
+// number is tried and picked first. Between two equally good releases the
+// one from the lower-numbered indexer is picked.
 const (
-	PriorityPreferred = 1
-	PriorityNormal    = 2
-	PriorityLast      = 3
+	PriorityMin     = 1
+	PriorityMax     = 50
+	PriorityDefault = 25
+	// The three old levels, kept for files and scripts that still use them.
+	PriorityPreferred = 10
+	PriorityNormal    = PriorityDefault
+	PriorityLast      = 40
 )
+
+// ParsePriority reads a priority from JSON or YAML input: a whole number
+// from 1 to 50, a numeric string, or one of the old words (preferred,
+// normal, last resort). ok is false for anything else.
+func ParsePriority(v any) (int, bool) {
+	switch x := v.(type) {
+	case int:
+		return x, x >= PriorityMin && x <= PriorityMax
+	case int64:
+		return int(x), x >= PriorityMin && x <= PriorityMax
+	case float64:
+		n := int(x)
+		return n, float64(n) == x && n >= PriorityMin && n <= PriorityMax
+	case string:
+		s := strings.ToLower(strings.TrimSpace(x))
+		switch strings.NewReplacer("_", " ", "-", " ").Replace(s) {
+		case "preferred":
+			return PriorityPreferred, true
+		case "normal":
+			return PriorityNormal, true
+		case "last resort", "last", "lastresort":
+			return PriorityLast, true
+		}
+		n, err := strconv.Atoi(s)
+		return n, err == nil && n >= PriorityMin && n <= PriorityMax
+	}
+	return 0, false
+}
+
+// ClampPriority returns p, or PriorityDefault when p is outside 1 to 50
+// (nothing chosen).
+func ClampPriority(p int) int {
+	if p < PriorityMin || p > PriorityMax {
+		return PriorityDefault
+	}
+	return p
+}
 
 // IsCardigann reports whether the instance is a definition-based site.
 func (inst Instance) IsCardigann() bool { return inst.Kind == KindCardigann }
