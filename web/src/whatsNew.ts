@@ -10,6 +10,15 @@ export interface ReleaseNotes {
 
 export const WHATS_NEW: ReleaseNotes[] = [
   {
+    version: '3.2.1',
+    items: [
+      t("Indexers have a priority from 1 to 50, like Prowlarr, and Knaben is a built-in site."),
+      t("Import your Simkl lists, next to Trakt (new, not yet tried with a real account)."),
+      t("Anime numbered by TheTVDB seasons, like One Piece and Jujutsu Kaisen, is placed on the right episodes."),
+      t("The e-reader catalogue loads much faster on big libraries, and an unmounted library folder is never written into."),
+    ],
+  },
+  {
     version: '3.2.0',
     items: [
       t("Click an actor, director or writer on a movie or show page to see their photo, life and other work, and add it from there."),

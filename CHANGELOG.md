@@ -8,12 +8,21 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.2.1] - 2026-10-18
+
+In short: new indexers and lists, and fixes for what you reported after 3.2.0.
+- Indexer priority is a number from 1 to 50 like Prowlarr, Knaben is a built-in site, and Simkl lists can be imported (Simkl is new and has not been tried with a real account yet).
+- Anime numbered by TheTVDB seasons (One Piece, Jujutsu Kaisen) is placed on the right episodes, and Mazepa is selectable again.
+- The e-reader catalogue loads much faster on big libraries.
+- Better on a desktop with wide fonts, and a few more fixes below.
+
 ### Added
 - **Simkl lists**: import your own Simkl lists (Plan to watch, Watching, Completed, On hold, Dropped; movies, shows and anime). Connect your Simkl account with a short code at simkl.com/pin under Settings > Info, lists and subtitles > Import lists, then add a Simkl list. An idea from nexus4004 on GitHub, through the idea form.
 - **Knaben** is a built-in torrent site now: add it from Settings > Indexers & Search > Torrent > Pick a site from the list. It's public, needs no login, and works with the VPN switch like the other sites. Asked for by SanketBaraiya on GitHub, #73.
 - **Indexer priority is a number from 1 to 50** (like Prowlarr; lower is tried first, 25 by default) instead of Preferred, Normal and Last resort. Existing indexers keep their order (Preferred became 10, Normal 25, Last resort 40), the Prowlarr import carries its numbers over, and the settings file and the API still accept the three old words. Thanks to SanketBaraiya on GitHub, #80.
 
 ### Fixed
+- A title with a `+` or a `%` in it (`C++ Primer`) is no longer changed when Sonarr or Radarr style tools look it up through Mediarium: the search term was decoded twice.
 - Names with `&` are handled better: a folder named with an HTML-escaped `&amp;` still matches its title, a search for a title like `Law & Order` no longer misses releases because of the `&`, and the Library, Wanted and Bookshelf search boxes treat `&` and "and" as the same and ignore accents (reported by franciscojnneto on GitHub, #81; if folders with `&` still don't show up for you, send me one example).
 - Anime files named by TheTVDB season (One Piece) were placed three episodes too late because TheTVDB starts the season earlier than the movie database does. Placement now checks the episode titles in the file names, and places a file by its title when the title matches exactly one episode. The import note lists the files that were left out (reported by SanketBaraiya on GitHub, #69).
 - A site marked "Not supported yet" in the site list is checked again after an update, so one that an update made possible (like Mazepa) no longer stays grey until you press Update list (reported by Apostol6 on GitHub, #16).
