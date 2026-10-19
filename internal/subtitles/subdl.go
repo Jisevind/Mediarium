@@ -361,8 +361,13 @@ func languageBase(s string) string {
 // path itself, or the same with the download host in front.
 func downloadPath(u string) string {
 	u = strings.TrimSpace(u)
-	for _, prefix := range []string{subdlDownload, "https://subdl.com", "http://dl.subdl.com"} {
+	for _, prefix := range []string{subdlDownload, "https://subdl.com", "http://dl.subdl.com", "//dl.subdl.com"} {
 		u = strings.TrimPrefix(u, prefix)
+	}
+	// A query or a fragment is not part of the path we ask for: the download
+	// host serves the file from the path alone.
+	if i := strings.IndexAny(u, "?#"); i >= 0 {
+		u = u[:i]
 	}
 	return u
 }
@@ -535,7 +540,7 @@ func shortSample(link string) string {
 		return "nothing, the link was empty"
 	}
 	if i := strings.IndexAny(link, "?#"); i >= 0 {
-		link = link[:i]
+		link = link[:i] + " (and more after it)"
 	}
 	if len(link) > 80 {
 		link = link[:80] + "..."

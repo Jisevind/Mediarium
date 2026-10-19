@@ -8,6 +8,14 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.2.10] - 2026-10-19
+
+In short: SubDL subtitles that were found but still thrown away, and a cropped arrow on the indexer card.
+
+### Fixed
+- SubDL subtitles were still thrown away as having "no usable download link": SubDL's link carries more after the file name (a query or a fragment), which Mediarium counted as an invalid path. Only the path is used now, and the Details line says when there was more after it (reported by SanketBaraiya on GitHub, #83).
+- The little arrow that opens the reason of a failed test on an indexer card was cropped. It has room now (SanketBaraiya on GitHub, #80).
+
 ## [3.2.9] - 2026-10-19
 
 In short: a minimum number of seeders per torrent indexer, and tidier indexer cards.

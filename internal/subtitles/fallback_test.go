@@ -125,3 +125,24 @@ func TestSubDLLinkShapes(t *testing.T) {
 		t.Errorf("sample shows the query: %q", got)
 	}
 }
+
+// SubDL's "url" may carry a query or a fragment, or come with the download
+// host in front: only the path is asked for.
+func TestSubDLDownloadPathDropsQueryAndHost(t *testing.T) {
+	for in, want := range map[string]string{
+		"/subtitle/3672321-8589191.zip":                         "/subtitle/3672321-8589191.zip",
+		"/subtitle/3672321-8589191.zip?download=1&x=y":          "/subtitle/3672321-8589191.zip",
+		"/subtitle/3672321-8589191.zip#top":                     "/subtitle/3672321-8589191.zip",
+		"https://dl.subdl.com/subtitle/3672321-8589191.zip?a=b": "/subtitle/3672321-8589191.zip",
+		"//dl.subdl.com/subtitle/3672321-8589191.zip":           "/subtitle/3672321-8589191.zip",
+		"  /subtitle/3672321-8589191.zip  ":                     "/subtitle/3672321-8589191.zip",
+	} {
+		got := downloadPath(in)
+		if got != want || !ValidSubDLLink(got) {
+			t.Errorf("downloadPath(%q) = %q (valid %v), want %q", in, got, ValidSubDLLink(got), want)
+		}
+	}
+	if got := shortSample("/subtitle/1.zip?api_key=SECRET"); strings.Contains(got, "SECRET") {
+		t.Errorf("sample shows the query: %q", got)
+	}
+}
