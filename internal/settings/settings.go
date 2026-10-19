@@ -83,6 +83,7 @@ const (
 	KeyQualityProfile     = "library.quality_profile"       // legacy: an old preset key (any-1080p, ultra-hd, any); only read once to pick the initial default profile
 	KeyQualityLanguage    = "quality.language"              // the audio language wanted, as a name like "English" (the default when unset); a release clearly in another language only is not picked automatically
 	KeyInfoLanguage       = "info.language"                 // the language titles, plots, genres and posters are read in, as a TMDB tag like "de-DE" (en-US when unset); file and folder names always use the English title
+	KeyReleaseCountry     = "info.release_country"          // the country release dates are read for, as a code like "IN"; unset = the country of the info language
 	KeySubtitleAddons     = "subtitles.addons"              // subtitle add-ons (JSON list of {id, name, url}; the url can hold the person's own key for a site, so it is stored encrypted)
 	KeyDefaultSources     = "library.default_sources"       // usenet | torrent | both (default both)
 	KeySeasonPacks        = "library.season_packs"          // "1" looks for a season pack once a season has ended (a show can say otherwise for itself); unset or "0" leaves it off

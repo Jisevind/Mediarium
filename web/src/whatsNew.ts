@@ -10,6 +10,13 @@ export interface ReleaseNotes {
 
 export const WHATS_NEW: ReleaseNotes[] = [
   {
+    version: '3.2.5',
+    items: [
+      t("Pick the country for a movie's release dates under Settings > Info, lists and subtitles."),
+      t("The Indexers & Search page no longer slides one card over another when you scroll."),
+    ],
+  },
+  {
     version: '3.2.4',
     items: [
       t("An indexer's seeding rules now reach your torrent client, and the Category box stays empty when you clear it."),

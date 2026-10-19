@@ -182,6 +182,13 @@ type settingsPayload struct {
 	InfoLanguage  string              `json:"infoLanguage,omitempty"`
 	InfoLanguages []metadata.Language `json:"infoLanguages,omitempty"`
 
+	// The country release dates are read for, like "IN". "" (or unset) means
+	// the country of the info language; a pointer so "" clears it. The
+	// countries offered come with every read.
+	ReleaseCountry          *string  `json:"releaseCountry,omitempty"`
+	ReleaseCountries        []string `json:"releaseCountries,omitempty"`
+	ReleaseCountryEffective string   `json:"releaseCountryEffective,omitempty"`
+
 	// Manual-import naming-collision conflict policy.
 	ImportConflictPolicy string `json:"importConflictPolicy,omitempty"` // "skip" | "overwrite" | "overwrite_if_better" | "ask"
 
@@ -455,6 +462,9 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		QualityLanguageOnly:      &qualityLanguageOnly,
 		InfoLanguage:             s.infoLanguage(),
 		InfoLanguages:            metadata.InfoLanguages,
+		ReleaseCountry:           ptr(s.releaseCountrySetting()),
+		ReleaseCountries:         metadata.ReleaseCountries,
+		ReleaseCountryEffective:  s.releaseRegion(),
 		RequireVPNForTorrents:    &requireVPNForTorrents,
 		RouteIndexersThroughVPN:  &routeIndexersThroughVPN,
 		ImportConflictPolicy:     importConflictPolicy,
@@ -665,7 +675,15 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if req.ReleaseCountry != nil {
+		if err := tx.Set(settings.KeyReleaseCountry, strings.ToUpper(strings.TrimSpace(*req.ReleaseCountry)), false); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+
 	languagesBefore := s.audioLanguageList()
+	regionBefore := s.releaseRegion()
 	sets := []struct {
 		key, value string
 	}{
@@ -698,6 +716,14 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	// The other titles kept for each movie and show were picked for the old
 	// languages: they are picked again as titles are searched for.
+	// The calendar's saved digital dates were read for the old country.
+	tx.then(func() {
+		if s.releaseRegion() != regionBefore {
+			if err := s.MovieRepo.ClearMovieReleaseDates(); err != nil {
+				slog.Warn("settings: couldn't forget the saved release dates after the country changed", "err", err)
+			}
+		}
+	})
 	tx.then(func() {
 		if s.audioLanguageList() != languagesBefore {
 			if err := s.MovieRepo.ClearTitleNames(); err != nil {

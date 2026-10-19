@@ -636,6 +636,9 @@ export interface Settings {
   qualityLanguageOnly?: boolean // only take releases that say they are in one of those languages
   infoLanguage?: string // the TMDB language titles are read in, like "de-DE"
   infoLanguages?: { tag: string; name: string }[]
+  releaseCountry?: string // the country release dates are read for, like "IN"; "" = the country of the info language
+  releaseCountries?: string[]
+  releaseCountryEffective?: string // the country really used
   hasOpenSubtitlesApiKey?: boolean
   movieCopiesPath?: string // where second copies of movies go; "" = off
   tvCopiesPath?: string

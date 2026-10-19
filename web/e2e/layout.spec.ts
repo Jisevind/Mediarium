@@ -111,3 +111,36 @@ test('the drawer theme button, month arrows and Browse more are at least 40px on
   await expect(more).toBeVisible()
   expect((await more.boundingBox())?.height).toBeGreaterThanOrEqual(40)
 })
+
+// On Settings > Indexers & Search no card sits on top of another one, however
+// far the page is scrolled (the add card used to be sticky and slid over the
+// sections below it). Run with --project app, app-tablet or app-phone.
+test('indexers page: no card overlaps another', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('mediarium-demo', '1'))
+  await page.goto('/settings/indexers')
+  const content = page.locator('main.content')
+  await expect(content).toBeVisible()
+  await page.waitForTimeout(800)
+  const sel = '.settings-content fieldset.group, .settings-content .indexer-card'
+  const height = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, document.querySelector('main.content')!.scrollHeight))
+  for (let y = 0; y <= height; y += 400) {
+    await content.evaluate((el, top) => { el.scrollTo(0, top); window.scrollTo(0, top) }, y)
+    const clashes = await page.evaluate((s) => {
+      const els = Array.from(document.querySelectorAll(s)).filter((e) => (e as HTMLElement).offsetParent !== null)
+      const out: string[] = []
+      for (let i = 0; i < els.length; i++) {
+        for (let j = i + 1; j < els.length; j++) {
+          const a = els[i], b = els[j]
+          if (a.contains(b) || b.contains(a)) continue
+          const r = a.getBoundingClientRect(), q = b.getBoundingClientRect()
+          const w = Math.min(r.right, q.right) - Math.max(r.left, q.left)
+          const h = Math.min(r.bottom, q.bottom) - Math.max(r.top, q.top)
+          if (w > 1 && h > 1) out.push(`${a.className} / ${b.className}`)
+        }
+      }
+      const pinned = Array.from(document.querySelectorAll('.settings-content *')).filter((e) => ['sticky', 'fixed'].includes(getComputedStyle(e).position))
+      return out.concat(pinned.map((e) => `pinned: ${e.className}`))
+    }, sel)
+    expect(clashes, `overlap at scroll ${y}`).toEqual([])
+  }
+})

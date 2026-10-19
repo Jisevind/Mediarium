@@ -68,6 +68,7 @@ The keys the app stores in its settings table. You normally change these from th
 | `ebooks.path` | ebooks library folder; falls back to the EBOOKS_DIR env default (/ebooks) when unset |
 | `flaresolverr.url` | e.g. http://flaresolverr:8191; unset = none |
 | `info.language` | the language titles, plots, genres and posters are read in, as a TMDB tag like "de-DE" (en-US when unset); file and folder names always use the English title |
+| `info.release_country` | the country release dates are read for, as a code like "IN"; unset = the country of the info language |
 | `legal.acknowledged_at` |  |
 | `library.default_profile_id` | id of the stored quality profile used by items with no profile of their own |
 | `library.default_profile_id_tv` | id of the quality profile shows with none of their own use; unset = the same default as movies |

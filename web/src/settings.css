@@ -184,13 +184,12 @@
   .settings-content .indexer-cols > :nth-child(n) { grid-column: 1; grid-row: auto; }
 }
 
-/* The add form stays in view on a wide screen while the list scrolls, and the
+/* The add form is a normal card and the page scrolls as one; the
    indexers sit in a grid of compact cards: two across when the list is wide
    enough, one when it is narrow. */
 
 @media (min-width: 1101px) {
 .settings-content .indexer-cols { grid-template-columns: minmax(300px, 0.42fr) minmax(0, 1fr); }
-  .settings-content .indexer-cols > .indexer-add { position: sticky; top: 8px; max-height: calc(100vh - 110px); overflow-y: auto; overscroll-behavior: contain; }
 }
 .settings-content .indexer-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; }
 .settings-content .indexer-filter { flex: 1 1 200px; min-width: 0; max-width: 360px; }

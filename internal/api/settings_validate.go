@@ -170,6 +170,12 @@ func (s *Server) validateSettings(req *settingsPayload) string {
 	if l := req.InfoLanguage; l != "" && !metadata.IsInfoLanguage(l) {
 		return "Choose one of the languages in the list."
 	}
+	if req.ReleaseCountry != nil {
+		c := strings.ToUpper(strings.TrimSpace(*req.ReleaseCountry))
+		if c != "" && !metadata.IsReleaseCountry(c) {
+			return "Choose one of the countries in the list."
+		}
+	}
 	if m := checkChoice(req.DefaultSources, `Choose where to download from: "usenet", "torrent" or "both".`, sourcesUsenet, sourcesTorrent, sourcesBoth); m != "" {
 		return m
 	}

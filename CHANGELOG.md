@@ -8,6 +8,21 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.2.5] - 2026-10-19
+
+In short: release dates for your own country, and the Indexers & Search page fixed.
+- A new setting picks the country for a movie's release dates, and a date is never taken from some other country any more.
+- The Add an indexer card no longer slides over the sections below it when you scroll.
+
+### Added
+- **Country for release dates** under Settings > Info, lists and subtitles. Pick your own country (India, say, while reading in English); left on "Same as the info language" it works as before. Asked for by SanketBaraiya on GitHub, #82.
+
+### Changed
+- A movie's cinema and digital dates now come from your country, then from the US (shown with "(US)"), and otherwise say "Not announced". They are never taken from some other country any more, so no more stray (BR) or (IN). The calendar follows the same rule and re-reads its saved dates when you change the country (SanketBaraiya on GitHub, #82).
+
+### Fixed
+- On Settings > Indexers & Search the "Add an indexer" card no longer sticks to the screen or scrolls inside itself, so it can't slide over "Cloudflare sites" and "IRC announce" any more. The page scrolls as one again (reported by SanketBaraiya on GitHub, #80).
+
 ## [3.2.4] - 2026-10-19
 
 In short: fixes for outside torrent clients, from your reports.
