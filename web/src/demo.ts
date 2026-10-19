@@ -407,6 +407,36 @@ function titleSearch(q: string): TitleResult[] {
   return out
 }
 
+// A made-up interactive search: scored releases, with the formats that gave
+// each score and the reasons an automatic search would skip it.
+function demoReleases() {
+  const rel = (title: string, o: Record<string, unknown>) => ({ title, indexerName: 'Indexer One', protocol: 'usenet', downloadUrl: 'demo-' + title, sizeBytes: 12e9, publishDate: ago(300), ...o })
+  const limits = { minScore: 0, upgradeUntil: 300 }
+  return [
+    rel('Saltwind.Part.Two.2024.1080p.BluRay.REMUX.DTS-HD.MA.5.1.AVC-KESTREL', {
+      resolution: '1080p', source: 'BluRay', best: true, sizeBytes: 31e9, formatScore: 350, ...limits,
+      formats: [{ name: 'Remux Tier 01', score: 300 }, { name: 'DTS-HD MA', score: 50 }], acceptedBy: { profileId: 1, profileName: 'HD 1080p', fallback: false },
+    }),
+    rel('Saltwind.Part.Two.2024.1080p.WEB-DL.DDP5.1.H.265-LUMEN', {
+      indexerName: 'Indexer Two', protocol: 'torrent', seeders: 41, peers: 6, resolution: '1080p', source: 'WEB-DL', codec: 'x265', sizeBytes: 4.2e9, formatScore: -50, ...limits,
+      formats: [{ name: 'x265 (HD)', score: -50 }],
+      reasons: [{ kind: 'profile', text: 'scores -50 with custom formats, and the "HD 1080p" profile needs at least 0' }],
+      rejections: ['scores -50 with custom formats, and the "HD 1080p" profile needs at least 0'],
+    }),
+    rel('Saltwind.Part.Two.2024.2160p.WEB-DL.DV.HDR10Plus.H.265-ORBIT', {
+      resolution: '2160p', source: 'WEB-DL', codec: 'x265', sizeBytes: 21e9, formatScore: 0, ...limits,
+      formats: [],
+      reasons: [{ kind: 'quality', text: "WEBDL-2160p isn't allowed by the \"HD 1080p\" profile" }, { kind: 'size', text: "larger than the \"HD 1080p\" profile's limit of 15 GB" }],
+      rejections: ["WEBDL-2160p isn't allowed by the \"HD 1080p\" profile", "larger than the \"HD 1080p\" profile's limit of 15 GB"],
+    }),
+    rel('Saltwind.Part.Two.2024.1080p.WEB-DL.DDP5.1.H.264-TINDER', {
+      indexerName: 'Indexer Two', protocol: 'torrent', seeders: 1, peers: 0, belowMinSeeders: true, minSeeders: 3, resolution: '1080p', source: 'WEB-DL', codec: 'x264', sizeBytes: 6.8e9, blocklisted: true, formatScore: 0, ...limits,
+      formats: [],
+      reasons: [{ kind: 'blocklist', text: 'This release failed before and is on the blocklist, so automatic searches leave it out.' }, { kind: 'seeders', text: 'Its seeder count (1) is below the minimum of 3 set for its indexer, so automatic searches leave it out.' }],
+    }),
+  ]
+}
+
 // Installs the demo layer over fetch. Anything it does not know is passed
 // through untouched (login, settings, etc. stay real).
 export function installDemo() {
@@ -441,6 +471,8 @@ export function installDemo() {
         return json([])
       case /^\/api\/(movies|series)\/\d+\/files$/.test(p):
         return json({ folder: '', files: [] })
+      case /^\/api\/movies\/\d+\/search$/.test(p):
+        return json({ results: demoReleases(), sources: 2, unanswered: [] })
       case p === '/api/movies':
         return json(movies)
       case /^\/api\/movies\/\d+$/.test(p):

@@ -156,7 +156,7 @@ func TestDefinitionIndexerEndToEnd(t *testing.T) {
 	if !strings.Contains(msg["error"].(string), "can't run yet") {
 		t.Fatalf("unsupported definition should say so: %v", msg)
 	}
-	postJSON[map[string]any](t, client, base+"/api/indexers", map[string]any{"definitionId": "fixtureprivate", "baseUrl": "https://elsewhere.test/", "settings": map[string]any{}}, http.StatusBadRequest)
+	postJSON[map[string]any](t, client, base+"/api/indexers", map[string]any{"definitionId": "fixtureprivate", "baseUrl": "ftp://elsewhere.test/", "settings": map[string]any{}}, http.StatusBadRequest)
 
 	// --- add the site (base URL defaults to the definition's first link) ---
 	created := postJSON[map[string]any](t, client, base+"/api/indexers", map[string]any{

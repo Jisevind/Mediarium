@@ -232,8 +232,9 @@ func (s *Server) handleSeriesSearch(w http.ResponseWriter, r *http.Request) {
 		payload := s.toSearchResultPayload(res)
 		payload.MatchedTitle = matchedOtherTitle(res.Title, series.Title, series.AltTitles)
 		payload.Blocklisted = blocked[blocklist.Key(res.Title)]
-		payload.Rejections = append(payload.Rejections, rejectionsFor(res.Title, profile, false, "", "")...)
-		payload.Rejections = append(payload.Rejections, sizeReasons(res.Title, res.SizeBytes)...)
+		payload.addReasonList(rejectionReasonsFor(res.Title, profile, false, "", ""))
+		payload.addReasons("size", sizeReasons(res.Title, res.SizeBytes))
+		payload.addStateReasons()
 		setFormatScore(&payload, profile, res.Title)
 		payload.AcceptedBy = acceptedBy(profile, res.Title)
 		out = append(out, payload)

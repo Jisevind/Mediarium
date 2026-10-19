@@ -10,6 +10,13 @@ export interface ReleaseNotes {
 
 export const WHATS_NEW: ReleaseNotes[] = [
   {
+    version: '3.2.11',
+    items: [
+      t("A small arrow after a release's score opens why it scored that way and why an automatic search may skip it."),
+      t("Sites that run on your own network, like BitMagnet, take your own address when you add or edit them."),
+    ],
+  },
+  {
     version: '3.2.9',
     items: [
       t("Set a minimum number of seeders on each torrent indexer, so releases that would stall are skipped."),

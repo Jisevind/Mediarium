@@ -31,7 +31,9 @@ export default function IndexerCard({ indexer: i, onChanged, onToggle, onRemove 
     name: firstError(required(name, t('Give this indexer a name.')), maxLength(name, 80, t('The name'))),
     perDay: numberRange(perDay, t('Requests per day'), { min: 0, max: 100000 }),
     ...(site
-      ? {}
+      ? i.localSite
+        ? { baseUrl: firstError(required(baseUrl, t('Add the address of the indexer, for example {example}.', { example: 'http://192.168.1.10:3333' })), urlCheck(baseUrl, { requireScheme: true, example: 'http://192.168.1.10:3333' }), maxLength(baseUrl, 200, t('The address'))) }
+        : {}
       : {
           baseUrl: firstError(required(baseUrl, t('Add the address of the indexer, for example {example}.', { example: 'https://api.example.com' })), urlCheck(baseUrl, { example: 'https://api.example.com' })),
           apiKey: apiKeyCheck(apiKey),
@@ -114,7 +116,7 @@ export default function IndexerCard({ indexer: i, onChanged, onToggle, onRemove 
     if (!v.attempt()) return
     setSaving(true)
     try {
-      await api.updateIndexer(i.id, { name: name.trim(), requestsPerDay: Number(perDay.trim() || '0'), ...(site ? {} : { baseUrl: baseUrl.trim(), apiKey: apiKey.trim() }) })
+      await api.updateIndexer(i.id, { name: name.trim(), requestsPerDay: Number(perDay.trim() || '0'), ...(site ? (i.localSite ? { baseUrl: baseUrl.trim() } : {}) : { baseUrl: baseUrl.trim(), apiKey: apiKey.trim() }) })
       toast.success(t('{name} saved.', { name: name.trim() || i.name }))
       setEditing(false)
       setApiKey('')
@@ -224,7 +226,17 @@ export default function IndexerCard({ indexer: i, onChanged, onToggle, onRemove 
             <FieldError v={v} name="name" />
           </label>
           {site ? (
-            <small style={{ color: 'var(--text-dim)' }}>{t('This site was added from the list. To change its sign-in details, remove it and add it again.')}</small>
+            <>
+              {i.localSite && (
+                <label>
+                  {t('Address')}
+                  <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} spellCheck={false} {...v.bind('baseUrl', baseUrl, setBaseUrl)} />
+                  <FieldError v={v} name="baseUrl" />
+                  <small style={{ color: 'var(--text-dim)', fontWeight: 400 }}>{t('The address of your own server, for example http://192.168.1.10:3333. Inside Docker, 127.0.0.1 is the Mediarium container itself.')}</small>
+                </label>
+              )}
+              <small style={{ color: 'var(--text-dim)' }}>{t('This site was added from the list. To change its sign-in details, remove it and add it again.')}</small>
+            </>
           ) : (
             <>
               <label>

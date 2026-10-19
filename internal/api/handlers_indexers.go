@@ -33,7 +33,10 @@ type indexerPayload struct {
 	StoredSecrets []string       `json:"storedSecrets,omitempty"`
 	LastTestError string         `json:"lastTestError,omitempty"`
 	LastTestAt    string         `json:"lastTestAt,omitempty"`
-	Priority      int            `json:"priority"` // 1 to 50, lower is tried first
+	// LocalSite is set for a site from the list that runs on the person's own
+	// network: its address can be changed to their own server.
+	LocalSite bool `json:"localSite,omitempty"`
+	Priority  int  `json:"priority"` // 1 to 50, lower is tried first
 	// MinSeeders is the fewest seeders a torrent from this indexer needs to be
 	// grabbed by itself (0 = off).
 	MinSeeders int `json:"minSeeders"`
@@ -80,6 +83,7 @@ func (s *Server) toIndexerPayload(inst indexers.Instance) indexerPayload {
 	p.Settings = map[string]any{}
 	// the local cache only: listing indexers must never trigger a download
 	sum, known := s.Definitions.CachedSummary(inst.DefinitionID)
+	p.LocalSite = known && sum.Local && !sum.Custom
 	for k, v := range inst.Settings {
 		secret := indexers.SecretSetting("", k)
 		if known {
@@ -238,8 +242,7 @@ func (s *Server) createCardigannIndexer(w http.ResponseWriter, r *http.Request, 
 	if base == "" && len(sum.Links) > 0 {
 		base = sum.Links[0]
 	}
-	if !sum.HasLink(base) {
-		writeError(w, http.StatusBadRequest, fmt.Sprintf("The address must be one of the site's own addresses: %s", strings.Join(sum.Links, ", ")))
+	if !siteAddressAllowed(w, sum, base) {
 		return
 	}
 	settingsMap, err := cardigannSettings(sum, req.Settings)
@@ -267,6 +270,41 @@ func (s *Server) createCardigannIndexer(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	writeJSON(w, http.StatusCreated, s.toIndexerPayload(created))
+}
+
+// localSiteExample is the example address shown in messages about a site on
+// the person's own network.
+const localSiteExample = "http://192.168.1.10:3333"
+
+// siteAddressAllowed judges the address for a site from the list. A site that
+// runs on the person's own network (a BitMagnet, say) takes any web address,
+// because the one in its definition is only an example; every other site keeps
+// to the addresses its definition lists. It writes the refusal and returns
+// false when the address is not allowed.
+func siteAddressAllowed(w http.ResponseWriter, sum indexers.DefinitionSummary, addr string) bool {
+	addr = strings.TrimSpace(addr)
+	if sum.Local && !sum.Custom {
+		switch indexers.CheckLocalSiteAddress(addr) {
+		case indexers.AddrOK:
+			return true
+		case indexers.AddrEmpty:
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("Add the address of your server, for example %s.", localSiteExample))
+		case indexers.AddrTooLong:
+			writeError(w, http.StatusBadRequest, "The address is too long. It can have at most 200 characters.")
+		case indexers.AddrUserInfo:
+			writeError(w, http.StatusBadRequest, "Leave the user name and password out of the address. Sign-in details go in the site's settings.")
+		case indexers.AddrQuery:
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("Leave everything after a ? or # out of the address. Use only the server and the port, for example %s.", localSiteExample))
+		default:
+			writeError(w, http.StatusBadRequest, fmt.Sprintf("The address has to start with http or https, then the server and, if needed, the port, for example %s.", localSiteExample))
+		}
+		return false
+	}
+	if !sum.HasLink(addr) {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("The address must be one of the site's own addresses: %s", strings.Join(sum.Links, ", ")))
+		return false
+	}
+	return true
 }
 
 type indexerUpdate struct {
@@ -336,8 +374,9 @@ func (s *Server) handleUpdateIndexer(w http.ResponseWriter, r *http.Request) {
 		}
 		secret = sum.IsSecret
 		if req.BaseURL != nil && strings.TrimSpace(*req.BaseURL) != "" {
-			if !sum.HasLink(*req.BaseURL) {
-				writeError(w, http.StatusBadRequest, fmt.Sprintf("The address must be one of the site's own addresses: %s", strings.Join(sum.Links, ", ")))
+			// An address that is already saved is not checked again, so a site
+			// whose definition changed can still be renamed or switched off.
+			if v := strings.TrimSpace(*req.BaseURL); v != inst.BaseURL && !siteAddressAllowed(w, sum, v) {
 				return
 			}
 			inst.BaseURL = strings.TrimSpace(*req.BaseURL)
@@ -481,6 +520,9 @@ func (s *Server) testIndexerInstance(ctx context.Context, inst indexers.Instance
 	defer cancel()
 	res, err := s.Cardigann.Test(ctx, inst)
 	if err != nil {
+		if indexers.LoopbackSite(inst.BaseURL) && strings.Contains(strings.ToLower(err.Error()), "connection refused") {
+			return connTestResult{Message: fmt.Sprintf("The server refused the connection. Check it's running and the address and port are right. Inside Docker, %s is the Mediarium container itself, so use the address of the machine that runs it, for example %s.", "127.0.0.1", localSiteExample)}
+		}
 		return connTestResult{Message: plainerror.Message(err)}
 	}
 	if res.Releases == 0 {

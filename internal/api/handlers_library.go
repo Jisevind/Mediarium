@@ -61,9 +61,16 @@ type searchResultPayload struct {
 	// profile, and Formats the formats it matched; left out when the profile
 	// scores no formats.
 	// Best marks the release automatic search would take; the list puts it first.
-	Best        bool     `json:"best,omitempty"`
-	FormatScore *int     `json:"formatScore,omitempty"`
-	Formats     []string `json:"formats,omitempty"`
+	Best        bool                `json:"best,omitempty"`
+	FormatScore *int                `json:"formatScore,omitempty"`
+	Formats     []quality.FormatHit `json:"formats,omitempty"`
+	// MinScore and UpgradeUntil are the profile's minimum custom-format score
+	// and the score it stops upgrading at (0 is left out), for the "why this
+	// score" details. Reasons lists, in plain words and by kind, everything that
+	// makes an automatic search skip the release (see release_why.go).
+	MinScore     int             `json:"minScore,omitempty"`
+	UpgradeUntil int             `json:"upgradeUntil,omitempty"`
+	Reasons      []releaseReason `json:"reasons,omitempty"`
 	// AcceptedBy names the profile that accepts this release: the item's own
 	// profile, or one of its fallbacks (fallback true). Left out when none
 	// does. Only set for a search on a library item.
@@ -127,7 +134,7 @@ func (s *Server) toSearchResultPayload(res indexers.Result) searchResultPayload 
 	// A Usenet post older than the retention is shown with the reason; the
 	// automatic searches leave it out.
 	if why := s.retentionRejection(res); why != "" {
-		payload.Rejections = append(payload.Rejections, why)
+		payload.addReasons("age", []string{why})
 	}
 	return payload
 }

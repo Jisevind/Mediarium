@@ -106,6 +106,9 @@ type DefinitionSummary struct {
 	Problem   string `json:"problem,omitempty"`
 	// Custom marks a definition file an administrator added.
 	Custom bool `json:"custom,omitempty"`
+	// Local marks a site that runs on the person's own network (see
+	// IsLocalDefinition): its address may be replaced with their own.
+	Local bool `json:"local,omitempty"`
 }
 
 // SettingSummary is one setting as the definition declares it, for the UI
@@ -583,6 +586,7 @@ func summarize(def *Definition) DefinitionSummary {
 	if sum.Links == nil {
 		sum.Links = []string{}
 	}
+	sum.Local = IsLocalDefinition(sum.Links)
 	for _, st := range def.Settings {
 		ss := SettingSummary{Name: st.Name, Label: st.Label, Type: st.Type}
 		if info, ok := predefinedInfo[st.Type]; ok {

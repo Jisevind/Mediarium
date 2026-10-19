@@ -29,6 +29,32 @@ func (p Profile) FormatScore(title string) (int, []string) {
 	return p.formatScore(lazyFor(title))
 }
 
+// FormatHit is a custom format a release matched and the score the profile
+// gives it.
+type FormatHit struct {
+	Name  string `json:"name"`
+	Score int    `json:"score"`
+}
+
+// FormatBreakdown is FormatScore with the score of each matched format, so a
+// list can show where the total comes from.
+func (p Profile) FormatBreakdown(title string) (int, []FormatHit) {
+	if len(p.Formats) == 0 {
+		return 0, nil
+	}
+	l := lazyFor(title)
+	in := FormatInput{Title: l.title, Release: l.get(), OriginalLanguage: p.OriginalLanguage}
+	total := 0
+	var hits []FormatHit
+	for _, sf := range p.Formats {
+		if sf.Format != nil && sf.Format.Matches(in) {
+			total += sf.Score
+			hits = append(hits, FormatHit{Name: sf.Format.Name, Score: sf.Score})
+		}
+	}
+	return total, hits
+}
+
 // FormatScoreRel is FormatScore for a title that is already parsed.
 func (p Profile) FormatScoreRel(title string, rel parser.Release) (int, []string) {
 	return p.formatScore(knownRel(title, rel))

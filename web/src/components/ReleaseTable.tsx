@@ -1,7 +1,8 @@
 import { Fragment, useMemo, useState } from 'react'
 import type { SearchResult } from '../api'
 import { formatBytes, nameParts } from '../format'
-import { locale, t } from '../i18n'
+import { locale, st, t } from '../i18n'
+import { loadShowWhy, saveShowWhy, signed, whyOf, type WhyInfo } from '../releaseWhy'
 import { FIRST_DIRECTION, ageOf, defaultOrder, filterReleases, indexersIn, publishedAt, qualitiesIn, sortReleases, type ReleaseSortKey, type SortDir } from '../releaseSort'
 import Dropdown from './Dropdown'
 import Icon from './Icon'
@@ -34,6 +35,9 @@ export default function ReleaseTable({
   const [words, setWords] = useState('')
   const [indexer, setIndexer] = useState('')
   const [quality, setQuality] = useState('')
+  // "Show why" opens the details of every row; a row's own button overrides it.
+  const [showWhy, setShowWhy] = useState(loadShowWhy)
+  const [opened, setOpened] = useState<Record<string, boolean>>({})
   const indexers = useMemo(() => indexersIn(results), [results])
   const qualities = useMemo(() => qualitiesIn(results), [results])
   const shown = useMemo(() => sortReleases(defaultOrder(filterReleases(results, { text: words, indexer, quality })), sort?.key ?? null, sort?.dir ?? 1), [results, words, indexer, quality, sort])
@@ -58,6 +62,23 @@ export default function ReleaseTable({
     </th>
   )
   const qualityName = (q: string) => (q === 'other' ? t('No resolution') : q)
+  const anyWhy = useMemo(() => results.some((r) => whyOf(r) !== null), [results])
+  const columns = 7 + (showLanguage ? 1 : 0) + (showScore ? 1 : 0)
+  function toggleAll() {
+    const next = !showWhy
+    setShowWhy(next)
+    setOpened({})
+    saveShowWhy(next)
+  }
+  const whyButton = (r: SearchResult, why: WhyInfo, label: string) => {
+    const open = opened[r.downloadUrl] ?? showWhy
+    return (
+      <button type="button" className="rel-why-btn" aria-expanded={open} aria-label={label} title={label} onClick={() => setOpened((o) => ({ ...o, [r.downloadUrl]: !open }))}>
+        <span aria-hidden="true">{open ? '▾' : '▸'}</span>
+        {why.reasons.length > 0 && <span className="rel-why-dot" aria-hidden="true" />}
+      </button>
+    )
+  }
 
   return (
     <>
@@ -65,6 +86,11 @@ export default function ReleaseTable({
         <input type="search" value={words} onChange={(e) => setWords(e.target.value)} placeholder={t('Find in these releases')} aria-label={t('Find in these releases')} />
         {indexers.length > 1 && <Dropdown label={t('Indexer')} value={indexer} onChange={setIndexer} options={[{ value: '', label: t('Any indexer') }, ...indexers.map((i) => ({ value: i, label: i }))]} />}
         {qualities.length > 1 && <Dropdown label={t('Quality')} value={quality} onChange={setQuality} options={[{ value: '', label: t('Any quality') }, ...qualities.map((q) => ({ value: q, label: qualityName(q) }))]} />}
+        {anyWhy && (
+          <button type="button" className="btn-sm" aria-pressed={showWhy} onClick={toggleAll} title={t('Open the details under every release: where the score comes from and why an automatic search may skip it')}>
+            {t('Show why')}
+          </button>
+        )}
         <span className="rel-count">{t('{shown} of {total}', { shown: shown.length, total: results.length })}</span>
         {filtering && (
           <button
@@ -103,8 +129,12 @@ export default function ReleaseTable({
               </tr>
             </thead>
             <tbody>
-              {shown.map((r) => (
-                <tr key={r.downloadUrl} style={r.rejections?.length || r.blocklisted ? { opacity: 0.75 } : undefined}>
+              {shown.map((r) => {
+                const why = whyOf(r)
+                const open = why !== null && (opened[r.downloadUrl] ?? showWhy)
+                return (
+                <Fragment key={r.downloadUrl}>
+                <tr className={open ? 'rel-open' : undefined} style={r.rejections?.length || r.blocklisted ? { opacity: 0.75 } : undefined}>
                   <td className="rel-name">
                     {nameParts(r.title).map((p, i) => (
                       <Fragment key={i}>
@@ -148,6 +178,7 @@ export default function ReleaseTable({
                         {r.rejections[0]}
                       </span>
                     )}
+                    {!showScore && why && whyButton(r, why, t('Why this release may be skipped'))}
                   </td>
                   <td className="rel-fit">{qualityLabel?.(r) || [r.resolution, r.source, r.codec].filter(Boolean).join(' · ') || '—'}</td>
                   {showLanguage && (
@@ -172,7 +203,8 @@ export default function ReleaseTable({
                   )}
                   {showScore && (
                     <td className={`rel-fit format-score-cell${(r.formatScore ?? 0) < 0 ? ' neg' : ''}`} title={r.formats?.length ? r.formats.join('\n') : t('No custom format matches')}>
-                      {r.formatScore === undefined ? '—' : r.formatScore > 0 ? `+${r.formatScore}` : r.formatScore}
+                      {r.formatScore === undefined ? '—' : signed(r.formatScore)}
+                      {why && whyButton(r, why, t('Why this score'))}
                     </td>
                   )}
                   <td className="rel-fit">
@@ -189,11 +221,69 @@ export default function ReleaseTable({
                     </button>
                   </td>
                 </tr>
-              ))}
+                {open && why && (
+                  <tr className="rel-why-row">
+                    <td colSpan={columns}>
+                      <WhyDetails why={why} />
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
+                )
+              })}
             </tbody>
           </table>
         </div>
       )}
     </>
+  )
+}
+
+// The details under a release: where the score comes from, and everything that
+// makes an automatic search skip it. Grabbing it by hand always works.
+function WhyDetails({ why }: { why: WhyInfo }) {
+  return (
+    <div className="rel-why">
+      {why.score !== undefined && (
+        <div className="rel-why-col">
+          <h4>{t('Why this score')}</h4>
+          {why.formats.length > 0 ? (
+            <ul className="rel-why-formats">
+              {why.formats.map((f) => (
+                <li key={f.name}>
+                  <span>{f.name}</span>
+                  <span className={`format-score-cell${f.score < 0 ? ' neg' : ''}`}>{signed(f.score)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="rel-why-none">{t('No custom format matches')}</p>
+          )}
+          <p className="rel-why-total">
+            <span>{t('Total')}</span>
+            <span className={`format-score-cell${why.score < 0 ? ' neg' : ''}`}>{signed(why.score)}</span>
+            {why.belowMin && <span className="badge conflict">{t('below the minimum')}</span>}
+          </p>
+          <p className="rel-why-limits">
+            {t('Minimum score: {n}', { n: signed(why.minScore) })}
+            {why.upgradeUntil > 0 && ` · ${t('Upgrades stop at: {n}', { n: signed(why.upgradeUntil) })}`}
+          </p>
+        </div>
+      )}
+      <div className="rel-why-col">
+        <h4>{t('Why automatic searches skip it')}</h4>
+        {why.reasons.length > 0 ? (
+          <ul className="rel-why-reasons">
+            {why.reasons.map((r, i) => (
+              <li key={i} className={`rel-why-${r.kind}`}>
+                {st(r.text)}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="rel-why-none">{t('Nothing here makes an automatic search skip it.')}</p>
+        )}
+      </div>
+    </div>
   )
 }

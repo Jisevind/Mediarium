@@ -746,6 +746,8 @@ export interface IndexerConfig {
   protocol: 'usenet' | 'torrent'
   enabled: boolean
   kind?: 'torznab' | 'newznab' | 'cardigann'
+  // A site from the list that runs on the person's own network: its address can be changed.
+  localSite?: boolean
   lastTestError?: string
   lastTestAt?: string
   // 1 to 50, lower is tried first (default 25)
@@ -892,6 +894,8 @@ export interface IndexerDefinition {
   problem?: string
   // A definition file an administrator added themselves.
   custom?: boolean
+  // A site that runs on the person's own network (every address it lists is local): they type the address of their own server.
+  local?: boolean
 }
 
 export interface UsenetServer {
@@ -1015,7 +1019,13 @@ export interface SearchResult {
   // The custom-format score in the title's profile and the formats matched
   // (only when the profile scores formats).
   formatScore?: number
-  formats?: string[]
+  // The matched formats with the score the profile gives each, the profile's
+  // minimum score and the score it stops upgrading at (0 when not set), and
+  // everything that makes an automatic search skip the release, by kind.
+  formats?: { name: string; score: number }[]
+  minScore?: number
+  upgradeUntil?: number
+  reasons?: { kind: string; text: string }[]
   // The release automatic search would take (set on a search for a title in the library).
   best?: boolean
   // Which profile would take this release: the title's own, or one of its fallbacks.

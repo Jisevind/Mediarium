@@ -8,6 +8,14 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.2.11] - 2026-10-19
+
+In short: see why a release got its score, and use your own address for a site on your network.
+
+### Added
+- A site from the list that runs on your own network, such as BitMagnet (Local DHT), can now be pointed at your own server. When you add it (or edit it later) there is an Address field filled in with the example address, and you can type something like http://192.168.1.10:3333. Test then asks that server, and a refused connection on a 127.0.0.1 address now explains that inside Docker 127.0.0.1 is the Mediarium container itself. Sites on the public internet keep to the addresses in their definition. Thanks to userkbmsr-png on GitHub, #90.
+- The search list can now say why a release got its score. A small arrow after the score opens a row under the release with each matched custom format and its score in the chosen profile, the total, the profile's minimum score and the score upgrades stop at, and every reason an automatic search would skip it (quality or language not taken, size outside the limits, score under the minimum, blocklisted, too few seeders, a file you already have that is as good). It works by touch and keyboard, no hovering. "Show why" above the list opens all of them, and your choice is remembered. Asked for by Bayharbourbutcher1 on GitHub, #87.
+
 ## [3.2.10] - 2026-10-19
 
 In short: SubDL subtitles that were found but still thrown away, and a cropped arrow on the indexer card.
