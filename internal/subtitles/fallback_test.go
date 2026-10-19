@@ -100,3 +100,28 @@ func TestSubDLPages(t *testing.T) {
 		t.Fatalf("results %d, pages %v", len(res), pages)
 	}
 }
+
+// SubDL download paths come in more shapes than "/subtitle/<id>-<id>.zip":
+// any plain path under /subtitle/ is fine, a query, a ".." part or another
+// start is not.
+func TestSubDLLinkShapes(t *testing.T) {
+	for link, want := range map[string]bool{
+		"/subtitle/3197651-3213944.zip":       true,
+		"/subtitle/3197651-3213944.1.zip":     true,
+		"/subtitle/sd1638677/3213944":         true,
+		"/subtitle/a%20b.zip":                 true,
+		"/subtitle/3197651-3213944.zip?x=1":   false,
+		"/subtitle/../etc/passwd":             false,
+		"/subtitle/a/../b.zip":                false,
+		"/other/3197651.zip":                  false,
+		"https://evil.example/subtitle/1.zip": false,
+		"":                                    false,
+	} {
+		if got := ValidSubDLLink(link); got != want {
+			t.Errorf("ValidSubDLLink(%q) = %v, want %v", link, got, want)
+		}
+	}
+	if got := shortSample("/subtitle/1.zip?api_key=SECRET"); strings.Contains(got, "SECRET") || strings.Contains(got, "?") {
+		t.Errorf("sample shows the query: %q", got)
+	}
+}

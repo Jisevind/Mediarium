@@ -10,6 +10,12 @@ export interface ReleaseNotes {
 
 export const WHATS_NEW: ReleaseNotes[] = [
   {
+    version: '3.2.7',
+    items: [
+      t("SubDL subtitles are no longer dropped for a download link of a shape Mediarium did not know, and the Details line shows what the link looked like."),
+    ],
+  },
+  {
     version: '3.2.6',
     items: [
       t("The Indexers & Search page is one full-width card per section, with your indexers in up to three columns."),

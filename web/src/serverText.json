@@ -1130,6 +1130,7 @@
  "The saved keys can't be read",
  "The score for {0} must be a number between -{1} and {2}.",
  "The script {0}, run after importing {1}, had a problem. {2}",
+ "The season number must be a number.",
  "The secret.key in your settings folder isn't the one this database was saved with, so indexer keys, passwords and tokens can't be read and automatic searching can't work. Put back the secret.key that belongs to this database, or re-enter your keys.",
  "The secure connection could not be set up. The server's certificate may be wrong or expired.",
  "The server answered but wouldn't start a scan.",

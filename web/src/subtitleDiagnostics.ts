@@ -23,7 +23,7 @@ export function diagnosticLine(d: SubtitleDiagnostic): string {
   else if (d.note === 'no-match') parts.push(d.detail ? t('not found ({detail})', vars) : t('not found'))
   else if (d.note === 'wrong-language') parts.push(t('{found} found, all dropped: wrong language (found: {detail})', vars))
   else if (d.note === 'wrong-episode') parts.push(t('{found} found, all dropped: not for this episode', vars))
-  else if (d.note === 'bad-link') parts.push(t('{found} found, all dropped: no usable download link', vars))
+  else if (d.note === 'bad-link') parts.push(d.detail ? t('{found} found, all dropped: no usable download link (it looked like {detail})', vars) : t('{found} found, all dropped: no usable download link', vars))
   else if (d.found > 0) parts.push(t('{found} found, none usable', vars))
   else parts.push(t('0 results, the site answered normally'))
   return parts.join(': ')

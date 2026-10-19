@@ -8,6 +8,15 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.2.7] - 2026-10-19
+
+In short: a fix for tools like Maintainerr that act on a season, SubDL subtitles that were found but thrown away, and the indexer card icon.
+
+### Fixed
+- The Sonarr-compatible episode list ignored `seasonNumber`, so a tool that asked for one season (Maintainerr, for example) got every season of the show and could act on episodes that were never meant, such as unmonitoring season 7 because of a rule about season 1. It now answers with only the season asked for (also `episodeIds` and `episodeFileId`). If your episodes were unmonitored like this, open the show and choose which episodes to monitor again (reported by u/troelsdk on Reddit).
+- SubDL subtitles were found and then all thrown away as having "no usable download link" because Mediarium only knew one shape of SubDL's download path. Any plain path under /subtitle/ is accepted now, and when a link is still turned down the Details line shows what it looked like (reported by SanketBaraiya on GitHub, #83).
+- The icon on an indexer card (the magnet or server symbol) sat in the top-left corner of a square box with sharp corners. It is now a rounded tile with the symbol centred (SanketBaraiya on GitHub, #80).
+
 ## [3.2.6] - 2026-10-19
 
 In short: a tidier Indexers & Search page, and a way to see why a subtitle search finds nothing.

@@ -39,10 +39,22 @@ var ErrSubDLKey = errors.New("SubDL rejected the API key")
 
 // subdlLink is the form of a SubDL download path: "/subtitle/3197651-3213944.zip",
 // or one file of a pack, "/subtitle/<id>/<file id>".
-var subdlLink = regexp.MustCompile(`^/subtitle/[A-Za-z0-9_-]+(?:\.zip|/[A-Za-z0-9_-]+)$`)
+var subdlLink = regexp.MustCompile(`^/subtitle/[A-Za-z0-9._~%+=-]+(?:/[A-Za-z0-9._~%+=-]+)*$`)
 
-// ValidSubDLLink reports whether link is a SubDL download path.
-func ValidSubDLLink(link string) bool { return subdlLink.MatchString(link) }
+// ValidSubDLLink reports whether link is a SubDL download path: a plain path
+// under /subtitle/ on SubDL's download host, with no query, no spaces and no
+// ".." part. The host is always put in front by us, never taken from SubDL.
+func ValidSubDLLink(link string) bool {
+	if !subdlLink.MatchString(link) {
+		return false
+	}
+	for _, part := range strings.Split(link, "/") {
+		if part == ".." || part == "." {
+			return false
+		}
+	}
+	return true
+}
 
 type SubDL struct {
 	apiKey     string
@@ -249,6 +261,7 @@ type subdlStats struct {
 	message    string
 	found      int // subtitles in the answers
 	badLink    int
+	badSample  string // the first link that was turned down, shortened, for the diagnostic
 	wrongEp    int
 	wrongLang  int
 	langsFound map[string]bool
@@ -266,7 +279,7 @@ func (st subdlStats) line(l subdlLookup, bare bool, kept int, err error) Diagnos
 	case st.wrongLang > 0 && st.wrongLang >= st.badLink && st.wrongLang >= st.wrongEp:
 		d.Note, d.Detail = "wrong-language", joinLanguages(st.langsFound)
 	case st.badLink > 0 && st.badLink >= st.wrongEp:
-		d.Note = "bad-link"
+		d.Note, d.Detail = "bad-link", st.badSample
 	case st.wrongEp > 0:
 		d.Note = "wrong-episode"
 	}
@@ -365,6 +378,9 @@ func (c *SubDL) results(resp subdlResponse, q Query, bare bool, st *subdlStats) 
 		link := downloadPath(s.URL)
 		if !ValidSubDLLink(link) {
 			st.badLink++
+			if st.badSample == "" {
+				st.badSample = shortSample(link)
+			}
 			continue
 		}
 		spelled := s.Language
@@ -510,4 +526,19 @@ func containsInt(list []int, v int) bool {
 func looksLikeSRT(b []byte) bool {
 	head := b[:min(len(b), 4096)]
 	return bytes.Contains(head, []byte("-->"))
+}
+
+// shortSample shortens a rejected download link for the diagnostic: the first
+// part of it, with a query string (which could hold a key) cut off.
+func shortSample(link string) string {
+	if link == "" {
+		return "nothing, the link was empty"
+	}
+	if i := strings.IndexAny(link, "?#"); i >= 0 {
+		link = link[:i]
+	}
+	if len(link) > 80 {
+		link = link[:80] + "..."
+	}
+	return link
 }

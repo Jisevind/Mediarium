@@ -1051,6 +1051,7 @@ details.own-key[open] summary { margin-bottom: 6px; }
 .added-list li { display: flex; align-items: center; gap: 10px; }
 .added-list .added-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .indexer-row { grid-template-columns: 40px minmax(0, 1fr) auto; }
+.indexer-card .tile-ico { display: grid; place-items: center; border-radius: 10px; }
 .tile-ico.proto-torrent { color: var(--c-discover); background: color-mix(in srgb, var(--c-discover) 14%, transparent); }
 .tile-ico.proto-usenet { color: var(--c-activity); background: color-mix(in srgb, var(--c-activity) 14%, transparent); }
 .target-row .tile-ico { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; }
