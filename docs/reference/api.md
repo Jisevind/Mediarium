@@ -179,7 +179,11 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 |---|---|---|---|
 | GET | `/api/custom-formats` | any account |  |
 | POST | `/api/custom-formats` | admin | imports pasted JSON. |
+| POST | `/api/custom-formats/assign` | admin | gives the chosen formats a score in each of the chosen quality profiles: TRaSH's own score for each, or one score typed in. |
+| POST | `/api/custom-formats/default-scores` | admin | says what the TRaSH Guides score each of these formats, for the form that adds formats to a profile. |
 | POST | `/api/custom-formats/test` | any account | says which formats a release name matches. |
+| GET | `/api/custom-formats/trash-update` | admin | lists what an update from the guides would change. |
+| POST | `/api/custom-formats/trash-update` | admin | updates the formats that came from the guides. |
 | DELETE | `/api/custom-formats/{id}` | admin |  |
 | PUT | `/api/custom-formats/{id}` | admin |  |
 
@@ -858,4 +862,4 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | PUT | `/api/watched/settings` | admin | PUT /api/watched/settings {"sync": true, "cleanup": {...}} |
 | POST | `/api/watched/sync` | admin | POST /api/watched/sync: read what's been watched now. |
 
-518 routes.
+522 routes.

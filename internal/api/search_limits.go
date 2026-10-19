@@ -29,6 +29,7 @@ func (s *Server) setupSearchExtras() {
 	s.setCachedPolicy()
 	tr := s.IndexerRepo.Tracker()
 	s.QueueRepo.SetOnEnqueue(func(it queue.Item) { tr.NoteGrab(it.NZBURL) })
+	s.QueueRepo.SetIndexerOf(s.indexerOfRelease)
 }
 
 // ---- size limits ----

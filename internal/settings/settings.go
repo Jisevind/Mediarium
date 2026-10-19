@@ -22,6 +22,8 @@ const (
 	KeyTranscodeFFmpeg     = "playback.ffmpeg_path"             // ffmpeg command or full path; unset = "ffmpeg" on PATH
 	KeyTranscodeHardware   = "playback.transcode_hardware"      // auto|software|vaapi|qsv|nvenc; unset = auto
 	KeyShowAdvanced        = "ui.show_advanced"                 // "1" shows custom formats and format scores on the Quality page; unset follows whether any custom format exists
+	KeyTrashFormatsAuto    = "formats.trash_auto_update"        // "1" re-reads the TRaSH Guides once a day and updates the custom formats that came from them; unset or "0" only updates on request
+	KeyTrashFormatsLast    = "formats.trash_last_update"        // when the TRaSH Guides were last read for the daily update (RFC 3339)
 	KeyUnmonitorDownloaded = "library.unmonitor_downloaded"     // "1" stops monitoring a movie once it is downloaded; unset or "0" keeps it monitored
 	KeyUnmonitorFinished   = "library.unmonitor_finished_shows" // "1" stops monitoring a show once it has ended and every monitored episode is in; unset or "0" keeps it monitored
 	KeyRootsConfirmed      = "library.roots_confirmed"          // library folders Mediarium has seen with their .mediarium-root marker (a JSON list); one that loses its marker is refused until it is back
@@ -70,7 +72,7 @@ const (
 	KeyDownloadClientURL            = "downloadclient.url"                 // the client's web address, e.g. http://192.168.1.10:8080
 	KeyDownloadClientUsername       = "downloadclient.username"            // the client's web login
 	KeyDownloadClientPassword       = "downloadclient.password"            // encrypted; never shown or logged
-	KeyDownloadClientCategory       = "downloadclient.category"            // the category torrents are added with; unset = "mediarium"
+	KeyDownloadClientCategory       = "downloadclient.category"            // the category torrents are added with; unset = "mediarium" (when no kind has a category of its own either)
 	KeyDownloadClientCategoryMovies = "downloadclient.category_movies"     // category for movies; unset = the main category
 	KeyDownloadClientCategoryTV     = "downloadclient.category_tv"         // category for TV shows; unset = the main category
 	KeyDownloadClientCategoryMusic  = "downloadclient.category_music"      // category for music; unset = the main category
@@ -78,6 +80,7 @@ const (
 	KeyDownloadClientRemotePath     = "downloadclient.remote_path"         // path mapping: a folder as the download client reports it, e.g. /downloads; unset = no mapping
 	KeyDownloadClientLocalPath      = "downloadclient.local_path"          // path mapping: the same folder as Mediarium sees it, e.g. /data/torrents
 	KeyDownloadClientRemoveImport   = "downloadclient.remove_after_import" // "1" removes a torrent from the client once it's imported; unset or "0" leaves it seeding
+	KeyDownloadClientRemoveOnStop   = "downloadclient.remove_on_stop"      // "0" leaves a stopped or removed download's torrent in the client; unset or "1" removes it too (only an unfinished torrent Mediarium added itself)
 	KeyDownloadClientLinkRoot       = "downloadclient.link_root"           // symlinks from the client may be imported only when they lead into this folder (Decypharr's mount); unset = no symlinks
 
 	// Automation (RSS sync, scheduled search, hunting).
@@ -85,6 +88,7 @@ const (
 	KeyQualityProfile     = "library.quality_profile"       // legacy: an old preset key (any-1080p, ultra-hd, any); only read once to pick the initial default profile
 	KeyQualityLanguage    = "quality.language"              // the audio language wanted, as a name like "English" (the default when unset); a release clearly in another language only is not picked automatically
 	KeyInfoLanguage       = "info.language"                 // the language titles, plots, genres and posters are read in, as a TMDB tag like "de-DE" (en-US when unset); file and folder names always use the English title
+	KeyReleaseCountry     = "info.release_country"          // the country release dates are read for, as a code like "IN"; unset = the country of the info language
 	KeySubtitleAddons     = "subtitles.addons"              // subtitle add-ons (JSON list of {id, name, url}; the url can hold the person's own key for a site, so it is stored encrypted)
 	KeyDefaultSources     = "library.default_sources"       // usenet | torrent | both (default both)
 	KeySeasonPacks        = "library.season_packs"          // "1" looks for a season pack once a season has ended (a show can say otherwise for itself); unset or "0" leaves it off

@@ -12,6 +12,100 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 - **The built-in player now plays videos the browser cannot play on its own.** Before playback, Mediarium probes the file with ffprobe. MP4/MOV and WebM files with browser-friendly streams are still sent directly, unchanged. Other containers, and files whose audio codec browsers do not support (AC-3, EAC-3, DTS, TrueHD), are converted on demand to H.264 and AAC in HLS segments. An MP4 with H.264 video keeps its video stream when only the audio needs converting; MKV is re-encoded so seeking and sound stay in step. Playback starts after the first segment and seeking converts only the part you jump to. Hardware VAAPI, Intel Quick Sync and NVIDIA NVENC are detected and tested, with libx264 as the fallback; a missing or broken ffmpeg falls back to the old direct-play path. Text subtitle tracks inside MKV/MP4 files (SubRip, ASS/SSA, WebVTT and MP4 text tracks) now appear in the player's subtitle menu, extracted as WebVTT, with language, SDH and forced labels; bitmap tracks such as PGS and VobSub are left out. Settings > General > Playback has the on/off switch, an ffmpeg path for your own build and the hardware picker ([playback.md](docs/playback.md)).
 - **Settings > General has a Reduce effects switch.** It stops the decorative background motion (the drifting shapes, the moving grain and the film-strip edge) in this browser, while loading spinners and progress bars keep moving. It helps on low-powered devices where the constant movement keeps the browser busy.
 
+## [3.2.12] - 2026-10-19
+
+In short: the address of a site on your own network could not be edited yet.
+
+### Fixed
+- The address of a site on your own network (BitMagnet, for example) stayed a fixed choice of its two listed links, with no Address field when editing. The site list your server had saved came from an older version and didn't say which sites run on your network; it is worked out when the list is read now, so the field is there without pressing Update list (reported by userkbmsr-png on GitHub, #90).
+
+## [3.2.11] - 2026-10-19
+
+In short: see why a release got its score, and use your own address for a site on your network.
+
+### Added
+- A site from the list that runs on your own network, such as BitMagnet (Local DHT), can now be pointed at your own server. When you add it (or edit it later) there is an Address field filled in with the example address, and you can type something like http://192.168.1.10:3333. Test then asks that server, and a refused connection on a 127.0.0.1 address now explains that inside Docker 127.0.0.1 is the Mediarium container itself. Sites on the public internet keep to the addresses in their definition. Thanks to userkbmsr-png on GitHub, #90.
+- The search list can now say why a release got its score. A small arrow after the score opens a row under the release with each matched custom format and its score in the chosen profile, the total, the profile's minimum score and the score upgrades stop at, and every reason an automatic search would skip it (quality or language not taken, size outside the limits, score under the minimum, blocklisted, too few seeders, a file you already have that is as good). It works by touch and keyboard, no hovering. "Show why" above the list opens all of them, and your choice is remembered. Asked for by Bayharbourbutcher1 on GitHub, #87.
+
+## [3.2.10] - 2026-10-19
+
+In short: SubDL subtitles that were found but still thrown away, and a cropped arrow on the indexer card.
+
+### Fixed
+- SubDL subtitles were still thrown away as having "no usable download link": SubDL's link carries more after the file name (a query or a fragment), which Mediarium counted as an invalid path. Only the path is used now, and the Details line says when there was more after it (reported by SanketBaraiya on GitHub, #83).
+- The little arrow that opens the reason of a failed test on an indexer card was cropped. It has room now (SanketBaraiya on GitHub, #80).
+
+## [3.2.9] - 2026-10-19
+
+In short: a minimum number of seeders per torrent indexer, and tidier indexer cards.
+
+### Changed
+- The indexer cards in a row are the same height with the buttons at the bottom, and each card shows its test result and limits in at most two short lines with the full text on hover (a failure opens its reason when you tap it). Nothing is hidden: a passed test older than a day is just shown dimmer. Asked for by SanketBaraiya on GitHub, #80.
+
+### Added
+- A **Minimum seeders** box on every torrent indexer card. Releases from that indexer with fewer seeders than the number are skipped by the automatic searches, the check for new releases, upgrades and season packs, so downloads stall less often. 0 turns it off (the default). Releases your debrid service already has cached, and releases that don't say how many seeders they have, are never skipped. In a search by hand every release is still listed; the ones under the minimum get a "Below minimum seeders" label and you can still grab them. Also in the settings file (`minSeeders`) and the API, and a minimum set in Prowlarr comes along when you import. Thanks to Bayharbourbutcher1 on GitHub, #88.
+
+## [3.2.8] - 2026-10-19
+
+In short: custom formats from the TRaSH Guides are easier to score, add and keep up to date.
+
+### Added
+- Custom formats added from the TRaSH Guides are now scored with TRaSH's default score in your default profile unless you choose "Don't score them", and the list shows the score each format will get before you press Add. Thanks to Bayharbourbutcher1 on GitHub (#87).
+- You can tick several custom formats and add them to one or more profiles in one go (with TRaSH's score for each, or one score you type), and the profile edit form has an "Add formats" button for the same. Thanks to Bayharbourbutcher1 on GitHub (#87).
+- New "Keep TRaSH formats up to date" switch (off by default) and an "Update from TRaSH" button that shows what would change first. Conditions of TRaSH formats follow the guides, and a profile's score follows only while you haven't changed it yourself. Thanks to Bayharbourbutcher1 on GitHub (#87).
+- In the release list of a manual search, the release an automatic search would take is marked "Best match" and put first, followed by the others from the highest custom format score down. Automatic searches already took the highest score within the same quality. Thanks to Bayharbourbutcher1 on GitHub (#87).
+
+## [3.2.7] - 2026-10-19
+
+In short: a fix for tools like Maintainerr that act on a season, SubDL subtitles that were found but thrown away, and the indexer card icon.
+
+### Fixed
+- The Sonarr-compatible episode list ignored `seasonNumber`, so a tool that asked for one season (Maintainerr, for example) got every season of the show and could act on episodes that were never meant, such as unmonitoring season 7 because of a rule about season 1. It now answers with only the season asked for (also `episodeIds` and `episodeFileId`). If your episodes were unmonitored like this, open the show and choose which episodes to monitor again (reported by u/troelsdk on Reddit).
+- SubDL subtitles were found and then all thrown away as having "no usable download link" because Mediarium only knew one shape of SubDL's download path. Any plain path under /subtitle/ is accepted now, and when a link is still turned down the Details line shows what it looked like (reported by SanketBaraiya on GitHub, #83).
+- The icon on an indexer card (the magnet or server symbol) sat in the top-left corner of a square box with sharp corners. It is now a rounded tile with the symbol centred (SanketBaraiya on GitHub, #80).
+
+## [3.2.6] - 2026-10-19
+
+In short: a tidier Indexers & Search page, and a way to see why a subtitle search finds nothing.
+- Every section of the Indexers & Search page is one full-width card, and your indexers sit in up to three columns, with no card overlapping another at any width.
+- When a subtitle search finds nothing, a Details line shows what each site was asked and what it answered, and SubDL is asked in more forgiving ways.
+
+### Fixed
+- On Settings > Indexers & Search the "Your indexers" card no longer overlaps the "Add an indexer" card at medium widths. Every section is one full-width card, stacked (reported by SanketBaraiya on GitHub, #80).
+- SubDL lookups are more forgiving: if every lookup finds nothing it is repeated with fewer filters, the language is accepted in any spelling, full download links are accepted, and hearing-impaired results are ranked lower instead of dropped (SanketBaraiya on GitHub, #83).
+
+### Changed
+- The indexer list is a grid of up to three columns (two on medium screens, one on a phone). On a wide screen the add card shows the search and filters beside the list of sites (SanketBaraiya on GitHub, #80).
+- When a subtitle search finds nothing, a collapsed Details line under the result lists, for each site and lookup, what was asked and what came back (never keys). The search answer of the movie and episode subtitle endpoints is now an object with `results` and `diagnostics` instead of a bare list.
+
+## [3.2.5] - 2026-10-19
+
+In short: release dates for your own country, and the Indexers & Search page fixed.
+- A new setting picks the country for a movie's release dates, and a date is never taken from some other country any more.
+- The Add an indexer card no longer slides over the sections below it when you scroll.
+
+### Added
+- **Country for release dates** under Settings > Info, lists and subtitles. Pick your own country (India, say, while reading in English); left on "Same as the info language" it works as before. Asked for by SanketBaraiya on GitHub, #82.
+
+### Changed
+- A movie's cinema and digital dates now come from your country, then from the US (shown with "(US)"), and otherwise say "Not announced". They are never taken from some other country any more, so no more stray (BR) or (IN). The calendar follows the same rule and re-reads its saved dates when you change the country (SanketBaraiya on GitHub, #82).
+
+### Fixed
+- On Settings > Indexers & Search the "Add an indexer" card no longer sticks to the screen or scrolls inside itself, so it can't slide over "Cloudflare sites" and "IRC announce" any more. The page scrolls as one again (reported by SanketBaraiya on GitHub, #80).
+
+## [3.2.4] - 2026-10-19
+
+In short: fixes for outside torrent clients, from your reports.
+- An indexer's seeding rules now reach qBittorrent (they never did), and the Category box stays empty when you clear it.
+- Stopping or removing a download also removes the torrent Mediarium sent to qBittorrent or Transmission, unless it has finished (a switch in the download client card).
+
+### Added
+- **When I stop or remove a download, remove it from the client too** in the download client card (on by default). Stopping a download, removing it from the list, removing its movie or show, or pressing Blocklist & search again now also removes the torrent Mediarium sent, with what it downloaded, from qBittorrent or Transmission. A finished torrent, an imported download and a torrent that was in the client before Mediarium sent it are left alone (Blocklist & search again also removes a finished one). If the client is down or has lost the torrent, the download is removed from Mediarium anyway. Asked for by Bayharbourbutcher1 on GitHub, #85.
+
+### Fixed
+- The Category field in the download client card no longer refills with "mediarium" after you clear it. If you fill in a category for some kinds and leave the main one empty, the other kinds are now added with no category (the `mediarium-qN` tag still lets Mediarium find its torrents). Only when everything is empty is "mediarium" used. Reported by Bayharbourbutcher1 on GitHub, #79.
+- An indexer's seeding rules never reached the download client. Mediarium didn't remember which indexer a release came from, so only the global limit was ever sent. It now records the indexer when a release is grabbed (from a search, the feed check or a scheduled search) and sends that indexer's ratio and time to qBittorrent when the torrent is added. Reported by Bayharbourbutcher1 on GitHub, #79.
+
 ## [3.2.3] - 2026-10-18
 
 In short: release dates on the movie page, and fixes for second copies and for subtitles.

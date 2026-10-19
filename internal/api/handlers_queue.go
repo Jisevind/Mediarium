@@ -292,9 +292,11 @@ func (s *Server) removeQueueEntry(item queue.Item, deleteFiles, controlLocked bo
 	// files can be deleted underneath it.
 	s.torrents.stopQueue(item.ID)
 	work := s.workDirFor(item.ID) // before the row goes: a torrent may be filed in a category folder
+	ref, inClient := s.clientRefFor(item)
 	if err := s.QueueRepo.Delete(item.ID); err != nil {
 		return err
 	}
+	s.removeFromClient(ref, inClient, false)
 	if deleteFiles {
 		s.removeWorkDir(work)
 	}
@@ -482,12 +484,16 @@ func (s *Server) dropBlocklistedItem(item queue.Item) {
 		return // resumed in the meantime: never delete a running download's row
 	}
 	work := s.workDirFor(item.ID) // before the row goes: a torrent may be filed in a category folder
+	// The release is being thrown away, so its torrent goes even when it had
+	// finished downloading (an item that was imported never gets here).
+	ref, inClient := s.clientRefFor(item)
 	if item.Status == queue.StatusPaused || item.Status == queue.StatusConflict {
 		_ = s.QueueRepo.SetStatus(item.ID, queue.StatusStopped, "")
 		s.releaseTitleClaims(item)
 	}
 	s.torrents.stopQueue(item.ID)
 	_ = s.QueueRepo.Delete(item.ID)
+	s.removeFromClient(ref, inClient, true)
 	s.removeWorkDir(work)
 }
 

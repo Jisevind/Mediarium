@@ -654,6 +654,9 @@ export interface Settings {
   qualityLanguageOnly?: boolean // only take releases that say they are in one of those languages
   infoLanguage?: string // the TMDB language titles are read in, like "de-DE"
   infoLanguages?: { tag: string; name: string }[]
+  releaseCountry?: string // the country release dates are read for, like "IN"; "" = the country of the info language
+  releaseCountries?: string[]
+  releaseCountryEffective?: string // the country really used
   hasOpenSubtitlesApiKey?: boolean
   movieCopiesPath?: string // where second copies of movies go; "" = off
   tvCopiesPath?: string
@@ -669,6 +672,7 @@ export interface Settings {
   subtitleCountEmbedded?: boolean // subtitle tracks inside the video count as there (on by default)
   subtitleWizdom?: boolean // also look for Hebrew subtitles on Wizdom (off by default)
   showAdvanced?: boolean // show custom formats and format scores on the Quality page
+  trashFormatsAuto?: boolean // read the TRaSH Guides once a day and update the formats that came from them
   trailerBackground?: boolean // play the trailer behind movie and show pages for everyone (on by default)
   trailerSound?: boolean // start that trailer with its sound on (off by default)
   transcodeEnabled?: boolean // convert videos the browser can't play, on by default
@@ -764,10 +768,14 @@ export interface IndexerConfig {
   protocol: 'usenet' | 'torrent'
   enabled: boolean
   kind?: 'torznab' | 'newznab' | 'cardigann'
+  // A site from the list that runs on the person's own network: its address can be changed.
+  localSite?: boolean
   lastTestError?: string
   lastTestAt?: string
   // 1 to 50, lower is tried first (default 25)
   priority?: number
+  // The fewest seeders a torrent from this indexer needs to be grabbed by itself (0 = off)
+  minSeeders?: number
   // Set after repeated failures: searches skip the indexer until pausedUntil.
   failures?: number
   pausedUntil?: string
@@ -876,6 +884,7 @@ export interface DownloadClientSettings {
   remotePath: string
   localPath: string
   removeAfterImport: boolean
+  removeOnStop: boolean
   linkRoot: string
 }
 export type DownloadClientInput = Omit<DownloadClientSettings, 'hasPassword'> & { password: string }
@@ -907,6 +916,8 @@ export interface IndexerDefinition {
   problem?: string
   // A definition file an administrator added themselves.
   custom?: boolean
+  // A site that runs on the person's own network (every address it lists is local): they type the address of their own server.
+  local?: boolean
 }
 
 export interface UsenetServer {
@@ -1019,6 +1030,10 @@ export interface SearchResult {
   // The debrid service already has this torrent, so it starts at once. Only
   // set when it is known (TorBox).
   cached?: boolean
+  // A torrent with fewer seeders than its indexer's minimum: automatic downloads
+  // skip it, grabbing it by hand is allowed. minSeeders is that minimum.
+  belowMinSeeders?: boolean
+  minSeeders?: number
   season?: number
   episodes?: number[]
   blocklisted?: boolean
@@ -1026,7 +1041,15 @@ export interface SearchResult {
   // The custom-format score in the title's profile and the formats matched
   // (only when the profile scores formats).
   formatScore?: number
-  formats?: string[]
+  // The matched formats with the score the profile gives each, the profile's
+  // minimum score and the score it stops upgrading at (0 when not set), and
+  // everything that makes an automatic search skip the release, by kind.
+  formats?: { name: string; score: number }[]
+  minScore?: number
+  upgradeUntil?: number
+  reasons?: { kind: string; text: string }[]
+  // The release automatic search would take (set on a search for a title in the library).
+  best?: boolean
   // Which profile would take this release: the title's own, or one of its fallbacks.
   acceptedBy?: { profileId: number; profileName: string; fallback: boolean }
   // The audio languages the release names ("Italian + English", "Multi") and how
@@ -1127,6 +1150,27 @@ export interface FormatImportResult {
   updated: number
   formats: CustomFormat[]
   missing?: string[]
+}
+
+export interface FormatAssignResult {
+  profiles: number
+  scored: number
+  unscored: string[]
+}
+
+export interface TrashFormatChange {
+  id: number
+  name: string
+  conditions: boolean
+  scoreChanged: boolean
+  scoreFrom: number
+  scoreTo: number
+  profiles: string[]
+}
+
+export interface TrashUpdateResult {
+  changes: TrashFormatChange[]
+  checked: number
 }
 
 export interface TrashFormat {
@@ -1978,6 +2022,24 @@ export interface SubtitleResult {
   rating: number
   hashMatch?: boolean // made for this exact video file
   variant?: 'sdh' | 'forced' // for the hard of hearing / only the foreign-language lines; empty is the plain full subtitle
+}
+
+// What one lookup at one subtitle site asked and what came back; an empty
+// search shows these so it is clear why nothing was found.
+export interface SubtitleDiagnostic {
+  source: string
+  lookup: 'tmdb' | 'imdb' | 'title' | ''
+  value?: string
+  bare?: boolean // the second try, with fewer filters
+  count: number // results kept
+  found: number // what the site sent back, before anything was dropped
+  note?: 'no-match' | 'wrong-language' | 'wrong-episode' | 'bad-link' | 'error'
+  detail?: string
+}
+
+export interface SubtitleSearch {
+  results: SubtitleResult[]
+  diagnostics: SubtitleDiagnostic[]
 }
 
 export interface VPNConfig {
@@ -3105,7 +3167,7 @@ export const api = {
   testIndexerConfig: (data: { name: string; baseUrl: string; apiKey: string }) =>
     post<{ ok: boolean; message: string }>('/indexers/test', data),
   testIndexer: (id: number) => post<{ ok: boolean; message: string }>(`/indexers/${id}/test`),
-  updateIndexer: (id: number, data: { name?: string; baseUrl?: string; apiKey?: string; enabled?: boolean; requestsPerDay?: number }) => put<IndexerConfig>(`/indexers/${id}`, data),
+  updateIndexer: (id: number, data: { name?: string; baseUrl?: string; apiKey?: string; enabled?: boolean; requestsPerDay?: number; minSeeders?: number }) => put<IndexerConfig>(`/indexers/${id}`, data),
   setIndexerEnabled: (id: number, enabled: boolean) => put<null>(`/indexers/${id}/enabled`, { enabled }),
 
   listUsenetServers: () => get<UsenetServer[]>('/usenet-servers'),
@@ -3153,7 +3215,7 @@ export const api = {
   movieSubtitleStatus: (id: number) => get<SubtitleStatus>(`/movies/${id}/subtitles/status`),
   episodeSubtitleStatus: (id: number) => get<SubtitleStatus>(`/episodes/${id}/subtitles/status`),
   searchEpisodeSubtitles: (id: number, lang: string, variant = '') =>
-    get<SubtitleResult[]>(`/episodes/${id}/subtitles?lang=${encodeURIComponent(lang)}${variant ? `&variant=${variant}` : ''}`),
+    get<SubtitleSearch>(`/episodes/${id}/subtitles?lang=${encodeURIComponent(lang)}${variant ? `&variant=${variant}` : ''}`),
   downloadEpisodeSubtitle: (id: number, pick: Pick<SubtitleResult, 'fileId' | 'source' | 'link' | 'variant'>, language: string) =>
     post<{ path: string }>(`/episodes/${id}/subtitles/download`, { fileId: pick.fileId, source: pick.source ?? '', link: pick.link ?? '', language, variant: pick.variant ?? '' }),
   subtitlesWanted: (includeDismissed = false) => get<SubtitleWanted[]>(`/subtitles/wanted${includeDismissed ? '?includeDismissed=1' : ''}`),
@@ -3163,7 +3225,7 @@ export const api = {
   dismissSubtitles: (items: { kind: string; id: number }[]) => post<null>('/subtitles/dismiss', { items }),
   undismissSubtitles: (items: { kind: string; id: number }[]) => request<null>('/subtitles/dismiss', { method: 'DELETE', body: JSON.stringify({ items }) }),
   subtitleSweep: () => post<{ downloaded: number; message: string }>('/subtitles/sweep'),
-  searchSubtitles: (movieId: number, lang = 'en', variant = '') => get<SubtitleResult[]>(`/movies/${movieId}/subtitles?lang=${lang}${variant ? `&variant=${variant}` : ''}`),
+  searchSubtitles: (movieId: number, lang = 'en', variant = '') => get<SubtitleSearch>(`/movies/${movieId}/subtitles?lang=${lang}${variant ? `&variant=${variant}` : ''}`),
   downloadSubtitle: (movieId: number, pick: Pick<SubtitleResult, 'fileId' | 'source' | 'link' | 'variant'>, language = 'en') =>
     post<{ path: string }>(`/movies/${movieId}/subtitles/download`, { fileId: pick.fileId, source: pick.source ?? '', link: pick.link ?? '', language, variant: pick.variant ?? '' }),
 
@@ -3178,6 +3240,11 @@ export const api = {
   renameCustomFormat: (id: number, name: string) => put<CustomFormat>(`/custom-formats/${id}`, { name }),
   deleteCustomFormat: (id: number) => del<null>(`/custom-formats/${id}`),
   testCustomFormats: (title: string, profileId?: number) => post<FormatTestResult>('/custom-formats/test', { title, profileId: profileId ?? 0 }),
+  assignCustomFormats: (formatIds: number[], profileIds: number[], mode: { trash: true } | { score: number }) =>
+    post<FormatAssignResult>('/custom-formats/assign', { formatIds, profileIds, mode: 'trash' in mode ? 'trash' : 'score', score: 'score' in mode ? mode.score : 0 }),
+  trashDefaultScores: (formatIds: number[]) => post<{ scores: FormatScore[] }>('/custom-formats/default-scores', { formatIds }),
+  trashUpdatePreview: () => get<TrashUpdateResult>('/custom-formats/trash-update'),
+  trashUpdate: () => post<TrashUpdateResult>('/custom-formats/trash-update', {}),
   trashGuides: (app: 'radarr' | 'sonarr') => get<{ formats: TrashFormat[]; profiles: TrashProfile[] }>(`/trash-guides/${app}`),
   importTrashFormats: (app: 'radarr' | 'sonarr', trashIds: string[], profileId?: number) =>
     post<FormatImportResult>(`/trash-guides/${app}/formats`, { trashIds, profileId: profileId ?? 0 }),

@@ -143,7 +143,9 @@ func (s *Server) stopItem(item queue.Item, deleteFiles bool) error {
 	if item.Status != queue.StatusQueued && item.Status != queue.StatusDownloading && item.Status != queue.StatusImporting && item.Status != queue.StatusPaused {
 		return finished
 	}
+	ref, inClient := s.clientRefFor(item) // before the folder with its hash can go
 	if s.pipelines.interrupt(item.ID, true, deleteFiles, stopWait) {
+		s.removeFromClient(ref, inClient, false)
 		return nil
 	}
 	// Only while it has not finished: a download that completed a moment ago
@@ -155,6 +157,7 @@ func (s *Server) stopItem(item queue.Item, deleteFiles bool) error {
 	if !stopped {
 		return finished
 	}
+	s.removeFromClient(ref, inClient, false)
 	s.torrents.stopQueue(item.ID)
 	s.releaseTitleClaims(item)
 	if deleteFiles {
@@ -167,6 +170,8 @@ func (s *Server) stopItem(item queue.Item, deleteFiles bool) error {
 // partial files and removes it from the list. It does not wait for the
 // pipeline to finish: it sets the final state itself.
 func (s *Server) discardItem(item queue.Item) {
+	ref, inClient := s.clientRefFor(item)
+	defer s.removeFromClient(ref, inClient, false)
 	if !s.pipelines.interrupt(item.ID, true, true, stopWait) {
 		s.torrents.stopQueue(item.ID)
 	}

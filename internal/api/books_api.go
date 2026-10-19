@@ -448,7 +448,7 @@ func (s *Server) searchBook(bookID int64, f books.Format, retry bool) bool {
 		return false
 	}
 	blocked := s.searchSkipKeys()
-	for _, res := range filterSources(s.freshOnly(results), s.sourcesFor("")) {
+	for _, res := range filterSources(s.autoCandidates(ctx, results), s.sourcesFor("")) {
 		if searchSkips(res, blocked) {
 			continue
 		}

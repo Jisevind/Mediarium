@@ -239,7 +239,7 @@ A custom format spots something in a release name: HDR, Dolby Vision, a codec, a
 
 What the score does:
 
-- Between releases of the same quality, the higher score wins. Preferred terms still count and are added to it.
+- Between releases of the same quality, the higher score wins. Preferred terms still count and are added to it. The order is the same in automatic searches and when Mediarium picks a release for an upgrade: first the language, then the quality (a higher quality always beats a higher score), then the score, and only then the usual tie-breaks (Usenet before torrents, a cached torrent, more seeders).
 - A release scoring below the profile's **Minimum score** is skipped. With the TRaSH scores, a big negative score (often -10000) keeps a release out completely.
 - With **Keep looking for better versions** on, a file whose release scores below the profile's **Upgrade until score** is replaced by a release of the same or better quality that scores higher. 0 means scores never cause an upgrade. Mediarium remembers the release each file came from from this version on. A file imported earlier has no known release, so it's never replaced for its score alone.
 
@@ -252,12 +252,26 @@ The **Custom formats** card then has four tabs:
 - **Your formats** lists what you have, whether each is for movies or TV, how many conditions it has and which profiles score it. **Rename** and **Delete** are here. Deleting a format also takes its score out of every profile.
 - **From the TRaSH Guides** reads the guides' formats and ready-made profiles from GitHub (kept for six hours). Pick **Movies (Radarr)** or **TV (Sonarr)**. Then either:
   - **Create profile** on a ready-made profile. This makes a new quality profile with its qualities, cutoff, formats, scores, minimum score and upgrade-until score. A name you already use gets "(2)" added. Your own profiles are never changed.
-  - Tick formats and press **Add**. Choose a profile under **Give them TRaSH's default score in** to score them there at the same time.
+  - Tick formats and press **Add**. Under **Give them TRaSH's default score in** the profile your movies (or, for TV, your shows) use by default is already chosen, so the formats arrive with the score the guides give them. Every format shows that score in the list; a format you already have that scores 0 (or something else) in the chosen profile although the guides score it is marked with the profile's score (for example "0 in 1080p"). Choose **Don't score them** to add the formats without a score: they then count in no profile until you give them one. A format the guides give no score (0) is added without one.
   Importing a format again updates it. Qualities Mediarium doesn't have (Raw-HD, BR-DISK) are left out, and WEBRip and WEBDL count as one quality.
 - **Paste JSON** takes one format or a list, as the **Export** button of a Radarr or Sonarr custom format, their API or a TRaSH file writes it. A format with the same name replaces the one you have.
 - **Test a release** shows which formats a release name matches, its quality and, with a profile chosen, its score and whether that profile would take it.
 
-Then open a profile with **Edit** and set the scores under **Custom format scores**. Interactive search shows each release's score in a **Score** column, with the formats it matched when you hover.
+Then open a profile with **Edit** and set the scores under **Custom format scores**. Interactive search shows each release's score in a **Score** column, with a small arrow after it. The arrow opens a details row under the release (it works with the keyboard and by touch, no hovering): each format the release matched with the score your profile gives it (+100, -50), the total, the profile's minimum score and the score upgrades stop at, and in plain words every reason an automatic search would skip the release or rank it lower: a quality or language the profile doesn't take, a size outside the limits, a score under the minimum, a release already blocklisted, fewer seeders than the indexer's minimum, or a file you already have that is as good. **Show why** above the list opens the details of every release at once, and Mediarium remembers that choice in your browser. You can still grab any release by hand. In the API, a release of the interactive search (`GET /api/movies/{id}/search`, `/api/series/{id}/search`) carries `formatScore`, `formats` (a list of `{name, score}`), `minScore`, `upgradeUntil` and `reasons` (a list of `{kind, text}`). When the title's profile scores formats, the list starts with the **Best match** (the release an automatic search would take from this list, not one the list marks as skipped) and then goes by score, highest first; the other columns can be clicked to sort as before, and a third click on a column goes back to this order.
+
+### Giving many formats a score at once
+
+- **In the Custom formats card**, tick formats in **Your formats** (the box in the header ticks all), press **Add to profiles...**, tick one or more profiles and choose **TRaSH's score for each** or **The same score for all** with a score you type. A score the profile already has for one of these formats is replaced; 0 takes the format out of the profile. Formats that came from the guides get the score the guides give them now (read from GitHub, or the last one Mediarium saw if GitHub can't be reached). A format the guides give no score is left alone and named afterwards.
+- **On a profile's edit form**, under **Custom format scores**, **Add formats** opens a list of the formats the profile doesn't score yet. Tick some, choose TRaSH's score or one typed score, and they appear in the form with their scores. Nothing is saved until you press **Save profile**.
+
+### Keeping the TRaSH formats up to date
+
+The TRaSH Guides change now and then: a pattern is fixed, a new release group is added, a score moves. Mediarium remembers which formats came from the guides (through the TRaSH tab or an earlier import) and what score the guides gave them. At the top of the Custom formats card:
+
+- **Update from TRaSH** reads the guides and first shows what would change ("3 formats changed: ..."), with the profiles whose score would follow. Press **Update** to apply it.
+- **Keep TRaSH formats up to date** (off by default) does the same once a day by itself and writes a line in Activity ("Updated 3 custom formats from the TRaSH Guides"). It reads GitHub once a day; if that fails it tries again a few hours later. It only exists when you have formats from the guides.
+
+What an update changes: the conditions of the formats that came from the guides, and a profile's score for such a format **only when that score is still the one TRaSH gave last time**. A score you changed yourself stays as you set it. Formats you pasted or made yourself are never touched, and neither is a format's name. A format the guides no longer list stays as it is. A profile made with **Create profile** from a TRaSH profile that uses a score set other than the default keeps its own scores, because they aren't the default ones. Formats that were added before Mediarium remembered TRaSH's score get their conditions updated but no score is changed for them until the guides change a score again.
 
 A language condition set to **Original** (Radarr's and Sonarr's "Original", used by several TRaSH formats) means the language the film or show was made in, as TMDB lists it. It matches a release in that language, and its "not" form (negate) matches a release in another one. When TMDB doesn't give the original language, neither form matches. Conditions Mediarium understands: release title, release group, edition, source, resolution, quality modifier, language, release type (single episode, multi-episode, season pack) and size. Indexer flags (such as freeleech) aren't passed on by the indexers, so a condition on them never matches, and the format says so.
 
@@ -272,9 +286,13 @@ A language condition set to **Original** (Radarr's and Sonarr's "Original", used
 | `POST /api/custom-formats/test` | `{title, profileId}` tests a release name. |
 | `GET /api/trash-guides/{app}` | The TRaSH formats and profiles for `radarr` or `sonarr`. |
 | `POST /api/trash-guides/{app}/formats` | `{trashIds, profileId}` imports formats, scored in the profile when one is given. |
+| `POST /api/custom-formats/assign` | `{formatIds, profileIds, mode, score}` gives formats a score in several profiles. `mode` is `trash` (each format's TRaSH score) or `score` (the typed `score` for all; 0 removes the format from the profile). Answers `{profiles, scored, unscored}`. |
+| `POST /api/custom-formats/default-scores` | `{formatIds}` answers the TRaSH score of each format the guides score. |
+| `GET /api/custom-formats/trash-update` | Lists what an update from the guides would change, without changing anything. |
+| `POST /api/custom-formats/trash-update` | Updates the formats that came from the guides and answers what changed. |
 | `POST /api/trash-guides/{app}/profiles` | `{trashId}` creates a profile from a TRaSH one. |
 
-In `POST /api/quality-profiles` and `PUT /api/quality-profiles/{id}` the scores are `formatScores` (a list of `{formatId, score}`), with `minFormatScore`, `cutoffFormatScore` and `noSeasonPacks`. An update that leaves any of them out keeps the saved value. Search results carry `formatScore` and `formats` when the title's profile scores formats.
+In `POST /api/quality-profiles` and `PUT /api/quality-profiles/{id}` the scores are `formatScores` (a list of `{formatId, score}`), with `minFormatScore`, `cutoffFormatScore` and `noSeasonPacks`. An update that leaves any of them out keeps the saved value. Search results carry `formatScore` and `formats` when the title's profile scores formats, and `best: true` on the one release an automatic search would take. The daily update is `trashFormatsAuto` in `PUT /api/settings` (`formats.trash_auto_update`).
 
 ## Music profiles
 

@@ -61,6 +61,7 @@ func (s *Server) StartAutomation() *automation.Scheduler {
 		automation.Job{Name: "release-dates", Interval: releaseDatesEvery, Run: s.heavy(s.releaseDatesJob)}, // reads the digital release dates of the movies on the calendar
 		automation.Job{Name: "weekly-summary", Interval: digestCheck, Run: s.digestJob},                     // does nothing until a day is chosen
 		automation.Job{Name: "import-details", Interval: importDetailsInterval, Run: s.heavy(s.importDetailsJob)},
+		automation.Job{Name: "trash-formats", Interval: time.Hour, Run: s.heavy(s.trashFormatsJob)}, // does nothing until switched on; reads the guides once a day
 		automation.Job{Name: "episode-quality", Interval: 24 * time.Hour, Run: s.heavy(func(context.Context) { s.backfillEpisodeQuality() })},
 		automation.Job{Name: "import-added-dates", Interval: 24 * time.Hour, Run: s.heavy(func(context.Context) { s.backfillImportedAddedDates() })},
 		automation.Job{Name: "watched", Interval: watchedJobTick, Run: s.heavy(s.watchedJob)},                     // does nothing until switched on
@@ -228,13 +229,13 @@ func (s *Server) huntMovie(ctx context.Context, m library.Movie, instances []ind
 		var enough func([]indexers.Outcome) bool
 		if !force {
 			enough = func(o []indexers.Outcome) bool {
-				return pickBestResult(filterSources(matchingResults(dropBlocked(s.freshOnly(indexers.MergeResults(o)), blocked), m), sources), profile, m.Year) != nil
+				return pickBestResult(filterSources(matchingResults(dropBlocked(s.autoCandidates(ctx, indexers.MergeResults(o)), blocked), m), sources), profile, m.Year) != nil
 			}
 		}
 		outcomes := s.searchMovieTitles(ctx, instances, m, enough)
 		// A title search also returns other films with similar words; only
 		// releases of this movie may be grabbed.
-		best := pickBestResult(s.limitMovieResults(ctx, m, profile, !force, filterSources(matchingResults(dropBlocked(s.freshOnly(indexers.MergeResults(outcomes)), blocked), m), sources)), profile, m.Year)
+		best := pickBestResult(s.limitMovieResults(ctx, m, profile, !force, filterSources(matchingResults(dropBlocked(s.autoCandidates(ctx, indexers.MergeResults(outcomes)), blocked), m), sources)), profile, m.Year)
 		s.noteMovieSearch(ctx, noteMode(force), m, outcomes, blocked, sources, profile, best, "")
 		if best == nil {
 			return false
@@ -254,11 +255,11 @@ func (s *Server) huntMovie(ctx context.Context, m library.Movie, instances []ind
 		var enough func([]indexers.Outcome) bool
 		if !force {
 			enough = func(o []indexers.Outcome) bool {
-				return pickUpgradeResult(filterSources(matchingResults(dropBlocked(s.freshOnly(indexers.MergeResults(o)), blocked), m), sources), profile, currentTier, m.ReleaseTitle, m.Year) != nil
+				return pickUpgradeResult(filterSources(matchingResults(dropBlocked(s.autoCandidates(ctx, indexers.MergeResults(o)), blocked), m), sources), profile, currentTier, m.ReleaseTitle, m.Year) != nil
 			}
 		}
 		outcomes := s.searchMovieTitles(ctx, instances, m, enough)
-		best := pickUpgradeResult(s.limitMovieResults(ctx, m, profile, !force, filterSources(matchingResults(dropBlocked(s.freshOnly(indexers.MergeResults(outcomes)), blocked), m), sources)), profile, currentTier, m.ReleaseTitle, m.Year)
+		best := pickUpgradeResult(s.limitMovieResults(ctx, m, profile, !force, filterSources(matchingResults(dropBlocked(s.autoCandidates(ctx, indexers.MergeResults(outcomes)), blocked), m), sources)), profile, currentTier, m.ReleaseTitle, m.Year)
 		s.noteMovieSearch(ctx, noteMode(force), m, outcomes, blocked, sources, profile, best, currentTier)
 		if best == nil {
 			return false
@@ -337,7 +338,7 @@ func (s *Server) rssSync(ctx context.Context) {
 	}
 
 	outcomes := indexers.SearchAll(ctx, instances, "", movieCategory)
-	results := dropBlocked(s.freshOnly(indexers.MergeResults(outcomes)), s.searchSkipKeys())
+	results := dropBlocked(s.autoCandidates(ctx, indexers.MergeResults(outcomes)), s.searchSkipKeys())
 
 	for _, m := range missing {
 		best := pickBestResult(s.limitMovieResults(ctx, m, s.profileForMovie(profiles, m), true, filterSources(matchingResults(results, m), s.sourcesFor(m.SourcePref))), s.profileForMovie(profiles, m), m.Year)

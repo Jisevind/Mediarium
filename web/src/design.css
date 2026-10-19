@@ -1077,6 +1077,7 @@ details.own-key[open] summary { margin-bottom: 6px; }
 .added-list li { display: flex; align-items: center; gap: 10px; }
 .added-list .added-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .indexer-row { grid-template-columns: 40px minmax(0, 1fr) auto; }
+.indexer-card .tile-ico { display: grid; place-items: center; border-radius: 10px; }
 .tile-ico.proto-torrent { color: var(--c-discover); background: color-mix(in srgb, var(--c-discover) 14%, transparent); }
 .tile-ico.proto-usenet { color: var(--c-activity); background: color-mix(in srgb, var(--c-activity) 14%, transparent); }
 .target-row .tile-ico { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; }
@@ -1163,15 +1164,13 @@ details.own-key[open] summary { margin-bottom: 6px; }
 .choice-card.active .choice-dot { border-color: var(--accent); background: radial-gradient(circle, var(--accent) 45%, transparent 50%); }
 
 /* Settings > Indexers: add form, your list, and the small Cloudflare card side by side. */
-.indexer-cols { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1.15fr) minmax(240px, 0.7fr); gap: 20px; align-items: stretch; }
+.indexer-cols { display: flex; flex-direction: column; gap: 20px; }
 .indexer-cols > fieldset.group { margin: 0; min-width: 0; }
 .flare-card { display: flex; flex-direction: column; gap: 10px; font-size: 0.9rem; }
 .flare-card p { margin: 0; }
 .flare-card .flare-field { display: grid; gap: 6px; margin-top: auto; }
 .flare-card .flare-field input { width: 100%; }
 .flare-card > button.primary { align-self: flex-start; }
-@media (max-width: 1280px) { .indexer-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .indexer-cols > .flare-card { grid-column: 1 / -1; } }
-@media (max-width: 860px) { .indexer-cols { grid-template-columns: minmax(0, 1fr); } }
 
 /* =====================================================================
    Flow: no hard lines between the sidebar, header and page; one surface.
@@ -2268,6 +2267,8 @@ legend .srv-dot { margin-left: 6px; }
 .format-thresholds small { color: var(--text-dim); }
 .format-problem { color: var(--warn, #d9822b); font-size: 0.78rem; }
 .formats-table td { vertical-align: top; }
+.formats-table td.format-conditions, .formats-table th { white-space: nowrap; }
+.formats-table th:first-child, .formats-table td:first-child { width: 1%; padding-right: 4px; }
 .trash-columns { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 16px; align-items: start; }
 .trash-profiles, .trash-formats, .format-test-matches { list-style: none; margin: 0; padding: 0; }
 .trash-profiles { max-height: 460px; overflow-y: auto; }
@@ -2278,6 +2279,13 @@ legend .srv-dot { margin-left: 6px; }
 .trash-formats li { break-inside: avoid; }
 .trash-formats label { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 0.88rem; color: var(--text); }
 .trash-score { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-dim); margin-left: auto; }
+.trash-update-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; margin-bottom: 14px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius, 8px); }
+.trash-update-bar > :first-child { flex: 1 1 360px; min-width: 0; }
+.assign-bar { margin-bottom: 12px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius, 8px); }
+.assign-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.assign-body { display: grid; gap: 10px; margin-top: 10px; }
+.add-formats { margin: 4px 0 10px; }
+.trash-score-note { margin: 10px 0 0; font-size: 0.85rem; color: var(--text-dim); }
 .trash-import-bar { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
 .format-test-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
 .format-test-result { padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
@@ -2663,6 +2671,8 @@ tr.is-default > td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .indexer-health.ok { color: var(--success, #34d399); }
 .indexer-health.bad { color: var(--danger); }
 .indexer-priority { display: flex; flex-direction: column; gap: 2px; margin-left: auto; font-size: 0.78rem; color: var(--text-dim); flex: none; }
+.indexer-minseed { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.78rem; color: var(--text-dim); }
+.indexer-minseed input { width: 72px; flex: none; padding: 4px 8px; text-align: center; }
 .indexer-priority select { width: auto; min-height: 30px; padding: 2px 8px; font-size: 0.85rem; }
 
 /* Series page: season bar and folding seasons */
@@ -3160,9 +3170,27 @@ img[data-broken] { visibility: hidden; }
 .rel-scroll table.rel-table { display: table; width: 100%; overflow: visible; }
 .rel-table th { white-space: nowrap; }
 .rel-table td.rel-fit { white-space: nowrap; }
+.rel-table td.rel-dim { opacity: 0.5; }
 .rel-table th, .rel-table td { padding-left: 8px; padding-right: 8px; }
 .rel-table td.rel-name { min-width: 11rem; overflow-wrap: anywhere; }
 .rel-table td.rel-name .badge { white-space: normal; overflow-wrap: normal; }
+
+/* "Why this score": a small button after the score opens a row under the release. The row sticks to the left edge of the scrolling box and is as wide as the screen, so it reads without sideways scrolling on a phone. */
+.rel-why-btn { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: 3px; min-width: 28px; height: 28px; margin-left: 6px; border-radius: 6px; color: var(--text-dim); cursor: pointer; vertical-align: middle; }
+.rel-why-btn:hover { color: var(--text); background: color-mix(in srgb, var(--text) 8%, transparent); }
+.rel-why-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.rel-why-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--warning); }
+.rel-table tr.rel-open > td { border-bottom-color: transparent; }
+.rel-table tr.rel-why-row > td { padding-top: 0; padding-bottom: 12px; white-space: normal; }
+.rel-why { position: sticky; left: 0; box-sizing: border-box; width: min(100%, calc(100vw - 64px)); display: flex; flex-wrap: wrap; gap: 12px 32px; padding: 10px 14px; border-radius: 4px 12px 12px 12px; background: color-mix(in srgb, var(--text) 5%, transparent); }
+.rel-why-col { flex: 1 1 260px; min-width: 0; }
+.rel-why-col h4 { margin: 0 0 6px; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-dim); }
+.rel-why-formats, .rel-why-reasons { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.rel-why-formats li { display: flex; justify-content: space-between; gap: 16px; }
+.rel-why-formats li > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.rel-why-reasons li { overflow-wrap: anywhere; }
+.rel-why-total { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 8px 0 0; padding-top: 6px; border-top: 1px solid var(--border); font-weight: 600; }
+.rel-why-limits, .rel-why-none { margin: 4px 0 0; color: var(--text-dim); font-size: 0.85rem; }
 
 /* Library list: status, quality, profile and the buttons stay whole; only the title wraps. */
 .lib-list th, .lib-list td { white-space: nowrap; }

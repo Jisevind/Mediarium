@@ -1,7 +1,7 @@
 // Run with: npm test (uses node's built-in test runner, no extra packages).
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { ageOf, filterReleases, indexersIn, qualitiesIn, resolutionOf, sortReleases, sortSubtitles, subtitleFit, subtitleRating, subtitleSite, type SortableRelease } from './releaseSort.ts'
+import { ageOf, defaultOrder, filterReleases, indexersIn, qualitiesIn, resolutionOf, sortReleases, sortSubtitles, subtitleFit, subtitleRating, subtitleSite, type SortableRelease } from './releaseSort.ts'
 
 const base = { protocol: 'usenet', sizeBytes: 0 }
 const list: SortableRelease[] = [
@@ -24,6 +24,14 @@ test('size, seeders and names sort the way people read them', () => {
   assert.deepEqual(sortReleases(list, 'seeders', -1).map((r) => r.seeders ?? null), [50, 3, null, null])
   assert.equal(sortReleases(list, 'indexer', 1)[0].indexerName, 'Alpha')
   assert.equal(sortReleases(list, null, 1), list)
+})
+
+test('the list starts with the best match, then the highest score, then the order the server gave', () => {
+  const r = (title: string, formatScore?: number, best?: boolean): SortableRelease => ({ ...base, title, indexerName: 'A', formatScore, best })
+  const scored = [r('a', 0), r('b', 300), r('c', -50), r('d', 300), r('e', 100, true)]
+  assert.deepEqual(defaultOrder(scored).map((x) => x.title), ['e', 'b', 'd', 'a', 'c'])
+  // A list that is not scored and has no marked release is left alone.
+  assert.equal(defaultOrder(list), list)
 })
 
 test('filters combine: indexer, quality and words in the title', () => {
