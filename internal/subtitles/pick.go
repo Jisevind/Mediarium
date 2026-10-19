@@ -38,8 +38,16 @@ func Score(r Result, videoName string) float64 {
 	if dl > 40 {
 		dl = 40
 	}
+	if r.HearingImpaired {
+		// Kept, but under an equal plain subtitle: the sound descriptions are
+		// noise for most people.
+		score -= hearingImpairedPenalty
+	}
 	return score + dl + r.Rating*2
 }
+
+// hearingImpairedPenalty puts a hearing-impaired subtitle below a plain one that fits equally well.
+const hearingImpairedPenalty = 5
 
 // releaseScore is how closely one release name matches the video's.
 func releaseScore(release string, video parser.Release) float64 {
@@ -64,9 +72,9 @@ func releaseScore(release string, video parser.Release) float64 {
 // none.
 func Pick(results []Result, videoName string) *Result {
 	var best *Result
-	bestScore := -1.0
+	bestScore := 0.0
 	for i := range results {
-		if s := Score(results[i], videoName); s > bestScore {
+		if s := Score(results[i], videoName); best == nil || s > bestScore {
 			bestScore = s
 			best = &results[i]
 		}

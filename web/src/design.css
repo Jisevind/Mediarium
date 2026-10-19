@@ -1137,15 +1137,13 @@ details.own-key[open] summary { margin-bottom: 6px; }
 .choice-card.active .choice-dot { border-color: var(--accent); background: radial-gradient(circle, var(--accent) 45%, transparent 50%); }
 
 /* Settings > Indexers: add form, your list, and the small Cloudflare card side by side. */
-.indexer-cols { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1.15fr) minmax(240px, 0.7fr); gap: 20px; align-items: stretch; }
+.indexer-cols { display: flex; flex-direction: column; gap: 20px; }
 .indexer-cols > fieldset.group { margin: 0; min-width: 0; }
 .flare-card { display: flex; flex-direction: column; gap: 10px; font-size: 0.9rem; }
 .flare-card p { margin: 0; }
 .flare-card .flare-field { display: grid; gap: 6px; margin-top: auto; }
 .flare-card .flare-field input { width: 100%; }
 .flare-card > button.primary { align-self: flex-start; }
-@media (max-width: 1280px) { .indexer-cols { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .indexer-cols > .flare-card { grid-column: 1 / -1; } }
-@media (max-width: 860px) { .indexer-cols { grid-template-columns: minmax(0, 1fr); } }
 
 /* =====================================================================
    Flow: no hard lines between the sidebar, header and page; one surface.

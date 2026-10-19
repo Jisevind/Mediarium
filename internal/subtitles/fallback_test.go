@@ -39,7 +39,8 @@ func TestSubDLFallsBackToImdbThenName(t *testing.T) {
 			}
 			return miss
 		}, []string{"tmdb_id", "imdb_id", "film_name"}, 1},
-		{"nothing works", func(q map[string][]string) string { return miss }, []string{"tmdb_id", "imdb_id", "film_name"}, 0},
+		// Each lookup is tried again with fewer filters before giving up.
+		{"nothing works", func(q map[string][]string) string { return miss }, []string{"tmdb_id", "imdb_id", "film_name", "tmdb_id", "imdb_id", "film_name"}, 0},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -54,10 +55,10 @@ func TestSubDLFallsBackToImdbThenName(t *testing.T) {
 					}
 				}
 				mu.Unlock()
-				if q.Get("film_name") != "" && (q.Get("year") != "1999" || q.Get("film_name") != "The Sixth Sense") {
+				if q.Get("film_name") != "" && ((q.Get("year") != "1999" && q.Get("hi") != "") || q.Get("film_name") != "The Sixth Sense") {
 					t.Errorf("name search: %s", q.Encode())
 				}
-				if q.Get("type") != "movie" || q.Get("languages") != "EN" {
+				if q.Get("type") != "movie" || (q.Get("languages") != "EN" && q.Get("hi") != "") {
 					t.Errorf("type/languages: %s", q.Encode())
 				}
 				fmt.Fprint(w, tc.answers(q))

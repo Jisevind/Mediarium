@@ -10,6 +10,13 @@ export interface ReleaseNotes {
 
 export const WHATS_NEW: ReleaseNotes[] = [
   {
+    version: '3.2.6',
+    items: [
+      t("The Indexers & Search page is one full-width card per section, with your indexers in up to three columns."),
+      t("When a subtitle search finds nothing, a Details line shows what each site was asked and what came back."),
+    ],
+  },
+  {
     version: '3.2.5',
     items: [
       t("Pick the country for a movie's release dates under Settings > Info, lists and subtitles."),

@@ -112,35 +112,64 @@ test('the drawer theme button, month arrows and Browse more are at least 40px on
   expect((await more.boundingBox())?.height).toBeGreaterThanOrEqual(40)
 })
 
-// On Settings > Indexers & Search no card sits on top of another one, however
-// far the page is scrolled (the add card used to be sticky and slid over the
-// sections below it). Run with --project app, app-tablet or app-phone.
-test('indexers page: no card overlaps another', async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('mediarium-demo', '1'))
-  await page.goto('/settings/indexers')
-  const content = page.locator('main.content')
-  await expect(content).toBeVisible()
-  await page.waitForTimeout(800)
-  const sel = '.settings-content fieldset.group, .settings-content .indexer-card'
-  const height = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, document.querySelector('main.content')!.scrollHeight))
-  for (let y = 0; y <= height; y += 400) {
-    await content.evaluate((el, top) => { el.scrollTo(0, top); window.scrollTo(0, top) }, y)
-    const clashes = await page.evaluate((s) => {
-      const els = Array.from(document.querySelectorAll(s)).filter((e) => (e as HTMLElement).offsetParent !== null)
-      const out: string[] = []
-      for (let i = 0; i < els.length; i++) {
-        for (let j = i + 1; j < els.length; j++) {
-          const a = els[i], b = els[j]
-          if (a.contains(b) || b.contains(a)) continue
-          const r = a.getBoundingClientRect(), q = b.getBoundingClientRect()
-          const w = Math.min(r.right, q.right) - Math.max(r.left, q.left)
-          const h = Math.min(r.bottom, q.bottom) - Math.max(r.top, q.top)
-          if (w > 1 && h > 1) out.push(`${a.className} / ${b.className}`)
-        }
-      }
-      const pinned = Array.from(document.querySelectorAll('.settings-content *')).filter((e) => ['sticky', 'fixed'].includes(getComputedStyle(e).position))
-      return out.concat(pinned.map((e) => `pinned: ${e.className}`))
-    }, sel)
-    expect(clashes, `overlap at scroll ${y}`).toEqual([])
+// Cards (and indexer cards) whose boxes overlap, ignoring anything inside a
+// closed <details> (its content keeps a box but is not drawn).
+const CLASHES = (sel: string) => {
+  const els = Array.from(document.querySelectorAll(sel)).filter((e) => {
+    if ((e as HTMLElement).offsetParent === null) return false
+    const d = e.closest('details')
+    return !d || d.open || e === d
+  })
+  const out: string[] = []
+  for (let i = 0; i < els.length; i++) {
+    for (let j = i + 1; j < els.length; j++) {
+      const a = els[i], b = els[j]
+      if (a.contains(b) || b.contains(a)) continue
+      const r = a.getBoundingClientRect(), q = b.getBoundingClientRect()
+      const w = Math.min(r.right, q.right) - Math.max(r.left, q.left)
+      const h = Math.min(r.bottom, q.bottom) - Math.max(r.top, q.top)
+      if (w > 1 && h > 1) out.push(`${a.className} / ${b.className}`)
+    }
   }
+  const pinned = Array.from(document.querySelectorAll('.settings-content *')).filter((e) => ['sticky', 'fixed'].includes(getComputedStyle(e).position))
+  return out.concat(pinned.map((e) => `pinned: ${e.className}`))
+}
+
+// On Settings > Indexers & Search no card sits on top of another one, however
+// far the page is scrolled and at every width from a phone to a wide screen
+// (the add card used to be sticky and slid over the sections below it, and the
+// two columns used to overlap at about 750px). Run with --project app, app-tablet or app-phone.
+for (const width of [750, 900, 1100, 1440]) {
+  test(`indexers page: no card overlaps another at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await page.addInitScript(() => localStorage.setItem('mediarium-demo', '1'))
+    await page.goto('/settings/indexers')
+    const content = page.locator('main.content')
+    await expect(content).toBeVisible()
+    await page.waitForTimeout(800)
+    const sel = '.settings-content fieldset.group, .settings-content .indexer-card'
+    const height = await page.evaluate(() => Math.max(document.documentElement.scrollHeight, document.querySelector('main.content')!.scrollHeight))
+    for (let y = 0; y <= height; y += 400) {
+      await content.evaluate((el, top) => { el.scrollTo(0, top); window.scrollTo(0, top) }, y)
+      expect(await page.evaluate(CLASHES, sel), `overlap at scroll ${y}`).toEqual([])
+    }
+    const over = await content.evaluate((el) => el.scrollWidth - el.clientWidth)
+    expect(over).toBeLessThanOrEqual(0)
+  })
+}
+
+// Every settings page at 750px: no card's box overlaps another card's box.
+test('all settings pages: no card overlaps another at 750px', async ({ page }) => {
+  test.setTimeout(240_000)
+  await page.setViewportSize({ width: 750, height: 900 })
+  await page.addInitScript(() => localStorage.setItem('mediarium-demo', '1'))
+  const bad: string[] = []
+  for (const path of SETTINGS) {
+    await page.goto(path)
+    await expect(page.locator('main.content')).toBeVisible()
+    await page.waitForTimeout(600)
+    const clashes = await page.evaluate(CLASHES, '.settings-content fieldset.group, .settings-content section.card, .settings-content .settings-stack > .card')
+    if (clashes.length) bad.push(`${path}: ${clashes.slice(0, 3).join(' | ')}`)
+  }
+  expect(bad).toEqual([])
 })

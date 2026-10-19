@@ -8,6 +8,20 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.2.6] - 2026-10-19
+
+In short: a tidier Indexers & Search page, and a way to see why a subtitle search finds nothing.
+- Every section of the Indexers & Search page is one full-width card, and your indexers sit in up to three columns, with no card overlapping another at any width.
+- When a subtitle search finds nothing, a Details line shows what each site was asked and what it answered, and SubDL is asked in more forgiving ways.
+
+### Fixed
+- On Settings > Indexers & Search the "Your indexers" card no longer overlaps the "Add an indexer" card at medium widths. Every section is one full-width card, stacked (reported by SanketBaraiya on GitHub, #80).
+- SubDL lookups are more forgiving: if every lookup finds nothing it is repeated with fewer filters, the language is accepted in any spelling, full download links are accepted, and hearing-impaired results are ranked lower instead of dropped (SanketBaraiya on GitHub, #83).
+
+### Changed
+- The indexer list is a grid of up to three columns (two on medium screens, one on a phone). On a wide screen the add card shows the search and filters beside the list of sites (SanketBaraiya on GitHub, #80).
+- When a subtitle search finds nothing, a collapsed Details line under the result lists, for each site and lookup, what was asked and what came back (never keys). The search answer of the movie and episode subtitle endpoints is now an object with `results` and `diagnostics` instead of a bare list.
+
 ## [3.2.5] - 2026-10-19
 
 In short: release dates for your own country, and the Indexers & Search page fixed.

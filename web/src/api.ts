@@ -1962,6 +1962,24 @@ export interface SubtitleResult {
   variant?: 'sdh' | 'forced' // for the hard of hearing / only the foreign-language lines; empty is the plain full subtitle
 }
 
+// What one lookup at one subtitle site asked and what came back; an empty
+// search shows these so it is clear why nothing was found.
+export interface SubtitleDiagnostic {
+  source: string
+  lookup: 'tmdb' | 'imdb' | 'title' | ''
+  value?: string
+  bare?: boolean // the second try, with fewer filters
+  count: number // results kept
+  found: number // what the site sent back, before anything was dropped
+  note?: 'no-match' | 'wrong-language' | 'wrong-episode' | 'bad-link' | 'error'
+  detail?: string
+}
+
+export interface SubtitleSearch {
+  results: SubtitleResult[]
+  diagnostics: SubtitleDiagnostic[]
+}
+
 export interface VPNConfig {
   id: number
   label: string
@@ -3134,7 +3152,7 @@ export const api = {
   movieSubtitleStatus: (id: number) => get<SubtitleStatus>(`/movies/${id}/subtitles/status`),
   episodeSubtitleStatus: (id: number) => get<SubtitleStatus>(`/episodes/${id}/subtitles/status`),
   searchEpisodeSubtitles: (id: number, lang: string, variant = '') =>
-    get<SubtitleResult[]>(`/episodes/${id}/subtitles?lang=${encodeURIComponent(lang)}${variant ? `&variant=${variant}` : ''}`),
+    get<SubtitleSearch>(`/episodes/${id}/subtitles?lang=${encodeURIComponent(lang)}${variant ? `&variant=${variant}` : ''}`),
   downloadEpisodeSubtitle: (id: number, pick: Pick<SubtitleResult, 'fileId' | 'source' | 'link' | 'variant'>, language: string) =>
     post<{ path: string }>(`/episodes/${id}/subtitles/download`, { fileId: pick.fileId, source: pick.source ?? '', link: pick.link ?? '', language, variant: pick.variant ?? '' }),
   subtitlesWanted: (includeDismissed = false) => get<SubtitleWanted[]>(`/subtitles/wanted${includeDismissed ? '?includeDismissed=1' : ''}`),
@@ -3144,7 +3162,7 @@ export const api = {
   dismissSubtitles: (items: { kind: string; id: number }[]) => post<null>('/subtitles/dismiss', { items }),
   undismissSubtitles: (items: { kind: string; id: number }[]) => request<null>('/subtitles/dismiss', { method: 'DELETE', body: JSON.stringify({ items }) }),
   subtitleSweep: () => post<{ downloaded: number; message: string }>('/subtitles/sweep'),
-  searchSubtitles: (movieId: number, lang = 'en', variant = '') => get<SubtitleResult[]>(`/movies/${movieId}/subtitles?lang=${lang}${variant ? `&variant=${variant}` : ''}`),
+  searchSubtitles: (movieId: number, lang = 'en', variant = '') => get<SubtitleSearch>(`/movies/${movieId}/subtitles?lang=${lang}${variant ? `&variant=${variant}` : ''}`),
   downloadSubtitle: (movieId: number, pick: Pick<SubtitleResult, 'fileId' | 'source' | 'link' | 'variant'>, language = 'en') =>
     post<{ path: string }>(`/movies/${movieId}/subtitles/download`, { fileId: pick.fileId, source: pick.source ?? '', link: pick.link ?? '', language, variant: pick.variant ?? '' }),
 
