@@ -8,6 +8,13 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.2.12] - 2026-10-19
+
+In short: the address of a site on your own network could not be edited yet.
+
+### Fixed
+- The address of a site on your own network (BitMagnet, for example) stayed a fixed choice of its two listed links, with no Address field when editing. The site list your server had saved came from an older version and didn't say which sites run on your network; it is worked out when the list is read now, so the field is there without pressing Update list (reported by userkbmsr-png on GitHub, #90).
+
 ## [3.2.11] - 2026-10-19
 
 In short: see why a release got its score, and use your own address for a site on your network.

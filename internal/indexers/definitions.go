@@ -321,6 +321,12 @@ func (s *DefinitionStore) loadIndexLocked() (*DefinitionIndex, error) {
 func (s *DefinitionStore) recheckUnsupportedLocked(idx *DefinitionIndex) {
 	for i := range idx.Definitions {
 		d := &idx.Definitions[i]
+		// Whether a site runs on the person's own network follows from its links,
+		// so it is worked out here too: a list saved by an older version has no
+		// such mark.
+		if !d.Custom {
+			d.Local = IsLocalDefinition(d.Links)
+		}
 		if d.Supported || d.Custom {
 			continue
 		}
