@@ -41,6 +41,11 @@ type searchResultPayload struct {
 	// (debrid_cache.go).
 	Cached bool   `json:"cached,omitempty"`
 	hash   string // the info hash from the indexer or the magnet link, for the cache check
+	// BelowMinSeeders is set on a torrent with fewer seeders than the minimum set
+	// on its indexer (MinSeeders): automatic searches skip it, a grab by hand is
+	// still allowed. A cached release is never marked.
+	BelowMinSeeders bool `json:"belowMinSeeders,omitempty"`
+	MinSeeders      int  `json:"minSeeders,omitempty"`
 	// Season/Episodes are set for TV releases (Episodes empty = a season
 	// pack), so the unified search UI can label them and route the grab.
 	Season   int   `json:"season,omitempty"`
@@ -102,6 +107,9 @@ func (s *Server) toSearchResultPayload(res indexers.Result) searchResultPayload 
 	}
 	if !res.PublishDate.IsZero() {
 		payload.PublishDate = res.PublishDate.Format("2006-01-02T15:04:05Z07:00")
+	}
+	if belowMinSeeders(res) {
+		payload.BelowMinSeeders, payload.MinSeeders = true, res.MinSeeders
 	}
 	fit := quality.FitLanguageOnly(release, s.preferredLanguage(), s.languageOnly())
 	payload.Language = fit.Label

@@ -67,6 +67,9 @@ type Instance struct {
 	// RequestsPerDay is the daily limit a person set for the indexer; 0 = none
 	// set, so what the indexer itself reported (if anything) is used.
 	RequestsPerDay int
+	// MinSeeders is the fewest seeders a torrent release from this indexer needs
+	// to be picked by itself; 0 = off. Usenet indexers ignore it.
+	MinSeeders int
 	// SecretError is set when the saved key or password of this indexer could
 	// not be read (usually a secret.key that does not belong to the database).
 	// The indexer is still listed, so it can be fixed, but it is never searched.
@@ -119,6 +122,14 @@ func ParsePriority(v any) (int, bool) {
 		return n, err == nil && n >= PriorityMin && n <= PriorityMax
 	}
 	return 0, false
+}
+
+// MinSeedersMax is the largest minimum a person can set.
+const MinSeedersMax = 1000
+
+// ClampMinSeeders keeps a stored minimum inside 0 to MinSeedersMax.
+func ClampMinSeeders(n int) int {
+	return min(max(n, 0), MinSeedersMax)
 }
 
 // ClampPriority returns p, or PriorityDefault when p is outside 1 to 50
@@ -241,6 +252,9 @@ func SearchAll(ctx context.Context, instances []Instance, query string, categori
 					results[j].Protocol = ProtocolTorrent
 				}
 				results[j].Priority = inst.Priority
+				if results[j].Protocol == ProtocolTorrent {
+					results[j].MinSeeders = inst.MinSeeders
+				}
 			}
 			outcomes[i] = Outcome{IndexerName: inst.Name, Results: results, Err: err, LimitNote: limitNote}
 			// A search cut short by the caller, or waiting for the VPN, says

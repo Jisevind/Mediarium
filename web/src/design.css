@@ -2644,6 +2644,8 @@ tr.is-default > td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
 .indexer-health.ok { color: var(--success, #34d399); }
 .indexer-health.bad { color: var(--danger); }
 .indexer-priority { display: flex; flex-direction: column; gap: 2px; margin-left: auto; font-size: 0.78rem; color: var(--text-dim); flex: none; }
+.indexer-minseed { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.78rem; color: var(--text-dim); }
+.indexer-minseed input { width: 72px; flex: none; padding: 4px 8px; text-align: center; }
 .indexer-priority select { width: auto; min-height: 30px; padding: 2px 8px; font-size: 0.85rem; }
 
 /* Series page: season bar and folding seasons */
@@ -3141,6 +3143,7 @@ img[data-broken] { visibility: hidden; }
 .rel-scroll table.rel-table { display: table; width: 100%; overflow: visible; }
 .rel-table th { white-space: nowrap; }
 .rel-table td.rel-fit { white-space: nowrap; }
+.rel-table td.rel-dim { opacity: 0.5; }
 .rel-table th, .rel-table td { padding-left: 8px; padding-right: 8px; }
 .rel-table td.rel-name { min-width: 11rem; overflow-wrap: anywhere; }
 .rel-table td.rel-name .badge { white-space: normal; overflow-wrap: normal; }

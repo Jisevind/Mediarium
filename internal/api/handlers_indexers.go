@@ -34,6 +34,9 @@ type indexerPayload struct {
 	LastTestError string         `json:"lastTestError,omitempty"`
 	LastTestAt    string         `json:"lastTestAt,omitempty"`
 	Priority      int            `json:"priority"` // 1 to 50, lower is tried first
+	// MinSeeders is the fewest seeders a torrent from this indexer needs to be
+	// grabbed by itself (0 = off).
+	MinSeeders int `json:"minSeeders"`
 	// Back-off: set while searches skip the indexer after repeated failures.
 	Failures    int    `json:"failures,omitempty"`    // failures in a row
 	PausedUntil string `json:"pausedUntil,omitempty"` // RFC 3339; searches skip the indexer until then
@@ -62,7 +65,7 @@ func (p indexerPayload) isCardigann() bool {
 func (s *Server) toIndexerPayload(inst indexers.Instance) indexerPayload {
 	p := indexerPayload{
 		ID: inst.ID, Name: inst.Name, Kind: string(inst.Kind), DefinitionID: inst.DefinitionID, BaseURL: inst.BaseURL,
-		Protocol: string(inst.Protocol), Enabled: inst.Enabled, LastTestError: inst.LastTestError, RequestsPerDay: inst.RequestsPerDay,
+		Protocol: string(inst.Protocol), Enabled: inst.Enabled, LastTestError: inst.LastTestError, RequestsPerDay: inst.RequestsPerDay, MinSeeders: inst.MinSeeders,
 		HasAPIKey: inst.APIKey != "", Priority: indexerRank(inst.Priority),
 	}
 	if !inst.LastTestAt.IsZero() {
@@ -128,6 +131,7 @@ func (s *Server) handleCreateIndexer(w http.ResponseWriter, r *http.Request) {
 	req.Name, req.BaseURL, req.APIKey = strings.TrimSpace(req.Name), strings.TrimSpace(req.BaseURL), strings.TrimSpace(req.APIKey)
 	if rejectBad(w,
 		checkRequestsPerDay(req.RequestsPerDay),
+		checkMinSeeders(req.MinSeeders),
 		checkRequired(req.Name, "Give this indexer a name, for example the name of the website."),
 		checkIndexerName(req.Name),
 		checkRequired(req.BaseURL, "Add the address of the indexer, for example https://api.example.com."),
@@ -144,7 +148,7 @@ func (s *Server) handleCreateIndexer(w http.ResponseWriter, r *http.Request) {
 	}
 	created, err := s.IndexerRepo.Create(indexers.Instance{
 		Name: req.Name, DefinitionID: req.DefinitionID, BaseURL: req.BaseURL, APIKey: req.APIKey, Protocol: protocol, Enabled: true,
-		RequestsPerDay: req.RequestsPerDay,
+		RequestsPerDay: req.RequestsPerDay, MinSeeders: req.MinSeeders,
 	}, nil)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -227,7 +231,7 @@ func (s *Server) createCardigannIndexer(w http.ResponseWriter, r *http.Request, 
 	if !ok {
 		return
 	}
-	if rejectBad(w, checkRequestsPerDay(req.RequestsPerDay)) {
+	if rejectBad(w, checkRequestsPerDay(req.RequestsPerDay), checkMinSeeders(req.MinSeeders)) {
 		return
 	}
 	base := strings.TrimSpace(req.BaseURL)
@@ -256,7 +260,7 @@ func (s *Server) createCardigannIndexer(w http.ResponseWriter, r *http.Request, 
 	}
 	created, err := s.IndexerRepo.Create(indexers.Instance{
 		Name: name, Kind: indexers.KindCardigann, DefinitionID: sum.ID, BaseURL: base, Protocol: protocol,
-		Enabled: true, Settings: settingsMap, RequestsPerDay: req.RequestsPerDay,
+		Enabled: true, Settings: settingsMap, RequestsPerDay: req.RequestsPerDay, MinSeeders: req.MinSeeders,
 	}, sum.IsSecret)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
@@ -275,6 +279,9 @@ type indexerUpdate struct {
 	// RequestsPerDay is the most requests a day Mediarium makes to the indexer
 	// (0 = no limit set). Left out keeps the saved value.
 	RequestsPerDay *int `json:"requestsPerDay"`
+	// MinSeeders is the fewest seeders a torrent needs to be grabbed by itself
+	// (0 = off). Left out keeps the saved value.
+	MinSeeders *int `json:"minSeeders"`
 }
 
 // handleUpdateIndexer edits a saved indexer. Every field is optional: what
@@ -314,6 +321,12 @@ func (s *Server) handleUpdateIndexer(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		inst.RequestsPerDay = *req.RequestsPerDay
+	}
+	if req.MinSeeders != nil {
+		if rejectBad(w, checkMinSeeders(*req.MinSeeders)) {
+			return
+		}
+		inst.MinSeeders = *req.MinSeeders
 	}
 	var secret indexers.Secrets
 	if inst.IsCardigann() {

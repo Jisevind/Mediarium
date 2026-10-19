@@ -80,6 +80,28 @@ for (const lang of ['en', 'ru']) {
   })
 }
 
+// Indexer cards in one grid row are all the same height, so no card leaves a
+// ragged gap under it however long its status lines are.
+for (const width of [1440, 750]) {
+  test(`indexer cards in a grid row have the same height (${width}px)`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 })
+    await page.addInitScript(() => localStorage.setItem('mediarium-demo', '1'))
+    await page.goto('/settings/indexers')
+    await expect(page.locator('.indexer-card')).toHaveCount(15)
+    const rows = await page.locator('.indexer-card').evaluateAll((els) => {
+      const byTop = new Map<number, number[]>()
+      for (const e of els) {
+        const r = e.getBoundingClientRect()
+        const top = Math.round(r.top + window.scrollY)
+        byTop.set(top, [...(byTop.get(top) ?? []), Math.round(r.height)])
+      }
+      return Array.from(byTop.values())
+    })
+    expect(rows.length).toBeGreaterThan(1)
+    for (const heights of rows) expect(new Set(heights).size, `row heights ${heights.join(', ')}`).toBe(1)
+  })
+}
+
 // The header buttons are big enough for a finger on a tablet or phone.
 test('the header buttons are at least 40px on a touch screen', async ({ page, isMobile }) => {
   test.skip(!isMobile, 'phone only')

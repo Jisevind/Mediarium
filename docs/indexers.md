@@ -42,6 +42,17 @@ When the error on an indexer card (the pause reason, the last test or a test you
 
 Scripts: `POST /api/indexers/{id}/resume` is **Try again now**; `GET /api/indexers` adds `failures`, `pausedUntil`, `pausedNote` and `pausedWhy` to a paused indexer.
 
+## Minimum seeders
+
+A torrent with few or no seeders can sit in the download client for days. Each torrent indexer card has a **Minimum seeders** box next to the priority. Put in a number such as 5 and Mediarium skips the releases from that indexer that have fewer seeders than that. 0 means off, which is how every indexer starts, and 1000 is the highest you can set. Each indexer has its own number, so a private tracker can be left at 0 while a public one asks for 5. The box saves when you leave it or press Enter.
+
+- **What it covers.** Everything Mediarium grabs by itself: the scheduled searches for movies, shows, albums and books, the regular check for new releases, upgrades and replacing a file with a smaller one, and the hunt for season packs. A skipped release is counted in the note of the search ("3 with fewer seeders than the indexer's minimum") that shows on the item's activity.
+- **What it does not skip.** A release whose indexer did not say how many seeders it has, a release your debrid service already has cached (see [Downloads](./downloads.md)), Usenet releases, and releases announced over IRC, which come without a seeder count.
+- **Searching by hand.** The list still shows every release. One that is under the minimum gets a **Below minimum seeders** label, its seeders are dimmed, and it is never marked as the best match. You can still grab it yourself.
+- **From Prowlarr.** When you import from Prowlarr, a minimum seeders number set on a torrent indexer there comes along.
+
+Scripts: `GET /api/indexers` has `minSeeders`; `PUT /api/indexers/{id}` takes `minSeeders` (a whole number from 0 to 1000) and a search result has `belowMinSeeders` and `minSeeders` when it is under the minimum. In a settings file an indexer can have `minSeeders: 5`.
+
 ## Daily limits
 
 Free indexers often allow only a few requests a day, 25 for example, and answer "Request limit reached" after that. Spacing searches apart does nothing against a daily count, so Mediarium counts the requests it makes to each indexer per day (UTC) and leaves the indexer alone before the day is used up.

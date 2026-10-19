@@ -8,6 +8,16 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.2.9] - 2026-10-19
+
+In short: a minimum number of seeders per torrent indexer, and tidier indexer cards.
+
+### Changed
+- The indexer cards in a row are the same height with the buttons at the bottom, and each card shows its test result and limits in at most two short lines with the full text on hover (a failure opens its reason when you tap it). Nothing is hidden: a passed test older than a day is just shown dimmer. Asked for by SanketBaraiya on GitHub, #80.
+
+### Added
+- A **Minimum seeders** box on every torrent indexer card. Releases from that indexer with fewer seeders than the number are skipped by the automatic searches, the check for new releases, upgrades and season packs, so downloads stall less often. 0 turns it off (the default). Releases your debrid service already has cached, and releases that don't say how many seeders they have, are never skipped. In a search by hand every release is still listed; the ones under the minimum get a "Below minimum seeders" label and you can still grab them. Also in the settings file (`minSeeders`) and the API, and a minimum set in Prowlarr comes along when you import. Thanks to Bayharbourbutcher1 on GitHub, #88.
+
 ## [3.2.8] - 2026-10-19
 
 In short: custom formats from the TRaSH Guides are easier to score, add and keep up to date.

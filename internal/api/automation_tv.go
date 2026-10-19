@@ -424,7 +424,7 @@ func (s *Server) targetedTVSearcher(ctx context.Context, instances []indexers.In
 			outcomes = append(outcomes, indexers.SearchAll(ctx, instances, q, tvCategory)...)
 		}
 		s.noteTVSearch(ctx, force, series, season, episode, outcomes)
-		found := s.freshOnly(indexers.MergeResults(outcomes))
+		found := s.autoCandidates(ctx, indexers.MergeResults(outcomes))
 		if found == nil {
 			found = []indexers.Result{} // searched, found nothing: not the same as "no search made"
 		}
@@ -470,7 +470,7 @@ func (s *Server) rssSyncTV(ctx context.Context, instances []indexers.Instance, p
 	if err != nil || (len(wants) == 0 && len(upgrades) == 0) {
 		return
 	}
-	latest := s.freshOnly(indexers.MergeResults(indexers.SearchAll(ctx, instances, "", tvCategory)))
+	latest := s.autoCandidates(ctx, indexers.MergeResults(indexers.SearchAll(ctx, instances, "", tvCategory)))
 	s.autoGrabTV(func(library.Series, int, int) []indexers.Result { return latest }, "rss-sync", profiles, tvScope{})
 }
 

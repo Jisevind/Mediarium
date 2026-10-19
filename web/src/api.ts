@@ -750,6 +750,8 @@ export interface IndexerConfig {
   lastTestAt?: string
   // 1 to 50, lower is tried first (default 25)
   priority?: number
+  // The fewest seeders a torrent from this indexer needs to be grabbed by itself (0 = off)
+  minSeeders?: number
   // Set after repeated failures: searches skip the indexer until pausedUntil.
   failures?: number
   pausedUntil?: string
@@ -1002,6 +1004,10 @@ export interface SearchResult {
   // The debrid service already has this torrent, so it starts at once. Only
   // set when it is known (TorBox).
   cached?: boolean
+  // A torrent with fewer seeders than its indexer's minimum: automatic downloads
+  // skip it, grabbing it by hand is allowed. minSeeders is that minimum.
+  belowMinSeeders?: boolean
+  minSeeders?: number
   season?: number
   episodes?: number[]
   blocklisted?: boolean
@@ -3128,7 +3134,7 @@ export const api = {
   testIndexerConfig: (data: { name: string; baseUrl: string; apiKey: string }) =>
     post<{ ok: boolean; message: string }>('/indexers/test', data),
   testIndexer: (id: number) => post<{ ok: boolean; message: string }>(`/indexers/${id}/test`),
-  updateIndexer: (id: number, data: { name?: string; baseUrl?: string; apiKey?: string; enabled?: boolean; requestsPerDay?: number }) => put<IndexerConfig>(`/indexers/${id}`, data),
+  updateIndexer: (id: number, data: { name?: string; baseUrl?: string; apiKey?: string; enabled?: boolean; requestsPerDay?: number; minSeeders?: number }) => put<IndexerConfig>(`/indexers/${id}`, data),
   setIndexerEnabled: (id: number, enabled: boolean) => put<null>(`/indexers/${id}/enabled`, { enabled }),
 
   listUsenetServers: () => get<UsenetServer[]>('/usenet-servers'),

@@ -15,7 +15,7 @@ func markBestMatch(payloads []searchResultPayload, found []indexers.Result, prof
 	best := -1
 	var bestKey pickKey
 	for i := range payloads {
-		if len(payloads[i].Rejections) > 0 || payloads[i].Blocklisted {
+		if len(payloads[i].Rejections) > 0 || payloads[i].Blocklisted || payloads[i].BelowMinSeeders {
 			continue
 		}
 		if !profile.Accepts(found[i].Parsed()) {

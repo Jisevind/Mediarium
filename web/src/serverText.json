@@ -536,6 +536,7 @@
  "Mediarium was restarted, so {0} that was downloading is now paused. Press Resume in Activity to carry on.",
  "Mediarium was shut down by {0}.",
  "Mediarium {0} was installed by {1} ({2}, checksum {3}). It restarts to use it.",
+ "Minimum seeders must be a whole number from 0 to {0}. Use 0 to turn it off.",
  "Missing episodes and better quality are only found when you search by hand.",
  "More than one entry matches that user name. Make the user filter more specific.",
  "Moved {0} by {1} seconds.",

@@ -189,8 +189,14 @@
 /* Your indexers: 3 columns when the card is wide, 2 when medium, 1 on a phone. */
 .settings-content .indexer-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 0 0 12px; }
 .settings-content .indexer-filter { flex: 1 1 200px; min-width: 0; max-width: 360px; }
-.settings-content .indexer-cards { grid-template-columns: repeat(auto-fill, minmax(min(100%, max(260px, calc((100% - 20px) / 3))), 1fr)); align-items: start; gap: 10px; }
-.settings-content .indexer-card { gap: 8px; padding: 10px 12px; align-content: start; }
+.settings-content .indexer-cards { grid-template-columns: repeat(auto-fill, minmax(min(100%, max(260px, calc((100% - 20px) / 3))), 1fr)); align-items: stretch; gap: 10px; }
+.settings-content .indexer-card { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; }
+/* Cards in one row are the same height; the buttons (and the seeding row above them) sit at the bottom. */
+.settings-content .indexer-card > .indexer-actions { margin-top: auto; gap: 4px; }
+.settings-content .indexer-card .indexer-actions .btn-sm { padding-inline: 9px; }
+.settings-content .indexer-card > .qdetails { margin-top: auto; }
+.settings-content .indexer-card > .qdetails + .indexer-actions { margin-top: 0; }
+.settings-content .indexer-card > .qdetails summary { margin-left: 0; }
 .settings-content .indexer-top { align-items: flex-start; gap: 10px; }
 .settings-content .indexer-title { flex-wrap: wrap; gap: 2px 8px; }
 .settings-content .indexer-title strong { max-width: 100%; }
@@ -198,6 +204,19 @@
 .settings-content .indexer-info small.indexer-url { display: block; -webkit-line-clamp: unset; }
 .settings-content .indexer-priority { display: grid; gap: 2px; justify-items: end; font-size: 0.78rem; color: var(--text-dim); }
 .settings-content .indexer-priority input { width: 60px !important; padding: 4px 8px; text-align: center; }
+.settings-content .indexer-info small.idx-line, .settings-content .indexer-info summary.idx-line { display: flex; align-items: center; gap: 6px; min-width: 0; margin-top: 3px; white-space: nowrap; overflow: hidden; }
+.settings-content .indexer-info .idx-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.settings-content .indexer-info .idx-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.settings-content .indexer-info small.idx-line.ok, .settings-content .indexer-info small.idx-line.bad { color: var(--text-dim); }
+.settings-content .indexer-info small.idx-info.bad { color: var(--danger); }
+.settings-content .indexer-info .idx-line.ok .idx-dot { color: var(--success, #34d399); }
+.settings-content .indexer-info .idx-line.bad .idx-dot { color: var(--danger); }
+.settings-content .indexer-info summary.idx-line.bad { color: var(--danger); cursor: pointer; list-style: none; }
+.settings-content .indexer-info summary.idx-line::-webkit-details-marker { display: none; }
+.settings-content .indexer-info summary.idx-line::after { content: ""; flex: none; margin-left: auto; width: 5px; height: 5px; border: solid currentColor; border-width: 0 1.5px 1.5px 0; transform: translateY(-2px) rotate(45deg); }
+.settings-content .indexer-info .idx-more[open] > summary.idx-line::after { transform: translateY(1px) rotate(225deg); }
+.settings-content .indexer-info .idx-line.old { opacity: 0.6; }
+.settings-content .indexer-info .idx-why { display: block; margin-top: 3px; color: var(--danger); -webkit-line-clamp: unset; }
 .settings-content .indexer-card .tile-ico { width: 32px; height: 32px; flex: none; }
 .settings-content .indexer-card .qdetails summary { font-size: 0.85rem; }
 @media (pointer: coarse) {

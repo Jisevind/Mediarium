@@ -128,6 +128,11 @@ export default function ReleaseTable({
                         {t('Cached')}
                       </span>
                     )}
+                    {r.belowMinSeeders && (
+                      <span className="badge conflict" style={{ marginLeft: 8 }} title={t('This release has fewer seeders than the minimum of {n} set for its indexer. Automatic downloads leave it out. You can still grab it yourself.', { n: r.minSeeders ?? 0 })}>
+                        {t('Below minimum seeders')}
+                      </span>
+                    )}
                     {r.blocklisted && (
                       <span className="badge failed" style={{ marginLeft: 8 }} title={t('This release failed before')}>
                         {t('blocklisted')}
@@ -177,7 +182,7 @@ export default function ReleaseTable({
                   </td>
                   <td className="rel-fit">{formatBytes(r.sizeBytes)}</td>
                   <td className="rel-fit" title={r.publishDate && publishedAt(r) ? new Date(publishedAt(r)).toLocaleString(locale()) : undefined}>{ageOf(r) || '—'}</td>
-                  <td className="rel-fit">{r.protocol === 'torrent' ? `${r.seeders ?? 0} / ${r.peers ?? 0}` : '—'}</td>
+                  <td className={`rel-fit${r.belowMinSeeders ? ' rel-dim' : ''}`}>{r.protocol === 'torrent' ? `${r.seeders ?? 0} / ${r.peers ?? 0}` : '—'}</td>
                   <td className="rel-fit">
                     <button className="primary" disabled={grabbing !== null} onClick={() => onGrab(r)}>
                       {grabbing === r.downloadUrl ? t('Grabbing…') : t('Grab')}

@@ -10,6 +10,13 @@ export interface ReleaseNotes {
 
 export const WHATS_NEW: ReleaseNotes[] = [
   {
+    version: '3.2.9',
+    items: [
+      t("Set a minimum number of seeders on each torrent indexer, so releases that would stall are skipped."),
+      t("The indexer cards in a row are the same height, with the test result and limits in short lines and the buttons at the bottom."),
+    ],
+  },
+  {
     version: '3.2.8',
     items: [
       t("Custom formats from the TRaSH Guides come in with TRaSH's score in your default profile, and you can add several formats to several profiles at once."),
