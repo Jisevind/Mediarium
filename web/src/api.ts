@@ -1023,6 +1023,8 @@ export interface SearchResult {
   // minimum score and the score it stops upgrading at (0 when not set), and
   // everything that makes an automatic search skip the release, by kind.
   formats?: { name: string; score: number }[]
+  // The preferred terms of the profile the release matched, with their scores.
+  terms?: { term: string; score: number }[]
   minScore?: number
   upgradeUntil?: number
   reasons?: { kind: string; text: string }[]

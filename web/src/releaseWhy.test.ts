@@ -60,3 +60,25 @@ test('the "Show why" choice is remembered, and storage that throws changes nothi
   assert.equal(loadShowWhy(broken), false)
   assert.doesNotThrow(() => saveShowWhy(true, broken))
 })
+
+test('matched preferred terms add to the total next to the formats', () => {
+  const w = whyOf({ formatScore: 50, formats: [{ name: 'Remux', score: 50 }], terms: [{ term: 'x265-FuN', score: 100 }, { term: 'x265', score: 50 }] })
+  assert.ok(w)
+  assert.equal(w.total, 200)
+  assert.equal(w.score, 50)
+  const only = whyOf({ terms: [{ term: 'x265', score: -20 }] })
+  assert.ok(only)
+  assert.equal(only.score, undefined)
+  assert.equal(only.total, -20)
+  assert.equal(only.belowMin, false)
+})
+
+test('why a release was not the best match is kept apart from the reasons it is skipped', () => {
+  const w = whyOf({ reasons: [{ kind: 'notBest', text: 'The best match fits your preferred language better.' }] })
+  assert.ok(w)
+  assert.deepEqual(w.notBest, ['The best match fits your preferred language better.'])
+  assert.deepEqual(w.reasons, [])
+  const both = whyOf({ reasons: [{ kind: 'notBest', text: 'a' }, { kind: 'size', text: 'b' }] })
+  assert.deepEqual(both?.notBest, ['a'])
+  assert.deepEqual(both?.reasons, [{ kind: 'size', text: 'b' }])
+})

@@ -8,6 +8,14 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.2.14] - 2026-10-19
+
+In short: the search list says why a release was not the best match.
+
+### Changed
+- The details row under a release in interactive search now says why a release that was not rejected was not the best match: your preferred language, a higher quality, a cached release, a higher score (with the matched terms and formats of both releases), a torrent with no seeders, or, between two equal releases, the indexer's priority, the protocol or the seeders. Thanks to mirisbowring on GitHub, #91.
+- The details row also lists the preferred terms a release matched, with their scores, next to the custom formats. Thanks to mirisbowring on GitHub, #91.
+
 ## [3.2.13] - 2026-10-19
 
 In short: subtitle results get a Fit even when your video file's name says nothing about its release.
