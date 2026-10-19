@@ -143,7 +143,7 @@ func (s *Server) searchSubtitles(w http.ResponseWriter, r *http.Request, kind st
 	for i, res := range results {
 		out[i] = subtitleResultPayload{
 			FileID: res.FileID, Source: res.Source, SourceName: res.SourceName, Link: res.Link, Language: res.Language, Release: res.Release, Rating: res.Rating,
-			Score: subtitles.Score(res, videoName), HashMatch: res.HashMatch, Variant: string(res.Variant()),
+			Score: subtitles.ScoreFor(res, videoName, it.hints()), HashMatch: res.HashMatch, Variant: string(res.Variant()),
 		}
 	}
 	sortSubtitleResults(out)

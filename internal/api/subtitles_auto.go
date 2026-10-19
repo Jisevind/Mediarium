@@ -50,12 +50,22 @@ type subtitleItem struct {
 	season     int
 	episode    int
 	filePath   string
+
+	// releaseTitle and quality are what was recorded for the file when it was
+	// downloaded; the file name itself says nothing about the release.
+	releaseTitle string
+	quality      string
+}
+
+// hints are the facts besides the file name that tell how a subtitle fits.
+func (it subtitleItem) hints() subtitles.VideoHints {
+	return subtitles.VideoHints{ReleaseTitle: it.releaseTitle, Quality: it.quality}
 }
 
 func (it subtitleItem) ref() subtitles.Item { return subtitles.Item{Kind: it.kind, ID: it.id} }
 
 func movieSubtitleItem(m library.Movie) subtitleItem {
-	return subtitleItem{kind: "movie", id: m.ID, title: m.Title, year: m.Year, tmdbID: m.TMDBID, filePath: m.FilePath}
+	return subtitleItem{kind: "movie", id: m.ID, title: m.Title, year: m.Year, tmdbID: m.TMDBID, filePath: m.FilePath, releaseTitle: m.ReleaseTitle, quality: m.Quality}
 }
 
 func episodeSubtitleItem(sr library.Series, ep library.Episode) subtitleItem {
@@ -65,7 +75,7 @@ func episodeSubtitleItem(sr library.Series, ep library.Episode) subtitleItem {
 	}
 	return subtitleItem{
 		kind: "episode", id: ep.ID, title: sr.Title, year: sr.Year, subtitle: label,
-		parentTMDB: sr.TMDBID, seriesID: sr.ID, season: ep.Season, episode: ep.Episode, filePath: ep.FilePath,
+		parentTMDB: sr.TMDBID, seriesID: sr.ID, season: ep.Season, episode: ep.Episode, filePath: ep.FilePath, releaseTitle: ep.ReleaseTitle, quality: ep.Quality,
 	}
 }
 
@@ -496,7 +506,7 @@ func (s *Server) fetchBestSubtitle(ctx context.Context, it subtitleItem, key str
 	if err != nil {
 		return "", err
 	}
-	best := subtitles.Pick(profile.Filter(slot, results), filepath.Base(it.filePath))
+	best := subtitles.PickFor(profile.Filter(slot, results), filepath.Base(it.filePath), it.hints())
 	if best == nil {
 		return "", errNoSubtitle
 	}

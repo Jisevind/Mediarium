@@ -8,6 +8,13 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.2.13] - 2026-10-19
+
+In short: subtitle results get a Fit even when your video file's name says nothing about its release.
+
+### Changed
+- In the subtitle list, Fit now also compares each result with the name of the release that was downloaded for the video (Mediarium remembers it) and with the stored quality, and takes the best score, so a movie that came from a YTS release can match a YTS subtitle even though the file is named `Title (Year).mp4`. Rating stays empty for SubDL, which sends none. The same comparison is used when Mediarium picks a subtitle by itself (asked for by SanketBaraiya on GitHub, #83).
+
 ## [3.2.12] - 2026-10-19
 
 In short: the address of a site on your own network could not be edited yet.
