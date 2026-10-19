@@ -10,6 +10,13 @@ export interface ReleaseNotes {
 
 export const WHATS_NEW: ReleaseNotes[] = [
   {
+    version: '3.2.4',
+    items: [
+      t("An indexer's seeding rules now reach your torrent client, and the Category box stays empty when you clear it."),
+      t("Stopping or removing a download also removes the torrent Mediarium sent to qBittorrent or Transmission (you can switch this off)."),
+    ],
+  },
+  {
     version: '3.2.3',
     items: [
       t("A movie's page shows when it is in cinemas and when it comes out digitally, and the calendar marks both days."),

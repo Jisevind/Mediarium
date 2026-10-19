@@ -153,7 +153,7 @@ func (s *Server) handleClientTorrents(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, out)
 		return
 	}
-	out.Configured, out.Kind, out.Label, out.Category = true, cfg.Kind, qbit.Label(cfg.Kind), cfg.category()
+	out.Configured, out.Kind, out.Label, out.Category = true, cfg.Kind, qbit.Label(cfg.Kind), strings.Join(cfg.allCategories(), ", ")
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	c := newDownloadClient(cfg.Kind, cfg.URL, cfg.Username, cfg.Password)

@@ -33,7 +33,7 @@ The keys the app stores in its settings table. You normally change these from th
 | `debrid.cached_lower_score` | "1" lets a cached release win over an uncached one of the same quality even when the profile's preferred terms score it lower; unset or "0" only breaks ties between equal scores |
 | `debrid.prefer_cached` | "0" stops asking TorBox which releases it already has (no tag, no ranking); "1" or unset (with TorBox as the service) asks and ranks a cached release ahead of an equal one that is not. Real-Debrid has no such check |
 | `debrid.service` | "" (off), "realdebrid" or "torbox": torrent releases go to that service instead of the built-in client |
-| `downloadclient.category` | the category torrents are added with; unset = "mediarium" |
+| `downloadclient.category` | the category torrents are added with; unset = "mediarium" (when no kind has a category of its own either) |
 | `downloadclient.category_books` | category for books; unset = the main category |
 | `downloadclient.category_movies` | category for movies; unset = the main category |
 | `downloadclient.category_music` | category for music; unset = the main category |
@@ -44,6 +44,7 @@ The keys the app stores in its settings table. You normally change these from th
 | `downloadclient.password` | encrypted; never shown or logged |
 | `downloadclient.remote_path` | path mapping: a folder as the download client reports it, e.g. /downloads; unset = no mapping |
 | `downloadclient.remove_after_import` | "1" removes a torrent from the client once it's imported; unset or "0" leaves it seeding |
+| `downloadclient.remove_on_stop` | "0" leaves a stopped or removed download's torrent in the client; unset or "1" removes it too (only an unfinished torrent Mediarium added itself) |
 | `downloadclient.url` | the client's web address, e.g. http://192.168.1.10:8080 |
 | `downloadclient.username` | the client's web login |
 | `downloads.concurrent` | how many downloads run at the same time, Usenet and torrents together: 1 to 5; unset = 1 |

@@ -188,14 +188,60 @@ func (s *Server) assignTorrentDir(queueID int64) string {
 	return s.workDirFor(queueID)
 }
 
+// indexerOfRelease says which indexer gave the release at url: the one a recent
+// search remembers, or else the one whose address the URL starts with (a
+// Torznab or Prowlarr address up to its /api). The second way still works after
+// a restart. A magnet link carries no address, so only the first can name it.
+func (s *Server) indexerOfRelease(url string) (int64, bool) {
+	if s.IndexerRepo == nil || url == "" {
+		return 0, false
+	}
+	if id, ok := s.IndexerRepo.Tracker().SourceOf(url); ok {
+		// The indexer may have been removed since that search.
+		if _, err := s.IndexerRepo.Get(id); err == nil {
+			return id, true
+		}
+	}
+	list, err := s.IndexerRepo.List()
+	if err != nil {
+		return 0, false
+	}
+	var best int64
+	bestLen, tie := 0, false
+	for _, inst := range list {
+		base := strings.TrimSuffix(strings.TrimRight(strings.TrimSpace(inst.BaseURL), "/"), "/api")
+		if base == "" || !strings.HasPrefix(url, base+"/") {
+			continue
+		}
+		switch {
+		case len(base) > bestLen:
+			best, bestLen, tie = inst.ID, len(base), false
+		case len(base) == bestLen:
+			tie = true
+		}
+	}
+	if bestLen == 0 || tie {
+		return 0, false
+	}
+	return best, true
+}
+
 // torrentSeedGoal is when a finished torrent stops seeding: the global limits,
 // except where the indexer it came from has rules of its own.
 func (s *Server) torrentSeedGoal(queueID int64) torrentclient.SeedGoal {
 	ratio, hours := s.torrentSeedRatioLimit(), s.torrentSeedTimeLimit().Hours()
 	if s.TorrentOpts != nil {
-		if item, err := s.QueueRepo.Get(queueID); err == nil && item.IndexerID.Valid {
-			if rule, err := s.TorrentOpts.SeedRule(item.IndexerID.Int64); err == nil {
-				ratio, hours = rule.Goal(ratio, hours)
+		if item, err := s.QueueRepo.Get(queueID); err == nil {
+			// Items queued before the indexer was remembered have none: work it
+			// out from the release's address.
+			id, ok := item.IndexerID.Int64, item.IndexerID.Valid
+			if !ok {
+				id, ok = s.indexerOfRelease(item.NZBURL)
+			}
+			if ok {
+				if rule, err := s.TorrentOpts.SeedRule(id); err == nil {
+					ratio, hours = rule.Goal(ratio, hours)
+				}
 			}
 		}
 	}

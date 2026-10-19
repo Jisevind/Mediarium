@@ -8,6 +8,19 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.2.4] - 2026-10-19
+
+In short: fixes for outside torrent clients, from your reports.
+- An indexer's seeding rules now reach qBittorrent (they never did), and the Category box stays empty when you clear it.
+- Stopping or removing a download also removes the torrent Mediarium sent to qBittorrent or Transmission, unless it has finished (a switch in the download client card).
+
+### Added
+- **When I stop or remove a download, remove it from the client too** in the download client card (on by default). Stopping a download, removing it from the list, removing its movie or show, or pressing Blocklist & search again now also removes the torrent Mediarium sent, with what it downloaded, from qBittorrent or Transmission. A finished torrent, an imported download and a torrent that was in the client before Mediarium sent it are left alone (Blocklist & search again also removes a finished one). If the client is down or has lost the torrent, the download is removed from Mediarium anyway. Asked for by Bayharbourbutcher1 on GitHub, #85.
+
+### Fixed
+- The Category field in the download client card no longer refills with "mediarium" after you clear it. If you fill in a category for some kinds and leave the main one empty, the other kinds are now added with no category (the `mediarium-qN` tag still lets Mediarium find its torrents). Only when everything is empty is "mediarium" used. Reported by Bayharbourbutcher1 on GitHub, #79.
+- An indexer's seeding rules never reached the download client. Mediarium didn't remember which indexer a release came from, so only the global limit was ever sent. It now records the indexer when a release is grabbed (from a search, the feed check or a scheduled search) and sends that indexer's ratio and time to qBittorrent when the torrent is added. Reported by Bayharbourbutcher1 on GitHub, #79.
+
 ## [3.2.3] - 2026-10-18
 
 In short: release dates on the movie page, and fixes for second copies and for subtitles.

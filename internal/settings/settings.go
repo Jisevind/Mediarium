@@ -67,7 +67,7 @@ const (
 	KeyDownloadClientURL            = "downloadclient.url"                 // the client's web address, e.g. http://192.168.1.10:8080
 	KeyDownloadClientUsername       = "downloadclient.username"            // the client's web login
 	KeyDownloadClientPassword       = "downloadclient.password"            // encrypted; never shown or logged
-	KeyDownloadClientCategory       = "downloadclient.category"            // the category torrents are added with; unset = "mediarium"
+	KeyDownloadClientCategory       = "downloadclient.category"            // the category torrents are added with; unset = "mediarium" (when no kind has a category of its own either)
 	KeyDownloadClientCategoryMovies = "downloadclient.category_movies"     // category for movies; unset = the main category
 	KeyDownloadClientCategoryTV     = "downloadclient.category_tv"         // category for TV shows; unset = the main category
 	KeyDownloadClientCategoryMusic  = "downloadclient.category_music"      // category for music; unset = the main category
@@ -75,6 +75,7 @@ const (
 	KeyDownloadClientRemotePath     = "downloadclient.remote_path"         // path mapping: a folder as the download client reports it, e.g. /downloads; unset = no mapping
 	KeyDownloadClientLocalPath      = "downloadclient.local_path"          // path mapping: the same folder as Mediarium sees it, e.g. /data/torrents
 	KeyDownloadClientRemoveImport   = "downloadclient.remove_after_import" // "1" removes a torrent from the client once it's imported; unset or "0" leaves it seeding
+	KeyDownloadClientRemoveOnStop   = "downloadclient.remove_on_stop"      // "0" leaves a stopped or removed download's torrent in the client; unset or "1" removes it too (only an unfinished torrent Mediarium added itself)
 	KeyDownloadClientLinkRoot       = "downloadclient.link_root"           // symlinks from the client may be imported only when they lead into this folder (Decypharr's mount); unset = no symlinks
 
 	// Automation (RSS sync, scheduled search, hunting).

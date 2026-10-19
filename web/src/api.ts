@@ -854,6 +854,7 @@ export interface DownloadClientSettings {
   remotePath: string
   localPath: string
   removeAfterImport: boolean
+  removeOnStop: boolean
   linkRoot: string
 }
 export type DownloadClientInput = Omit<DownloadClientSettings, 'hasPassword'> & { password: string }

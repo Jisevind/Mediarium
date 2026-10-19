@@ -69,6 +69,7 @@ type downloadClientConfig struct {
 	RemotePath        string
 	LocalPath         string
 	RemoveAfterImport bool
+	RemoveOnStop      bool
 	LinkRoot          string
 }
 
@@ -93,19 +94,29 @@ func (s *Server) downloadClientConfig() downloadClientConfig {
 		RemotePath:        get(settings.KeyDownloadClientRemotePath),
 		LocalPath:         get(settings.KeyDownloadClientLocalPath),
 		RemoveAfterImport: remove,
+		RemoveOnStop:      s.removeOnStopOn(),
 		LinkRoot:          get(settings.KeyDownloadClientLinkRoot),
 	}
 }
 
+// category is the main category. An empty one stays empty when the person gave
+// some kinds a category of their own: a kind without one then gets no category
+// at all. Only when nothing is set anywhere does the default apply.
 func (c downloadClientConfig) category() string {
-	if strings.TrimSpace(c.Category) == "" {
-		return defaultClientCategory
+	if v := strings.TrimSpace(c.Category); v != "" {
+		return v
 	}
-	return c.Category
+	for _, k := range torrentopts.Kinds {
+		if strings.TrimSpace(c.KindCategories[k]) != "" {
+			return ""
+		}
+	}
+	return defaultClientCategory
 }
 
 // categoryFor is the category a download of this kind is added with: the one
-// set for the kind, or the main category when that is empty.
+// set for the kind, or the main category when that is empty (which may itself
+// mean none, see category).
 func (c downloadClientConfig) categoryFor(kind string) string {
 	if v := strings.TrimSpace(c.KindCategories[kind]); v != "" {
 		return v
@@ -116,7 +127,10 @@ func (c downloadClientConfig) categoryFor(kind string) string {
 // allCategories lists every category Mediarium may have used: the main one and
 // those of the kinds. Torrents in any of them are Mediarium's.
 func (c downloadClientConfig) allCategories() []string {
-	out := []string{c.category()}
+	var out []string
+	if v := c.category(); v != "" {
+		out = append(out, v)
+	}
 	for _, k := range torrentopts.Kinds {
 		if v := strings.TrimSpace(c.KindCategories[k]); v != "" && !slices.Contains(out, v) {
 			out = append(out, v)
@@ -661,6 +675,7 @@ type downloadClientPayload struct {
 	RemotePath        string `json:"remotePath"`
 	LocalPath         string `json:"localPath"`
 	RemoveAfterImport bool   `json:"removeAfterImport"`
+	RemoveOnStop      bool   `json:"removeOnStop"`
 	LinkRoot          string `json:"linkRoot"`
 }
 
@@ -669,9 +684,9 @@ func (s *Server) handleGetDownloadClient(w http.ResponseWriter, r *http.Request)
 	c := s.downloadClientConfig()
 	writeJSON(w, http.StatusOK, downloadClientPayload{
 		Kind: c.Kind, URL: c.URL, Username: c.Username, HasPassword: c.Password != "",
-		Category: c.category(), CategoryMovies: c.KindCategories[torrentopts.KindMovie], CategoryTV: c.KindCategories[torrentopts.KindTV],
+		Category: strings.TrimSpace(c.Category), CategoryMovies: c.KindCategories[torrentopts.KindMovie], CategoryTV: c.KindCategories[torrentopts.KindTV],
 		CategoryMusic: c.KindCategories[torrentopts.KindMusic], CategoryBooks: c.KindCategories[torrentopts.KindBook], RemotePath: c.RemotePath, LocalPath: c.LocalPath,
-		RemoveAfterImport: c.RemoveAfterImport, LinkRoot: c.LinkRoot,
+		RemoveAfterImport: c.RemoveAfterImport, RemoveOnStop: c.RemoveOnStop, LinkRoot: c.LinkRoot,
 	})
 }
 
@@ -688,6 +703,7 @@ type downloadClientRequest struct {
 	RemotePath        string `json:"remotePath"`
 	LocalPath         string `json:"localPath"`
 	RemoveAfterImport bool   `json:"removeAfterImport"`
+	RemoveOnStop      *bool  `json:"removeOnStop"` // absent keeps the saved choice (on unless switched off)
 	LinkRoot          string `json:"linkRoot"`
 }
 
@@ -780,6 +796,10 @@ func (s *Server) handlePutDownloadClient(w http.ResponseWriter, r *http.Request)
 	if req.RemoveAfterImport {
 		remove = "1"
 	}
+	removeOnStop := boolSetting(old.RemoveOnStop)
+	if req.RemoveOnStop != nil {
+		removeOnStop = boolSetting(*req.RemoveOnStop)
+	}
 	save := []kv{
 		{settings.KeyDownloadClientURL, req.URL, false},
 		{settings.KeyDownloadClientUsername, req.Username, false},
@@ -791,6 +811,7 @@ func (s *Server) handlePutDownloadClient(w http.ResponseWriter, r *http.Request)
 		{settings.KeyDownloadClientRemotePath, req.RemotePath, false},
 		{settings.KeyDownloadClientLocalPath, req.LocalPath, false},
 		{settings.KeyDownloadClientRemoveImport, remove, false},
+		{settings.KeyDownloadClientRemoveOnStop, removeOnStop, false},
 		{settings.KeyDownloadClientLinkRoot, req.LinkRoot, false},
 	}
 	switch {
