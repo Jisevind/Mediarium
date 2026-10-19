@@ -19,6 +19,8 @@ const (
 	KeyTrailerSound        = "ui.trailer_sound"                 // "1" starts the trailer behind a title page with its sound on, where the browser allows it; unset or "0" starts it muted
 	KeyTrailerBackground   = "ui.trailer_background"            // unset or "1" plays the trailer behind movie and show pages for everyone, unless a browser chose otherwise; "0" switches it off for everyone
 	KeyShowAdvanced        = "ui.show_advanced"                 // "1" shows custom formats and format scores on the Quality page; unset follows whether any custom format exists
+	KeyTrashFormatsAuto    = "formats.trash_auto_update"        // "1" re-reads the TRaSH Guides once a day and updates the custom formats that came from them; unset or "0" only updates on request
+	KeyTrashFormatsLast    = "formats.trash_last_update"        // when the TRaSH Guides were last read for the daily update (RFC 3339)
 	KeyUnmonitorDownloaded = "library.unmonitor_downloaded"     // "1" stops monitoring a movie once it is downloaded; unset or "0" keeps it monitored
 	KeyUnmonitorFinished   = "library.unmonitor_finished_shows" // "1" stops monitoring a show once it has ended and every monitored episode is in; unset or "0" keeps it monitored
 	KeyRootsConfirmed      = "library.roots_confirmed"          // library folders Mediarium has seen with their .mediarium-root marker (a JSON list); one that loses its marker is refused until it is back

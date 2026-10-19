@@ -216,6 +216,7 @@ var mustBeAdmin = []string{
 	"POST /api/music/profiles", "PUT /api/music/profiles/{id}", "DELETE /api/music/profiles/{id}",
 	"POST /api/quality-profiles", "PUT /api/quality-profiles/{id}", "DELETE /api/quality-profiles/{id}",
 	"POST /api/custom-formats", "PUT /api/custom-formats/{id}", "DELETE /api/custom-formats/{id}",
+	"POST /api/custom-formats/assign", "POST /api/custom-formats/default-scores", "GET /api/custom-formats/trash-update", "POST /api/custom-formats/trash-update",
 	"GET /api/trash-guides/{app}", "POST /api/trash-guides/{app}/formats", "POST /api/trash-guides/{app}/profiles",
 	"GET /api/proxy", "PUT /api/proxy", "POST /api/proxy/test", "GET /api/download-client/torrents", "GET /api/debrid/torrents", "POST /api/debrid/torrents/{id}/remove", "POST /api/download-client/torrents/{hash}/{action}", "GET /api/notifications/push-key",
 	"DELETE /api/queue/{id}", "DELETE /api/queue", "POST /api/queue/{id}/blocklist",

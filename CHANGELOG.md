@@ -8,6 +8,16 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.2.8] - 2026-10-19
+
+In short: custom formats from the TRaSH Guides are easier to score, add and keep up to date.
+
+### Added
+- Custom formats added from the TRaSH Guides are now scored with TRaSH's default score in your default profile unless you choose "Don't score them", and the list shows the score each format will get before you press Add. Thanks to Bayharbourbutcher1 on GitHub (#87).
+- You can tick several custom formats and add them to one or more profiles in one go (with TRaSH's score for each, or one score you type), and the profile edit form has an "Add formats" button for the same. Thanks to Bayharbourbutcher1 on GitHub (#87).
+- New "Keep TRaSH formats up to date" switch (off by default) and an "Update from TRaSH" button that shows what would change first. Conditions of TRaSH formats follow the guides, and a profile's score follows only while you haven't changed it yourself. Thanks to Bayharbourbutcher1 on GitHub (#87).
+- In the release list of a manual search, the release an automatic search would take is marked "Best match" and put first, followed by the others from the highest custom format score down. Automatic searches already took the highest score within the same quality. Thanks to Bayharbourbutcher1 on GitHub (#87).
+
 ## [3.2.7] - 2026-10-19
 
 In short: a fix for tools like Maintainerr that act on a season, SubDL subtitles that were found but thrown away, and the indexer card icon.

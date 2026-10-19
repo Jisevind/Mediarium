@@ -55,6 +55,8 @@ type searchResultPayload struct {
 	// FormatScore is the release's custom-format score in the item's
 	// profile, and Formats the formats it matched; left out when the profile
 	// scores no formats.
+	// Best marks the release automatic search would take; the list puts it first.
+	Best        bool     `json:"best,omitempty"`
 	FormatScore *int     `json:"formatScore,omitempty"`
 	Formats     []string `json:"formats,omitempty"`
 	// AcceptedBy names the profile that accepts this release: the item's own

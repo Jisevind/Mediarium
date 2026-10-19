@@ -179,8 +179,13 @@ var ErrFormatName = errors.New("a custom format with that name already exists")
 func (r *FormatRepo) scan(scan func(dest ...any) error) (CustomFormat, error) {
 	var f CustomFormat
 	var app, specs string
-	if err := scan(&f.ID, &f.Name, &app, &f.TrashID, &specs); err != nil {
+	var trashScore sql.NullInt64
+	if err := scan(&f.ID, &f.Name, &app, &f.TrashID, &specs, &trashScore); err != nil {
 		return CustomFormat{}, err
+	}
+	if trashScore.Valid {
+		n := int(trashScore.Int64)
+		f.TrashScore = &n
 	}
 	f.App = FormatApp(app)
 	if err := json.Unmarshal([]byte(specs), &f.Specs); err != nil {
@@ -190,7 +195,7 @@ func (r *FormatRepo) scan(scan func(dest ...any) error) (CustomFormat, error) {
 	return f, nil
 }
 
-const selectFormat = `SELECT id, name, app, trash_id, specs FROM custom_formats`
+const selectFormat = `SELECT id, name, app, trash_id, specs, trash_score FROM custom_formats`
 
 // List returns every custom format, by name.
 func (r *FormatRepo) List() ([]CustomFormat, error) {
@@ -226,7 +231,7 @@ func (r *FormatRepo) Save(f CustomFormat) (CustomFormat, bool, error) {
 	err = r.db.QueryRow(`SELECT id FROM custom_formats WHERE (trash_id != '' AND trash_id = ?) OR name = ? COLLATE NOCASE ORDER BY trash_id = ? DESC LIMIT 1`, f.TrashID, f.Name, f.TrashID).Scan(&id)
 	switch {
 	case errors.Is(err, sql.ErrNoRows):
-		res, err := r.db.Exec(`INSERT INTO custom_formats (name, app, trash_id, specs) VALUES (?, ?, ?, ?)`, f.Name, string(f.App), f.TrashID, string(specs))
+		res, err := r.db.Exec(`INSERT INTO custom_formats (name, app, trash_id, specs, trash_score) VALUES (?, ?, ?, ?, ?)`, f.Name, string(f.App), f.TrashID, string(specs), f.TrashScore)
 		if err != nil {
 			return CustomFormat{}, false, fmt.Errorf("save custom format %q: %w", f.Name, err)
 		}
@@ -235,7 +240,7 @@ func (r *FormatRepo) Save(f CustomFormat) (CustomFormat, bool, error) {
 	case err != nil:
 		return CustomFormat{}, false, err
 	}
-	if _, err := r.db.Exec(`UPDATE custom_formats SET name = ?, app = ?, trash_id = ?, specs = ? WHERE id = ?`, f.Name, string(f.App), f.TrashID, string(specs), id); err != nil {
+	if _, err := r.db.Exec(`UPDATE custom_formats SET name = ?, app = ?, trash_id = ?, specs = ?, trash_score = ? WHERE id = ?`, f.Name, string(f.App), f.TrashID, string(specs), f.TrashScore, id); err != nil {
 		if strings.Contains(err.Error(), "UNIQUE") {
 			return CustomFormat{}, false, ErrFormatName
 		}
@@ -243,6 +248,37 @@ func (r *FormatRepo) Save(f CustomFormat) (CustomFormat, bool, error) {
 	}
 	f.ID = id
 	return f, false, nil
+}
+
+// UpdateFromTrash gives a format that came from the TRaSH Guides their current
+// conditions and score. The name stays as the person left it. A format that
+// didn't come from the guides is refused (sql.ErrNoRows).
+func (r *FormatRepo) UpdateFromTrash(id int64, app FormatApp, specs []FormatSpec, trashScore int) error {
+	b, err := json.Marshal(specs)
+	if err != nil {
+		return err
+	}
+	res, err := r.db.Exec(`UPDATE custom_formats SET app = ?, specs = ?, trash_score = ? WHERE id = ? AND trash_score IS NOT NULL`, string(app), string(b), trashScore, id)
+	if err != nil {
+		return fmt.Errorf("update custom format from the TRaSH Guides: %w", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+// RetargetScore is what a profile's score for a format becomes when the TRaSH
+// score moves from prev to next. The profile follows only while its score is
+// still the one TRaSH gave last time: a score someone changed by hand, or a
+// format the profile doesn't score, is left alone. A new score of 0 means the
+// profile drops the format. changed says whether anything should be written.
+func RetargetScore(scores map[int64]int, id int64, prev, next int) (score int, changed bool) {
+	cur, ok := scores[id]
+	if !ok || prev == 0 || cur != prev || next == prev {
+		return 0, false
+	}
+	return next, true
 }
 
 // Rename renames a format.

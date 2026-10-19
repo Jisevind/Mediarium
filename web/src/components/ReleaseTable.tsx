@@ -2,7 +2,7 @@ import { Fragment, useMemo, useState } from 'react'
 import type { SearchResult } from '../api'
 import { formatBytes, nameParts } from '../format'
 import { locale, t } from '../i18n'
-import { FIRST_DIRECTION, ageOf, filterReleases, indexersIn, publishedAt, qualitiesIn, sortReleases, type ReleaseSortKey, type SortDir } from '../releaseSort'
+import { FIRST_DIRECTION, ageOf, defaultOrder, filterReleases, indexersIn, publishedAt, qualitiesIn, sortReleases, type ReleaseSortKey, type SortDir } from '../releaseSort'
 import Dropdown from './Dropdown'
 import Icon from './Icon'
 
@@ -36,10 +36,10 @@ export default function ReleaseTable({
   const [quality, setQuality] = useState('')
   const indexers = useMemo(() => indexersIn(results), [results])
   const qualities = useMemo(() => qualitiesIn(results), [results])
-  const shown = useMemo(() => sortReleases(filterReleases(results, { text: words, indexer, quality }), sort?.key ?? null, sort?.dir ?? 1), [results, words, indexer, quality, sort])
+  const shown = useMemo(() => sortReleases(defaultOrder(filterReleases(results, { text: words, indexer, quality })), sort?.key ?? null, sort?.dir ?? 1), [results, words, indexer, quality, sort])
   const filtering = words !== '' || indexer !== '' || quality !== ''
 
-  // First click sorts the natural way for that column, the second reverses it, the third goes back to the order the server gave.
+  // First click sorts the natural way for that column, the second reverses it, the third goes back to the starting order (best match first, then by score).
   function clickSort(key: ReleaseSortKey) {
     setSort((cur) => {
       if (!cur || cur.key !== key) return { key, dir: FIRST_DIRECTION[key] }
@@ -112,6 +112,11 @@ export default function ReleaseTable({
                         <wbr />
                       </Fragment>
                     ))}
+                    {r.best && (
+                      <span className="badge downloaded" style={{ marginLeft: 8 }} title={t('The release an automatic search would take')}>
+                        {t('Best match')}
+                      </span>
+                    )}
                     {r.matchedTitle && <div className="lang-hint lang-hint-wrap">{t('Matched on the title "{title}"', { title: r.matchedTitle })}</div>}
                     {showPackBadge && (r.episodes?.length ?? 0) === 0 && (
                       <span className="badge" style={{ marginLeft: 8 }}>

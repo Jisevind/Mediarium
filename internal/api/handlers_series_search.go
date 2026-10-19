@@ -223,6 +223,7 @@ func (s *Server) handleSeriesSearch(w http.ResponseWriter, r *http.Request) {
 	blocked := s.searchSkipKeys()
 	sizeReasons := s.tvSizeRejections(r.Context(), series, profile)
 	out := []searchResultPayload{}
+	var found []indexers.Result
 	for _, res := range merged {
 		parsed := res.Parsed()
 		if !matchesShowForRel(parsed, series, season) || !coversTarget(mapped(mapper, parsed), season, episode) {
@@ -236,7 +237,9 @@ func (s *Server) handleSeriesSearch(w http.ResponseWriter, r *http.Request) {
 		setFormatScore(&payload, profile, res.Title)
 		payload.AcceptedBy = acceptedBy(profile, res.Title)
 		out = append(out, payload)
+		found = append(found, res)
 	}
+	markBestMatch(out, found, profile)
 	s.markCachedPayloads(r.Context(), out)
 	writeSearch(w, r, out, len(instances), outcomes)
 }

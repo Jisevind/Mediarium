@@ -109,6 +109,7 @@ func (s *Server) handleMovieSearch(w http.ResponseWriter, r *http.Request) {
 	outcomes := s.searchMovieTitles(r.Context(), instances, m, nil)
 	merged := indexers.MergeResults(outcomes)
 	out := []searchResultPayload{}
+	var found []indexers.Result
 	for _, res := range merged {
 		if !matchesMovie(res.Title, m) {
 			continue
@@ -124,7 +125,9 @@ func (s *Server) handleMovieSearch(w http.ResponseWriter, r *http.Request) {
 		setFormatScore(&p, profile, res.Title)
 		p.AcceptedBy = acceptedBy(profile, res.Title)
 		out = append(out, p)
+		found = append(found, res)
 	}
+	markBestMatch(out, found, profile)
 	s.markCachedPayloads(r.Context(), out)
 	writeSearch(w, r, out, len(instances), outcomes)
 }

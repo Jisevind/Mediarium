@@ -654,6 +654,7 @@ export interface Settings {
   subtitleCountEmbedded?: boolean // subtitle tracks inside the video count as there (on by default)
   subtitleWizdom?: boolean // also look for Hebrew subtitles on Wizdom (off by default)
   showAdvanced?: boolean // show custom formats and format scores on the Quality page
+  trashFormatsAuto?: boolean // read the TRaSH Guides once a day and update the formats that came from them
   trailerBackground?: boolean // play the trailer behind movie and show pages for everyone (on by default)
   trailerSound?: boolean // start that trailer with its sound on (off by default)
   unmonitorDownloaded?: boolean // stop monitoring a movie once it is downloaded (off by default)
@@ -1009,6 +1010,8 @@ export interface SearchResult {
   // (only when the profile scores formats).
   formatScore?: number
   formats?: string[]
+  // The release automatic search would take (set on a search for a title in the library).
+  best?: boolean
   // Which profile would take this release: the title's own, or one of its fallbacks.
   acceptedBy?: { profileId: number; profileName: string; fallback: boolean }
   // The audio languages the release names ("Italian + English", "Multi") and how
@@ -1109,6 +1112,27 @@ export interface FormatImportResult {
   updated: number
   formats: CustomFormat[]
   missing?: string[]
+}
+
+export interface FormatAssignResult {
+  profiles: number
+  scored: number
+  unscored: string[]
+}
+
+export interface TrashFormatChange {
+  id: number
+  name: string
+  conditions: boolean
+  scoreChanged: boolean
+  scoreFrom: number
+  scoreTo: number
+  profiles: string[]
+}
+
+export interface TrashUpdateResult {
+  changes: TrashFormatChange[]
+  checked: number
 }
 
 export interface TrashFormat {
@@ -3177,6 +3201,11 @@ export const api = {
   renameCustomFormat: (id: number, name: string) => put<CustomFormat>(`/custom-formats/${id}`, { name }),
   deleteCustomFormat: (id: number) => del<null>(`/custom-formats/${id}`),
   testCustomFormats: (title: string, profileId?: number) => post<FormatTestResult>('/custom-formats/test', { title, profileId: profileId ?? 0 }),
+  assignCustomFormats: (formatIds: number[], profileIds: number[], mode: { trash: true } | { score: number }) =>
+    post<FormatAssignResult>('/custom-formats/assign', { formatIds, profileIds, mode: 'trash' in mode ? 'trash' : 'score', score: 'score' in mode ? mode.score : 0 }),
+  trashDefaultScores: (formatIds: number[]) => post<{ scores: FormatScore[] }>('/custom-formats/default-scores', { formatIds }),
+  trashUpdatePreview: () => get<TrashUpdateResult>('/custom-formats/trash-update'),
+  trashUpdate: () => post<TrashUpdateResult>('/custom-formats/trash-update', {}),
   trashGuides: (app: 'radarr' | 'sonarr') => get<{ formats: TrashFormat[]; profiles: TrashProfile[] }>(`/trash-guides/${app}`),
   importTrashFormats: (app: 'radarr' | 'sonarr', trashIds: string[], profileId?: number) =>
     post<FormatImportResult>(`/trash-guides/${app}/formats`, { trashIds, profileId: profileId ?? 0 }),

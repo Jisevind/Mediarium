@@ -11,6 +11,7 @@ import { FieldError, FormProblem, useValidation } from '../useValidation'
 import { useReveal } from '../useReveal'
 import { plural, t, tx } from '../i18n'
 import TipLabel from './TipLabel'
+import AddFormatsPicker from './AddFormatsPicker'
 
 interface Draft {
   id?: number
@@ -47,6 +48,12 @@ function parsePreferred(text: string): PreferredTerm[] {
 // Limits the server applies (internal/quality/repo.go, formats_profile.go).
 const MAX_FORMAT_SCORE = 1000000
 const wholeNumber = (s: string) => /^[+-]?\d+$/.test(s.trim())
+
+// isScored: the form gives the format a score other than 0.
+function isScored(d: Draft, id: number): boolean {
+  const s = (d.formatScores[id] ?? '').trim()
+  return s !== '' && Number(s) !== 0
+}
 
 function formatScoreProblem(d: Draft | null, formats: CustomFormat[]): string | null {
   if (!d) return null
@@ -157,6 +164,8 @@ export default function QualityProfilesSection({ rev = 0, onChanged, advanced = 
   const [draft, setDraft] = useState<Draft | null>(null)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  // Formats added with Add formats stay in the score list even while their score is empty.
+  const [addedFormats, setAddedFormats] = useState<Set<number>>(new Set())
   const orderedFor = (d: Draft) => tiers.filter((t) => d.allowed.includes(t))
   const errors = {
     name: firstError(required(draft?.name, t('Give this profile a name, for example Movies 1080p.')), maxLength(draft?.name ?? '', 60, t('The name'))),
@@ -176,6 +185,7 @@ export default function QualityProfilesSection({ rev = 0, onChanged, advanced = 
   function openDraft(d: Draft | null) {
     v.reset()
     setDraft(d)
+    setAddedFormats(new Set(d ? Object.keys(d.formatScores).map(Number).filter((id) => isScored(d, id)) : []))
     if (d) setOpened((n) => n + 1)
   }
 
@@ -382,8 +392,15 @@ export default function QualityProfilesSection({ rev = 0, onChanged, advanced = 
               <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', margin: 0 }}>
                 {t('A release gets the score of every format it matches. Between releases of the same quality, the higher total wins. Leave a format empty to ignore it.')}
               </p>
+              <AddFormatsPicker
+                candidates={formats.filter((f) => !isScored(draft, f.id) && !addedFormats.has(f.id))}
+                onAdd={(ids, scores) => {
+                  setAddedFormats((cur) => new Set([...cur, ...ids]))
+                  setDraft({ ...draft, formatScores: { ...draft.formatScores, ...scores } })
+                }}
+              />
               <div className="format-scores">
-                {formats.map((f) => (
+                {formats.filter((f) => isScored(draft, f.id) || addedFormats.has(f.id)).map((f) => (
                   <label key={f.id} className="format-score-row">
                     <span>
                       {f.name} <small>{f.app === 'sonarr' ? t('TV') : t('movies')}</small>

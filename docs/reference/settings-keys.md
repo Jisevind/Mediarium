@@ -67,6 +67,8 @@ The keys the app stores in its settings table. You normally change these from th
 | `downloads.temp_dir_previous` | earlier temporary folders (a JSON list), kept so downloads that started there are still found |
 | `ebooks.path` | ebooks library folder; falls back to the EBOOKS_DIR env default (/ebooks) when unset |
 | `flaresolverr.url` | e.g. http://flaresolverr:8191; unset = none |
+| `formats.trash_auto_update` | "1" re-reads the TRaSH Guides once a day and updates the custom formats that came from them; unset or "0" only updates on request |
+| `formats.trash_last_update` | when the TRaSH Guides were last read for the daily update (RFC 3339) |
 | `info.language` | the language titles, plots, genres and posters are read in, as a TMDB tag like "de-DE" (en-US when unset); file and folder names always use the English title |
 | `info.release_country` | the country release dates are read for, as a code like "IN"; unset = the country of the info language |
 | `legal.acknowledged_at` |  |

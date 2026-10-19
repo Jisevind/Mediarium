@@ -26,6 +26,7 @@ export interface SortableRelease {
   source?: string
   seeders?: number
   formatScore?: number
+  best?: boolean
   language?: string
   publishDate?: string
 }
@@ -91,6 +92,20 @@ export function sortReleases<T extends SortableRelease>(list: T[], key: ReleaseS
   return list
     .map((item, i) => ({ item, i }))
     .sort((x, y) => compare(x.item, y.item, key) * dir || x.i - y.i)
+    .map((x) => x.item)
+}
+
+// defaultOrder is how a list of releases starts, before a column is clicked:
+// the release automatic search would take first (the server marks it), then,
+// when the title's profile scores custom formats, the highest score first.
+// Equal rows keep the order the server sent them. Without scores and without a
+// marked release the list is left as it is.
+export function defaultOrder<T extends SortableRelease>(list: T[]): T[] {
+  const scored = list.some((r) => r.formatScore !== undefined)
+  if (!scored && !list.some((r) => r.best)) return list
+  return list
+    .map((item, i) => ({ item, i }))
+    .sort((x, y) => Number(!!y.item.best) - Number(!!x.item.best) || (scored ? (y.item.formatScore ?? 0) - (x.item.formatScore ?? 0) : 0) || x.i - y.i)
     .map((x) => x.item)
 }
 

@@ -133,6 +133,9 @@ type settingsPayload struct {
 	UnmonitorDownloaded *bool `json:"unmonitorDownloaded,omitempty"`
 	// ShowAdvanced shows custom formats and format scores on the Quality page.
 	ShowAdvanced *bool `json:"showAdvanced,omitempty"`
+	// TrashFormatsAuto keeps the custom formats that came from the TRaSH Guides
+	// up to date: the guides are read once a day (off by default).
+	TrashFormatsAuto *bool `json:"trashFormatsAuto,omitempty"`
 	// TrailerBackground plays the trailer behind movie and show pages for every
 	// account (a browser can still switch it off for itself).
 	TrailerBackground *bool `json:"trailerBackground,omitempty"`
@@ -351,6 +354,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	seasonPacks := s.seasonPackDefault()
 	qualityLanguageOnly := s.languageOnly()
 	showAdvanced := s.showAdvanced()
+	trashFormatsAuto := s.trashAutoUpdate()
 	trailerBackground := s.trailerBackground()
 	trailerSound := s.trailerSound()
 	subtitlesOn := s.subtitlesEnabled()
@@ -442,6 +446,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		NumberingLookup:          &numberingLookup,
 		UnmonitorDownloaded:      &unmonitorDownloaded,
 		ShowAdvanced:             &showAdvanced,
+		TrashFormatsAuto:         &trashFormatsAuto,
 		TrailerBackground:        &trailerBackground,
 		TrailerSound:             &trailerSound,
 		UnmonitorFinished:        &unmonitorFinished,
@@ -816,6 +821,12 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.ShowAdvanced != nil {
 		if err := setBool(tx, settings.KeyShowAdvanced, *req.ShowAdvanced); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if req.TrashFormatsAuto != nil {
+		if err := setBool(tx, settings.KeyTrashFormatsAuto, *req.TrashFormatsAuto); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
