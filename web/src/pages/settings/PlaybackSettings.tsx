@@ -102,7 +102,7 @@ export default function PlaybackSettings() {
         <h2>
           <Icon name="hard" size={16} /> {t('ffmpeg')}
         </h2>
-        <div className="settings-stack">
+        <div className="settings-stack playback-fields">
           <label>
             {t('ffmpeg path')}
             <input

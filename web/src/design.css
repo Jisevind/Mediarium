@@ -433,6 +433,8 @@ a.hero-pill:hover { text-decoration: none; transform: translateY(-2px); }
 .form-cols label { min-width: 0; }
 .form-cols > label > input:not([type='checkbox']):not([type='radio']), .form-cols > label > select { width: 100%; box-sizing: border-box; }
 .form-cols > label > small { display: block; margin-top: 4px; }
+/* Playback settings: the hint under each field starts on its own line. */
+.playback-fields > label > small { display: block; margin-top: 4px; }
 .form-cols + .check-hint, .form-cols + .field-help { margin-top: 14px; }
 .check-hint + .form-actions { margin-top: 14px; }
 .legal-box { padding: 14px 16px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--c-wanted) 45%, var(--border)); background: color-mix(in srgb, var(--c-wanted) 7%, var(--surface)); font-size: 0.9rem; }
