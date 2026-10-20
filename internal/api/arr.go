@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
@@ -102,6 +103,9 @@ func (s *Server) arrHandler(app arrApp) http.Handler {
 	h("DELETE", "/queue/{id}", s.arrDeleteQueueItem(app))
 	h("GET", "/wanted/missing", s.arrWantedMissing(app))
 	h("GET", "/calendar", s.arrCalendar(app))
+	h("GET", "/indexer", s.arrIndexers)
+	h("GET", "/downloadclient", arrDownloadClients)
+	h("GET", "/customformat", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, []any{}) })
 	h("GET", "/history", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, arrPage{Page: 1, PageSize: 10, SortKey: "date", SortDirection: "descending", Records: []any{}})
 	})
@@ -118,6 +122,8 @@ func (s *Server) arrHandler(app arrApp) http.Handler {
 		h("PUT", "/movie/{id}", s.arrUpdateMovie)
 		h("DELETE", "/movie/{id}", s.arrDeleteMovie)
 		h("GET", "/moviefile", s.arrMovieFiles)
+		h("GET", "/release", s.arrListReleases(arrRadarr))
+		h("POST", "/release", s.arrGrabRelease(arrRadarr))
 	case arrSonarr:
 		h("GET", "/series", s.arrListSeries)
 		h("GET", "/series/lookup", s.arrSeriesLookup)
@@ -132,6 +138,8 @@ func (s *Server) arrHandler(app arrApp) http.Handler {
 		h("PUT", "/episode/{id}", s.arrUpdateEpisode)
 		h("PUT", "/episode/monitor", s.arrMonitorEpisodes)
 		h("GET", "/episodefile", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, []any{}) })
+		h("GET", "/release", s.arrListReleases(arrSonarr))
+		h("POST", "/release", s.arrGrabRelease(arrSonarr))
 	case arrLidarr:
 		h("GET", "/artist", s.arrListArtists)
 		h("GET", "/artist/lookup", s.arrArtistLookup)
@@ -171,8 +179,36 @@ func (s *Server) arrHandler(app arrApp) http.Handler {
 		u := *r.URL
 		u.Path, u.RawPath = path, ""
 		r2.URL = &u
-		mux.ServeHTTP(w, r2)
+		// A request nothing here answers is logged (the path and the names of
+		// the query values, never the values: one is the API key), so an app
+		// that says "something went wrong" can be followed, and it gets the
+		// JSON "not found" the real apps send rather than plain text.
+		if _, pattern := mux.Handler(r2); pattern == "" {
+			names := make([]string, 0, len(r.URL.Query()))
+			for k := range r.URL.Query() {
+				if !strings.EqualFold(k, "apikey") {
+					names = append(names, k)
+				}
+			}
+			slog.Info("arr: an app asked for something Mediarium does not answer", "app", string(app), "method", r.Method, "path", r.URL.Path, "query", strings.Join(names, ","))
+			arrNotFound(w)
+			return
+		}
+		sw := &arrStatusWriter{ResponseWriter: w, status: http.StatusOK}
+		mux.ServeHTTP(sw, r2)
+		slog.Debug("arr: request answered", "app", string(app), "method", r.Method, "path", r.URL.Path, "status", sw.status)
 	})
+}
+
+// arrStatusWriter remembers the status an answer was sent with, for the log.
+type arrStatusWriter struct {
+	http.ResponseWriter
+	status int
+}
+
+func (w *arrStatusWriter) WriteHeader(code int) {
+	w.status = code
+	w.ResponseWriter.WriteHeader(code)
 }
 
 // arrUser is the account behind the API key, from the X-Api-Key header (in

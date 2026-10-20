@@ -2,10 +2,10 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { profileForApp, scorePreview, signed } from './trashScores.ts'
 
-test('a format that is not added yet gets the guide score, or none when the guides give none', () => {
+test('a format that is not added yet gets the guide score, a 0 included', () => {
   const scores = new Map<number, number>()
   assert.deepEqual(scorePreview({ defaultScore: 1700, importedId: 0 }, scores), { willGet: 1700, current: null, flag: null })
-  assert.deepEqual(scorePreview({ defaultScore: 0, importedId: 0 }, scores), { willGet: null, current: null, flag: null })
+  assert.deepEqual(scorePreview({ defaultScore: 0, importedId: 0 }, scores), { willGet: 0, current: null, flag: null })
 })
 
 test('no profile chosen means nothing is scored', () => {

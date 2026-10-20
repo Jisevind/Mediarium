@@ -5,7 +5,7 @@ import { useToast } from './Toast'
 import { profileBlurb, sortProfiles } from './qualityBlurb'
 import { api, type CustomFormat, type PreferredTerm, type QualityProfile } from '../api'
 import { addAnimeTerms } from '../animeGroups'
-import { syncFormatScores } from '../profileScoreSync'
+import { hasScore, syncFormatScores, withoutScore } from '../profileScoreSync'
 import { useConfirm } from './ConfirmProvider'
 import { firstError, maxLength, required } from '../validate'
 import { FieldError, FormProblem, useValidation } from '../useValidation'
@@ -50,10 +50,11 @@ function parsePreferred(text: string): PreferredTerm[] {
 const MAX_FORMAT_SCORE = 1000000
 const wholeNumber = (s: string) => /^[+-]?\d+$/.test(s.trim())
 
-// isScored: the form gives the format a score other than 0.
+// isScored: the format is in the profile's list. A score of 0 counts: the
+// format is added and does nothing until it is raised. Only an empty box
+// leaves a format out.
 function isScored(d: Draft, id: number): boolean {
-  const s = (d.formatScores[id] ?? '').trim()
-  return s !== '' && Number(s) !== 0
+  return hasScore(d.formatScores, id)
 }
 
 function formatScoreProblem(d: Draft | null, formats: CustomFormat[]): string | null {
@@ -210,7 +211,7 @@ export default function QualityProfilesSection({ rev = 0, onChanged, advanced = 
           const synced = syncFormatScores(baseScores.current, cur.formatScores, server)
           baseScores.current = server
           setDraft({ ...cur, formatScores: synced })
-          setAddedFormats((added) => new Set([...added, ...Object.keys(synced).map(Number).filter((id) => (synced[id] ?? '').trim() !== '' && Number(synced[id]) !== 0)]))
+          setAddedFormats((added) => new Set([...added, ...Object.keys(synced).map(Number).filter((id) => (synced[id] ?? '').trim() !== '')]))
         }
         setTiers(r.tiers)
         setDefaultId(r.defaultId)
@@ -240,7 +241,7 @@ export default function QualityProfilesSection({ rev = 0, onChanged, advanced = 
         fallback: draft.fallback,
         maxSizeGB: draft.maxSize.trim() === '' ? 0 : Number(draft.maxSize),
         formatScores: Object.entries(draft.formatScores)
-          .filter(([, s]) => s.trim() !== '' && Number(s) !== 0)
+          .filter(([, s]) => s.trim() !== '')
           .map(([id, s]) => ({ formatId: Number(id), score: Number(s) })),
         minFormatScore: draft.minFormatScore.trim() === '' ? 0 : Number(draft.minFormatScore),
         cutoffFormatScore: draft.cutoffFormatScore.trim() === '' ? 0 : Number(draft.cutoffFormatScore),
@@ -401,14 +402,14 @@ export default function QualityProfilesSection({ rev = 0, onChanged, advanced = 
             </div>
           </div>
         </details>
-        {advanced && <details open={Object.values(draft.formatScores).some((s) => s.trim() !== '' && Number(s) !== 0) || draft.minFormatScore !== '' || draft.cutoffFormatScore !== ''}>
+        {advanced && <details open={Object.values(draft.formatScores).some((s) => s.trim() !== '') || draft.minFormatScore !== '' || draft.cutoffFormatScore !== ''}>
           <summary style={{ cursor: 'pointer' }}>{t('Custom format scores (optional)')}</summary>
           {formats.length === 0 ? (
             <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>{t('No custom formats yet. Import some under Custom formats below, from the TRaSH Guides or from Radarr or Sonarr.')}</p>
           ) : (
             <div className="grid-form" style={{ marginTop: 8 }}>
               <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem', margin: 0 }}>
-                {t('A release gets the score of every format it matches. Between releases of the same quality, the higher total wins. Leave a format empty to ignore it.')}
+                {t('A release gets the score of every format it matches. Between releases of the same quality, the higher total wins. Take a format out with the bin button, or leave its box empty.')}
               </p>
               <AddFormatsPicker
                 candidates={formats.filter((f) => !isScored(draft, f.id) && !addedFormats.has(f.id))}
@@ -419,7 +420,7 @@ export default function QualityProfilesSection({ rev = 0, onChanged, advanced = 
               />
               <div className="format-scores">
                 {formats.filter((f) => isScored(draft, f.id) || addedFormats.has(f.id)).map((f) => (
-                  <label key={f.id} className="format-score-row">
+                  <div key={f.id} className="format-score-row">
                     <span>
                       {f.name} <small>{f.app === 'sonarr' ? t('TV') : t('movies')}</small>
                     </span>
@@ -430,7 +431,19 @@ export default function QualityProfilesSection({ rev = 0, onChanged, advanced = 
                       placeholder="0"
                       onChange={(e) => setDraft({ ...draft, formatScores: { ...draft.formatScores, [f.id]: e.target.value } })}
                     />
-                  </label>
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      title={t('Remove {name} from this profile', { name: f.name })}
+                      aria-label={t('Remove {name} from this profile', { name: f.name })}
+                      onClick={() => {
+                        setAddedFormats((cur) => new Set([...cur].filter((x) => x !== f.id)))
+                        setDraft({ ...draft, formatScores: withoutScore(draft.formatScores, f.id) })
+                      }}
+                    >
+                      <Icon name="trash" size={15} />
+                    </button>
+                  </div>
                 ))}
               </div>
               <div className="format-thresholds">

@@ -803,6 +803,13 @@ export interface SizeRow {
   defaultMin: number
   defaultMax: number
 }
+// The sizes the TRaSH Guides recommend, mapped onto the size table (max 0 = no limit).
+export interface TrashSizes {
+  list: string
+  rows: { quality: string; min: number; max: number }[]
+  skipped: string[]
+}
+
 export interface SizeTable {
   enabled: boolean
   rows: SizeRow[]
@@ -3316,6 +3323,7 @@ export const api = {
   sizeLimits: () => get<SizeTable>('/quality/size-limits'),
   putSizeLimits: (table: SizeTable) => put<SizeTable>('/quality/size-limits', table),
   resetSizeLimits: () => post<SizeTable>('/quality/size-limits/reset'),
+  trashSizes: (list: string) => get<TrashSizes>(`/quality/size-limits/trash/${encodeURIComponent(list)}`),
   calendarFeed: () => get<{ on: boolean; path?: string }>('/calendar/feed'),
   newCalendarFeed: () => post<{ on: boolean; path?: string }>('/calendar/feed'),
   removeCalendarFeed: () => del<{ on: boolean; path?: string }>('/calendar/feed'),

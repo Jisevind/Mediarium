@@ -285,7 +285,7 @@ func (req profileRequest) toProfile(id int64) quality.Profile {
 	if req.FormatScores != nil {
 		p.FormatScores = map[int64]int{}
 		for _, fs := range req.FormatScores {
-			if fs.FormatID > 0 && fs.Score != 0 {
+			if fs.FormatID > 0 {
 				p.FormatScores[fs.FormatID] = fs.Score
 			}
 		}

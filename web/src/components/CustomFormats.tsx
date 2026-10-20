@@ -342,7 +342,7 @@ function TrashPanel({ profiles, defaults, onImported }: { profiles: QualityProfi
     return p ? new Map((p.formatScores ?? []).map((s) => [s.formatId, s.score])) : null
   }, [profiles, scoreIn])
   const scoredProfile = profiles.find((p) => String(p.id) === scoreIn)
-  const unscored = (data?.formats ?? []).filter((f) => picked.has(f.trashId) && f.defaultScore === 0)
+  const zeroScored = (data?.formats ?? []).filter((f) => picked.has(f.trashId) && f.defaultScore === 0)
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -495,8 +495,8 @@ function TrashPanel({ profiles, defaults, onImported }: { profiles: QualityProfi
             {picked.size > 0 && (
               <p className="trash-score-note">
                 {scoredProfile
-                  ? plural(unscored.length === picked.size ? 0 : picked.size - unscored.length, '{n} of the picked formats gets its TRaSH score in {profile}.', '{n} of the picked formats get their TRaSH score in {profile}.', { profile: scoredProfile.name }) +
-                    (unscored.length > 0 ? ' ' + plural(unscored.length, "{n} has no TRaSH score, so it stays unscored.", "{n} have no TRaSH score, so they stay unscored.") : '')
+                  ? plural(picked.size - zeroScored.length, '{n} of the picked formats gets its TRaSH score in {profile}.', '{n} of the picked formats get their TRaSH score in {profile}.', { profile: scoredProfile.name }) +
+                    (zeroScored.length > 0 ? ' ' + plural(zeroScored.length, "{n} has a TRaSH score of 0, so it is added with 0.", "{n} have a TRaSH score of 0, so they are added with 0.") : '')
                   : t("Without a profile the picked formats are added without a score. They don't count anywhere until you score them.")}
               </p>
             )}

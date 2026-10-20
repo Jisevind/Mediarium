@@ -36,7 +36,7 @@ func (s *Server) trashDefaultScores(ctx context.Context, formats []quality.Custo
 		} else if f.TrashScore != nil {
 			score, known = *f.TrashScore, true
 		}
-		if known && score != 0 {
+		if known {
 			out[f.ID] = score
 		}
 	}
@@ -187,7 +187,9 @@ func (s *Server) handleAssignCustomFormats(w http.ResponseWriter, r *http.Reques
 			p.FormatScores = map[int64]int{}
 		}
 		for id, sc := range scores {
-			if sc == 0 {
+			// A typed 0 takes the format out; TRaSH's own 0 adds it with a
+			// score of 0.
+			if sc == 0 && req.Mode == "score" {
 				delete(p.FormatScores, id)
 			} else {
 				p.FormatScores[id] = sc

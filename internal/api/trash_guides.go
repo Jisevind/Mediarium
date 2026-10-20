@@ -371,9 +371,9 @@ func (s *Server) handleTrashImportFormats(w http.ResponseWriter, r *http.Request
 			writeFormatError(w, err)
 			return
 		}
-		if f.DefaultScore != 0 {
-			scores[saved.ID] = f.DefaultScore
-		}
+		// A score of 0 still adds the format to the profile, as an entry the
+		// person can raise later.
+		scores[saved.ID] = f.DefaultScore
 	}
 	if req.ProfileID != 0 && len(scores) > 0 {
 		if profile.FormatScores == nil {
@@ -452,9 +452,7 @@ func (s *Server) handleTrashImportProfile(w http.ResponseWriter, r *http.Request
 			writeFormatError(w, err)
 			return
 		}
-		if sc := tp.ScoreFor(f); sc != 0 {
-			p.FormatScores[saved.ID] = sc
-		}
+		p.FormatScores[saved.ID] = tp.ScoreFor(f)
 	}
 	created, err := s.QualityRepo.Create(p)
 	if err != nil {

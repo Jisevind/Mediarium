@@ -35,7 +35,7 @@ From then on, an approved request adds the title to your library, with the seaso
 - **Homepage**: add a `radarr`, `sonarr` or `lidarr` widget with `url: http://<mediarium>:8264/radarr` (or `/sonarr`, `/lidarr`) and the key. It shows what's wanted, missing and downloading.
 - **Homarr**: add a Radarr, Sonarr or Lidarr integration with the full address and the key. The calendar and the download list work.
 - **matcharr** (group movie picking): add Radarr with the address `http://<mediarium>:8264/radarr` and the key. A match is added to your library and searched for; a movie you already have counts as done.
-- **nzb360, LunaSea, Ruddarr**: add a Radarr or Sonarr instance with the full address and the key. You can browse the library, add movies and shows, change monitoring and quality profile, search, and follow the download queue and the calendar.
+- **nzb360, LunaSea, Ruddarr**: add a Radarr or Sonarr instance with the full address and the key. You can browse the library, add movies and shows, change monitoring and quality profile, search, and follow the download queue and the calendar. The interactive release search works too: the app lists what your indexers have for a movie, an episode or a season, and tapping one downloads it. If an app shows an error, check the log: a request Mediarium does not answer is written there with its address (never the key).
 
 ## Tdarr and other apps that change your files
 

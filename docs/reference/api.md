@@ -564,6 +564,7 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | GET | `/api/quality/size-limits` | admin |  |
 | PUT | `/api/quality/size-limits` | admin |  |
 | POST | `/api/quality/size-limits/reset` | admin | puts every quality back to its default. |
+| GET | `/api/quality/size-limits/trash/{list}` | admin | is GET /api/quality/size-limits/trash/{list}. |
 
 ## quality-profiles
 
@@ -857,4 +858,4 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | PUT | `/api/watched/settings` | admin | PUT /api/watched/settings {"sync": true, "cleanup": {...}} |
 | POST | `/api/watched/sync` | admin | POST /api/watched/sync: read what's been watched now. |
 
-517 routes.
+518 routes.

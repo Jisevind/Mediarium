@@ -8,6 +8,23 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.2.17] - 2026-10-20
+
+In short: phone apps can search for releases, the search box finds settings, and more TRaSH help.
+
+### Added
+
+- Each row in a profile's Custom format scores list has a bin button that takes the format out of the profile. (Bayharbourbutcher1 on GitHub, #87)
+- New file name choices under Settings > File names and importing > Custom > Start from: "TRaSH recommended", plus Plex, Emby and Jellyfin versions with the TMDb id. Nothing existing changes. (Bayharbourbutcher1 on GitHub, #95)
+- "Apply TRaSH sizes" on the Size limits card fills the table with the sizes the TRaSH Guides recommend (movies, streaming and 4K SQP, anime, series, anime series). It shows what changed first and saves nothing until you press Save. (Bayharbourbutcher1 on GitHub, #95)
+- Phone apps built for Radarr and Sonarr (nzb360 and others) can now run an interactive release search: pick a movie, episode or season, see what your indexers have, and tap one to download it (Bayharbourbutcher1 on GitHub, #94).
+- Radarr and Sonarr apps also get the list of your indexers and a download client entry, and a request Mediarium does not answer is written to the log with its address instead of failing without a trace (Bayharbourbutcher1 on GitHub, #94).
+- The search box at the top also finds settings. Type "folders" or "temp folder" and a Settings group shows the page or the setting; picking one opens the page, scrolls to the card and lights it up for a moment (mirisbowring on GitHub, #93).
+
+### Fixed
+
+- Importing TRaSH custom formats that score 0 now adds them to the quality profile with a score of 0 instead of skipping them, from the TRaSH tab, "Add to profiles" and "Add formats" on a profile. They show in the profile's Custom format scores list. A 0 changes no release's score. (Bayharbourbutcher1 on GitHub, #87)
+
 ## [3.2.16] - 2026-10-20
 
 In short: Usenet downloads with a split 7z archive are unpacked.

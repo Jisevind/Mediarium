@@ -27,6 +27,10 @@ function groupName(g: string): string {
 function schemeName(id: string, name: string): string {
   if (id === 'detailed') return t('Detailed, like Radarr and Sonarr')
   if (id === 'plex-editions') return t('Plex with editions')
+  if (id === 'trash') return t('TRaSH recommended')
+  if (id === 'trash-plex-tmdb') return t('TRaSH recommended, Plex with TMDb id')
+  if (id === 'trash-emby-tmdb') return t('TRaSH recommended, Emby with TMDb id')
+  if (id === 'trash-jellyfin-tmdb') return t('TRaSH recommended, Jellyfin with TMDb id')
   return name
 }
 

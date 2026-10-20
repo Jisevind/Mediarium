@@ -472,6 +472,7 @@ func (s *Server) searchRoutes(admin routeGroup, member routeGroup) {
 	admin.HandleFunc("GET /api/quality/size-limits", s.handleGetSizeLimits)
 	admin.HandleFunc("PUT /api/quality/size-limits", s.handlePutSizeLimits)
 	admin.HandleFunc("POST /api/quality/size-limits/reset", s.handleResetSizeLimits)
+	admin.HandleFunc("GET /api/quality/size-limits/trash/{list}", s.handleTrashSizes)
 	admin.HandleFunc("POST /api/indexers/{id}/resume", s.handleResumeIndexer)
 	admin.HandleFunc("GET /api/stats/indexers", s.handleIndexerStats)
 	member.HandleFunc("GET /api/search/waiting", s.handleSearchWaiting)

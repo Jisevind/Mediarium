@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, type SizeRow, type SizeTable } from '../api'
-import { t } from '../i18n'
+import { plural, t } from '../i18n'
+import { applyTrashSizes, type SizeChange } from '../trashSizes'
 import { useConfirm } from './ConfirmProvider'
 import Switch from './Switch'
 import { useToast } from './Toast'
@@ -11,6 +12,18 @@ interface EditRow extends SizeRow {
   minText: string
   maxText: string
 }
+
+// The size lists the TRaSH Guides publish; the id is the name the server knows.
+const TRASH_LISTS: { id: string; label: () => string }[] = [
+  { id: 'radarr-movie', label: () => t('Movies') },
+  { id: 'radarr-sqp-streaming', label: () => t('Movies, streaming (SQP)') },
+  { id: 'radarr-sqp-uhd', label: () => t('Movies, 4K (SQP)') },
+  { id: 'radarr-anime', label: () => t('Anime movies') },
+  { id: 'sonarr-series', label: () => t('Series') },
+  { id: 'sonarr-anime', label: () => t('Anime series') },
+]
+
+const rangeText = (min: number, max: number): string => (max <= 0 ? t('{min} and up', { min }) : t('{min} to {max}', { min, max }))
 
 const FILM_MINUTES = 100
 const numText = (n: number) => (n === 0 ? '' : String(n))
@@ -53,11 +66,16 @@ export default function SizeLimitsCard() {
   const [enabled, setEnabled] = useState(false)
   const [rows, setRows] = useState<EditRow[]>([])
   const [busy, setBusy] = useState(false)
+  const [trashList, setTrashList] = useState(TRASH_LISTS[0].id)
+  const [trashBusy, setTrashBusy] = useState(false)
+  // What the last "Apply TRaSH sizes" did, shown until the table is saved or reset.
+  const [applied, setApplied] = useState<{ list: string; changes: SizeChange[]; untouched: string[]; skipped: string[] } | null>(null)
 
   const load = (table: SizeTable) => {
     setSaved(table)
     setEnabled(table.enabled)
     setRows(table.rows.map(toEdit))
+    setApplied(null)
   }
   useEffect(() => {
     api.sizeLimits().then(load).catch(() => undefined)
@@ -85,6 +103,22 @@ export default function SizeLimitsCard() {
       toast.error(t('Not saved: {error}', { error: e instanceof Error ? e.message : String(e) }))
     } finally {
       setBusy(false)
+    }
+  }
+
+  // Reads the sizes from the TRaSH Guides and fills the table with them. Nothing is saved until Save.
+  async function applyTrash() {
+    setTrashBusy(true)
+    try {
+      const r = await api.trashSizes(trashList)
+      const res = applyTrashSizes(rows, r.rows)
+      setRows(res.rows)
+      setApplied({ list: trashList, changes: res.changes, untouched: res.untouched, skipped: r.skipped })
+    } catch (e) {
+      setApplied(null)
+      toast.error(t("Couldn't get the TRaSH sizes: {error}", { error: e instanceof Error ? e.message : String(e) }))
+    } finally {
+      setTrashBusy(false)
     }
   }
 
@@ -116,6 +150,42 @@ export default function SizeLimitsCard() {
         description={t('Off, the numbers below do nothing. Runtimes come from TMDB; when one is missing, a film counts as {film} minutes and an episode as 45.', { film: FILM_MINUTES })}
         showState
       />
+      <div className="size-trash">
+        <label>
+          <TipLabel text={t('Fills the table with the smallest and largest sizes the TRaSH Guides recommend, read from their site. You see what changes first, and nothing is kept until you press Save. Their preferred size has no place here and is left out; a largest size at the end of their scale means no limit.')}>{t('Apply TRaSH sizes')}</TipLabel>
+          <select value={trashList} onChange={(e) => setTrashList(e.target.value)} disabled={!saved || busy || trashBusy}>
+            {TRASH_LISTS.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.label()}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button disabled={!saved || busy || trashBusy} onClick={() => void applyTrash()}>
+          {trashBusy ? t('Reading…') : t('Apply TRaSH sizes')}
+        </button>
+      </div>
+      {applied && (
+        <div className="size-trash-result" role="status">
+          <strong>
+            {applied.changes.length === 0
+              ? t('Nothing changes: the table already has these sizes.')
+              : plural(applied.changes.length, '{n} quality changed. Press Save to keep it.', '{n} qualities changed. Press Save to keep them.')}
+          </strong>
+          {applied.changes.length > 0 && (
+            <ul>
+              {applied.changes.map((c) => (
+                <li key={c.quality}>
+                  <b>{c.quality}</b> {rangeText(c.fromMin, c.fromMax)} → {rangeText(c.toMin, c.toMax)}
+                </li>
+              ))}
+            </ul>
+          )}
+          {applied.untouched.length > 0 && <small className="field-hint">{t('Left as they are, since TRaSH gives no size for them: {names}.', { names: applied.untouched.join(', ') })}</small>}
+          {applied.skipped.length > 0 && <small className="field-hint">{t('TRaSH sizes with no row here: {names}.', { names: applied.skipped.join(', ') })}</small>}
+          {!enabled && <small className="field-hint">{t('The limits are still switched off. Turn on the switch above for them to count.')}</small>}
+        </div>
+      )}
       <div className="size-table-wrap" style={{ overflowX: 'auto', marginTop: 12 }}>
         <table className="size-table" style={{ opacity: off ? 0.6 : 1, width: '100%' }}>
           <thead>
