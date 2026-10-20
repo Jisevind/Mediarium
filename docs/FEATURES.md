@@ -14,7 +14,7 @@ Movies, TV, music, ebooks and audiobooks all work end to end (music, ebooks and 
 
 What is still thin or missing, stated plainly: files are not unpacked while they download (Usenet downloads unpack when they finish); downloads can't be dragged to reorder; a delay profile is one setting for the whole library (none per title, none for music or books); there are no per-indexer query limits, no per-indexer tags and no category mapping you can edit; there is no Last.fm scrobbling (ListenBrainz works); no comics or manga, no podcasts, and no adult content module; no theme songs or extras; watch state is read from your media server every six hours, not pushed by a webhook; and IMDb and Letterboxd lists are read from the exported file, not synced live (those sites don't allow it). Section 3 has the full list.
 
-Family accounts exist. An administrator can add basic-user and viewer accounts (see [accounts.md](./accounts.md)). RAR (RAR4 and RAR5, including multi-part sets) and ZIP are unpacked natively in Go, so they work the same everywhere. Only the rare `.7z` format uses the `7z` tool, which the Docker image includes.
+Family accounts exist. An administrator can add basic-user and viewer accounts (see [accounts.md](./accounts.md)). RAR (RAR4 and RAR5, including multi-part sets) and ZIP are unpacked natively in Go, so they work the same everywhere. Only `.7z` (also when it is split into `.7z.001`, `.7z.002`, ...) uses the `7z` tool, which the Docker image includes.
 
 ## 2. Matrix
 

@@ -8,6 +8,14 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.2.16] - 2026-10-20
+
+In short: Usenet downloads with a split 7z archive are unpacked.
+
+### Fixed
+
+- Usenet downloads where the video is inside a 7z archive cut into pieces (`name.7z.001`, `.002`, ...) are now unpacked. Before, only a plain `.7z` was recognised, so these ended as "No video in a download". Reported by xrandallx1 on GitHub (#92) and u/troelsdk on Reddit.
+
 ## [3.2.15] - 2026-10-20
 
 In short: multi-language releases rank better when you list several languages, and the TRaSH update tells you what it did.
