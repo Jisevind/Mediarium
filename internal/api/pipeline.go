@@ -121,6 +121,9 @@ func (s *Server) runPipeline(queueID, movieID int64, movieTitle string, movieYea
 	if err != nil {
 		return fail(err)
 	}
+	if m, err := s.MovieRepo.Get(movieID); err == nil {
+		destPath = s.keepMovieFolder(m, root, destPath) // a movie that has a folder keeps it
+	}
 
 	// Classified up front (not just the bare resolution) so it's available
 	// both for ConflictOverwriteIfBetter's comparison below and for what
@@ -1181,7 +1184,7 @@ func (s *Server) buildDestPath(root, movieTitle string, year, tmdbID int, releas
 	}
 
 	sanitizeMode, replacement := s.illegalCharSettings()
-	folder := organizer.Sanitize(organizer.Render(organizer.Presets["plex"], ctx), sanitizeMode, replacement)
+	folder := organizer.Sanitize(organizer.Render(s.movieFolderFormat(), ctx), sanitizeMode, replacement)
 	if name, ok := s.keptName(videoFile, sanitizeMode, replacement); ok {
 		return filepath.Join(moviesPath, folder, name), nil
 	}

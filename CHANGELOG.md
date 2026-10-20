@@ -8,6 +8,25 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.2.19] - 2026-10-20
+
+In short: nzb360 and other phone apps show scores, naming has folder formats and TRaSH presets that save, size limits are separate for movies and TV, and long cards fold away.
+
+### Added
+
+- Separate Movie folder and Show folder formats under Settings > Library > File names and importing > Custom, with ready-made choices (Mediarium default, TRaSH recommended, and TMDb id versions for Plex, Emby and Jellyfin) and a live preview. They only name the folder of a new title; a movie or show that already has files keeps its folder. (Bayharbourbutcher1 on GitHub, #95)
+- Release lists in apps like nzb360 now show what Radarr and Sonarr show: the custom formats a release matches and their score, the quality revision (repack or proper), the edition, seeders and leechers, and the reasons an automatic search would skip it. The best match is listed first. Reported by Bayharbourbutcher1 on GitHub, #94.
+- The apps' "cutoff unmet" list, saved filters, custom format list and the settings lists they load at start (tags in detail, display and host settings, notifications, import lists, remote path mappings, updates, tasks, log, metadata) now get a proper answer instead of "not found". Releases pushed from other tools are answered with a clear refusal. Reported by Bayharbourbutcher1 on GitHub, #94.
+
+### Changed
+
+- Size limits are now separate for Movies and TV, each with its own tab, switch and Apply TRaSH sizes. Radarr's TRaSH lists fill the Movies table and Sonarr's the TV table. On upgrade the TV table starts as a copy of your current table, so no check changes. (Bayharbourbutcher1 on GitHub, #95)
+- The Custom formats card, the Size limits card and the Music card on the Quality page are folded away until opened, with a short summary and your choice remembered. Custom format scores in the profile editor are folded too, and open by themselves when you add formats or a score has a mistake. (Bayharbourbutcher1 on GitHub, #95)
+
+### Fixed
+
+- The TRaSH file name formats (Plex, Emby, Jellyfin with TMDb id) no longer fail to save with "at most 200 characters". A format can now be up to 500 characters. (Bayharbourbutcher1 on GitHub, #95)
+
 ## [3.2.17] - 2026-10-20
 
 In short: phone apps can search for releases, the search box finds settings, and more TRaSH help.

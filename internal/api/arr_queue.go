@@ -315,7 +315,6 @@ func (s *Server) allShowEpisodes() ([]showEpisode, error) {
 
 func (s *Server) arrWantedMissing(app arrApp) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		page, size := paging(r, 10)
 		desc := !strings.EqualFold(r.URL.Query().Get("sortDirection"), "ascending")
 		var records []any
 		switch app {
@@ -381,12 +380,7 @@ func (s *Server) arrWantedMissing(app arrApp) http.HandlerFunc {
 				records = append(records, s.toArrAlbum(a, &ar))
 			}
 		}
-		if records == nil {
-			records = []any{}
-		}
-		from, to := pageOf(len(records), page, size)
-		writeJSON(w, http.StatusOK, arrPage{Page: page, PageSize: size, SortKey: r.URL.Query().Get("sortKey"),
-			SortDirection: map[bool]string{true: "descending", false: "ascending"}[desc], TotalRecords: len(records), Records: records[from:to]})
+		arrWantedPage(w, r, records, map[arrApp]string{arrRadarr: "movieMetadata.sortTitle", arrSonarr: "episodes.airDateUtc", arrLidarr: "albums.releaseDate"}[app])
 	}
 }
 

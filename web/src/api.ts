@@ -582,6 +582,8 @@ export interface NotifyTestStep {
 export interface NamingTokens {
   tokens: { token: string; kind: 'movie' | 'tv' | 'both'; group: string }[]
   schemes: { id: string; name: string; movie: string; episode: string }[]
+  // Ready-made folder formats for a new movie and a new show.
+  folderSchemes?: { id: string; name: string; movie: string; series: string }[]
 }
 
 // Another program that runs next to Mediarium, with a link to it (Settings > Add-ons).
@@ -617,6 +619,9 @@ export interface Settings {
   namingPreset: string
   movieNameFormat: string
   episodeNameFormat?: string
+  // The folder formats for a new movie and a new show (Custom style); '' = the usual "Title (Year)".
+  movieFolderFormat?: string
+  seriesFolderFormat?: string
   // Imported videos keep the file name they came with (folders are named as usual).
   keepOriginalNames?: boolean
   hasTmdbApiKey: boolean
@@ -806,6 +811,8 @@ export interface SizeRow {
 // The sizes the TRaSH Guides recommend, mapped onto the size table (max 0 = no limit).
 export interface TrashSizes {
   list: string
+  // The size table the list is for.
+  kind?: 'movie' | 'tv'
   rows: { quality: string; min: number; max: number }[]
   skipped: string[]
 }
@@ -3320,9 +3327,10 @@ export const api = {
   delayProfile: () => get<DelayProfile>('/search/delay'),
   putDelayProfile: (p: DelayProfile) => put<DelayProfile>('/search/delay', p),
   searchWaiting: () => get<WaitingRelease[]>('/search/waiting'),
-  sizeLimits: () => get<SizeTable>('/quality/size-limits'),
-  putSizeLimits: (table: SizeTable) => put<SizeTable>('/quality/size-limits', table),
-  resetSizeLimits: () => post<SizeTable>('/quality/size-limits/reset'),
+  // Movies and TV each have a size table; kind picks one.
+  sizeLimits: (kind: 'movie' | 'tv' = 'movie') => get<SizeTable>(`/quality/size-limits?kind=${kind}`),
+  putSizeLimits: (table: SizeTable, kind: 'movie' | 'tv' = 'movie') => put<SizeTable>(`/quality/size-limits?kind=${kind}`, table),
+  resetSizeLimits: (kind: 'movie' | 'tv' = 'movie') => post<SizeTable>(`/quality/size-limits/reset?kind=${kind}`),
   trashSizes: (list: string) => get<TrashSizes>(`/quality/size-limits/trash/${encodeURIComponent(list)}`),
   calendarFeed: () => get<{ on: boolean; path?: string }>('/calendar/feed'),
   newCalendarFeed: () => post<{ on: boolean; path?: string }>('/calendar/feed'),
@@ -3666,8 +3674,8 @@ export const api = {
       `/settings/filesystem-check?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`,
     ),
 
-  namingPreview: (preset: string, format?: string, kind: 'movie' | 'tv' = 'movie', keep = false) =>
-    get<{ folder: string; filename: string; problem?: string }>(namingPreviewPath(preset, format, kind, keep)),
+  namingPreview: (preset: string, format?: string, kind: 'movie' | 'tv' = 'movie', keep = false, folder?: string) =>
+    get<{ folder: string; filename: string; problem?: string }>(namingPreviewPath(preset, format, kind, keep, folder)),
 
   namingTokens: () => get<NamingTokens>('/settings/naming-tokens'),
 

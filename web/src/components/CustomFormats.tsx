@@ -5,6 +5,7 @@ import { useConfirm } from './ConfirmProvider'
 import { api, type CustomFormat, type FormatTestResult, type QualityProfile, type TrashFormat, type TrashProfile } from '../api'
 import { plural, t, tx, st } from '../i18n'
 import TipLabel from './TipLabel'
+import Collapsible from './Collapsible'
 import TrashUpdateBar from './TrashUpdateBar'
 import { profileForApp, scorePreview, signed } from '../trashScores'
 
@@ -26,6 +27,8 @@ export default function CustomFormatsSection({ rev = 0, onChanged }: { rev?: num
   const [profiles, setProfiles] = useState<QualityProfile[]>([])
   const [defaults, setDefaults] = useState({ id: 0, tvId: 0 })
   const [error, setError] = useState('')
+  // The card is folded away until wanted; a change made in it (an import, say) keeps it open.
+  const [openSignal, setOpenSignal] = useState(0)
 
   const load = useCallback(() => {
     api
@@ -43,6 +46,7 @@ export default function CustomFormatsSection({ rev = 0, onChanged }: { rev?: num
   useEffect(load, [load, rev])
 
   const changed = () => {
+    setOpenSignal((n) => n + 1)
     load()
     onChanged?.()
   }
@@ -66,6 +70,7 @@ export default function CustomFormatsSection({ rev = 0, onChanged }: { rev?: num
         {t('A custom format spots something in a release name, like HDR, a codec or a release group. Each quality profile gives the formats it cares about a score: releases scoring higher win, and a negative score keeps a release out. Most people start from the TRaSH Guides.')}
       </p>
       {error && <p className="error-text">{error}</p>}
+      <Collapsible id="custom-formats" label={t('Custom formats')} summary={plural(formats.length, '{n} format', '{n} formats')} openSignal={openSignal}>
       {formats.some((f) => f.trashId) && <TrashUpdateBar onUpdated={changed} />}
       <div className="seg" role="tablist" aria-label={t('Custom formats')} style={{ marginBottom: 14 }}>
         <button role="tab" aria-selected={panel === 'list'} className={panel === 'list' ? 'active' : ''} onClick={() => setPanel('list')}>
@@ -92,6 +97,7 @@ export default function CustomFormatsSection({ rev = 0, onChanged }: { rev?: num
         />
       )}
       {panel === 'test' && <TestPanel profiles={profiles} hasFormats={formats.length > 0} />}
+      </Collapsible>
     </section>
   )
 }

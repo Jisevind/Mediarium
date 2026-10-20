@@ -32,6 +32,7 @@ func (p Profile) FormatScore(title string) (int, []string) {
 // FormatHit is a custom format a release matched and the score the profile
 // gives it.
 type FormatHit struct {
+	ID    int64  `json:"id,omitempty"`
 	Name  string `json:"name"`
 	Score int    `json:"score"`
 }
@@ -49,7 +50,7 @@ func (p Profile) FormatBreakdown(title string) (int, []FormatHit) {
 	for _, sf := range p.Formats {
 		if sf.Format != nil && sf.Format.Matches(in) {
 			total += sf.Score
-			hits = append(hits, FormatHit{Name: sf.Format.Name, Score: sf.Score})
+			hits = append(hits, FormatHit{ID: sf.Format.ID, Name: sf.Format.Name, Score: sf.Score})
 		}
 	}
 	return total, hits

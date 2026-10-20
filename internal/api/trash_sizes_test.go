@@ -50,6 +50,9 @@ func TestTrashSizesEndpoint(t *testing.T) {
 	before := getJSON[map[string]any](t, client, api+"/quality/size-limits")
 
 	got := getJSON[map[string]any](t, client, api+"/quality/size-limits/trash/radarr-movie")
+	if got["kind"] != "movie" {
+		t.Errorf("kind = %v, want movie", got["kind"])
+	}
 	rows := got["rows"].([]any)
 	want := map[string][2]float64{"WEBDL-1080p": {12.5, 0}, "Bluray-1080p": {50.8, 155}}
 	if len(rows) != len(want) {

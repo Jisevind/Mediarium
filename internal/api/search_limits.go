@@ -38,8 +38,8 @@ func (s *Server) setupSearchExtras() {
 // only when the table is on and a release has a size; episodes says how many
 // episodes a release holds (0 for a movie). It also returns the reason the
 // first refused release gave, "" when none was refused.
-func (s *Server) applySizeTable(results []indexers.Result, runtime func() float64, episodes func(res indexers.Result) int) ([]indexers.Result, string) {
-	table := s.sizeLimits()
+func (s *Server) applySizeTable(kind string, results []indexers.Result, runtime func() float64, episodes func(res indexers.Result) int) ([]indexers.Result, string) {
+	table := s.sizeLimitsFor(kind)
 	if !table.Enabled || len(results) == 0 {
 		return results, ""
 	}
@@ -92,7 +92,7 @@ func trimFloat(v float64) string { return fmt.Sprintf("%g", v) }
 
 // movieSizeRejections is sizeRejections for the releases of a movie.
 func (s *Server) movieSizeRejections(ctx context.Context, m library.Movie, profile quality.Profile) func(title string, size int64) []string {
-	table := s.sizeLimits()
+	table := s.sizeLimitsFor("movie")
 	var minutes float64
 	return func(title string, size int64) []string {
 		if table.Enabled && minutes == 0 {
@@ -112,7 +112,7 @@ func episodeCount(mapper func(parser.Release) parser.Release, rel parser.Release
 
 // tvSizeRejections is sizeRejections for the releases of a show.
 func (s *Server) tvSizeRejections(ctx context.Context, series library.Series, profile quality.Profile) func(title string, size int64) []string {
-	table := s.sizeLimits()
+	table := s.sizeLimitsFor("tv")
 	mapper := s.releaseMapper(series)
 	var minutes float64
 	return func(title string, size int64) []string {
@@ -266,7 +266,7 @@ func (s *Server) limitMovieResults(ctx context.Context, m library.Movie, profile
 // limitMovie is limitMovieResults that also says what it took out.
 func (s *Server) limitMovie(ctx context.Context, m library.Movie, profile quality.Profile, mode limitMode, results []indexers.Result) ([]indexers.Result, limitReport) {
 	var rep limitReport
-	results, rep.size = s.applySizeTable(results, func() float64 { return s.movieRuntime(ctx, m) }, func(indexers.Result) int { return 0 })
+	results, rep.size = s.applySizeTable("movie", results, func() float64 { return s.movieRuntime(ctx, m) }, func(indexers.Result) int { return 0 })
 	if mode != limitDry {
 		results = s.markCached(ctx, results) // only reorders: see debrid_cache.go
 	}
@@ -300,7 +300,7 @@ func (s *Server) limitTVResults(series library.Series, season, episode int, prof
 func (s *Server) limitTV(series library.Series, season, episode int, profile quality.Profile, current *upgradeBase, mode limitMode, results []indexers.Result) ([]indexers.Result, limitReport) {
 	var rep limitReport
 	mapper := s.releaseMapper(series)
-	results, rep.size = s.applySizeTable(results, func() float64 { return s.episodeRuntime(context.Background(), series) },
+	results, rep.size = s.applySizeTable("tv", results, func() float64 { return s.episodeRuntime(context.Background(), series) },
 		func(res indexers.Result) int { return episodeCount(mapper, res.Parsed()) })
 	if mode != limitDry {
 		results = s.markCached(context.Background(), results) // only reorders: see debrid_cache.go

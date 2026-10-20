@@ -1310,6 +1310,9 @@ fieldset.group .card, fieldset.group table { max-width: 100%; }
 .naming-token-group .chip-row { gap: 6px; }
 .chip.naming-token { font-family: var(--font-mono); font-size: 0.75rem; padding: 4px 9px; border: 1px solid var(--border); cursor: pointer; }
 .chip.naming-token:hover { color: var(--accent); border-color: var(--accent); }
+.naming-builder > * { min-width: 0; }
+.naming-builder-forms input, .naming-builder-forms select { width: 100%; min-width: 0; box-sizing: border-box; }
+.naming-folder-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px 14px; }
 @media (max-width: 900px) { .naming-builder { grid-template-columns: 1fr; } }
 
 /* Selected main item: a soft pill in its own colour instead of a tab that
@@ -2235,6 +2238,16 @@ legend .srv-dot { margin-left: 6px; }
 .format-score-row > span { min-width: 0; flex: 1; overflow-wrap: anywhere; }
 .format-score-row small { color: var(--text-dim); }
 .format-score-row .icon-btn { flex: none; }
+/* A part of a page that folds away (components/Collapsible.tsx): one button across the width. */
+.collapsible-head { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 12px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.collapsible-head:hover { border-color: var(--accent); }
+.collapsible-label { font-weight: 600; }
+.collapsible-summary { color: var(--text-dim); font-size: 0.88rem; min-width: 0; overflow-wrap: anywhere; }
+.collapsible-chevron { margin-left: auto; flex: none; transition: transform 0.15s ease; }
+.collapsible[data-open="true"] > .collapsible-head > .collapsible-chevron { transform: rotate(180deg); }
+.collapsible-body { margin-top: 12px; }
+.collapsible-body[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { .collapsible-chevron { transition: none; } }
 .size-trash { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-top: 14px; }
 .size-trash label { display: flex; flex-direction: column; gap: 4px; min-width: min(100%, 220px); }
 .size-trash-result { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.88rem; }

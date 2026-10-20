@@ -269,7 +269,15 @@ const (
 
 	// Search and quality (Settings > Library). Both off until switched on.
 	KeySearchDelay = "search.delay_profile" // delay profile (JSON: preferredProtocol, usenetMinutes, torrentMinutes, bypassIfHighestQuality): automatic searches hold back releases of the less liked protocol for that many minutes; unset or 0 minutes = no wait
-	KeySizeLimits  = "quality.size_limits"  // size limits per quality in MB per minute of runtime (JSON: enabled, limits); applied only while enabled is true
+	KeySizeLimits  = "quality.size_limits"  // size limits per quality for movies in MB per minute of runtime (JSON: enabled, limits); applied only while enabled is true
+
+	// The same table for shows (it started as a copy of the movie table).
+	KeySizeLimitsTV = "quality.size_limits_tv"
+
+	// The folder a new movie or show gets, used when the naming style is Custom.
+	KeyMovieFolderFormat  = "library.movie_folder_format"  // token string; unset = "{Movie Title} ({Year})"
+	KeySeriesFolderFormat = "library.series_folder_format" // the same for a new show; unset = "{Series Title} ({Year})"
+
 	// The request portal (Settings > Accounts > All accounts). Everything is off or unlimited until set.
 	KeyRequestOptions = "requests.options" // JSON: notifyRequester (tell people when their request or report is answered), quotaCount (requests per period, 0 = no limit), quotaPeriod (day or week), fourK (let people ask for a 4K copy), fourKProfileId (the quality profile of that copy), reports (let people report a problem with a title)
 	// Permissions of what Mediarium creates in the library (Settings > Library > Folders).

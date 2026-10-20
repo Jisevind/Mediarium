@@ -13,6 +13,7 @@ import { useReveal } from '../useReveal'
 import { plural, t, tx } from '../i18n'
 import TipLabel from './TipLabel'
 import AddFormatsPicker from './AddFormatsPicker'
+import Collapsible from './Collapsible'
 
 interface Draft {
   id?: number
@@ -185,6 +186,9 @@ export default function QualityProfilesSection({ rev = 0, onChanged, advanced = 
     formatScores: formatScoreProblem(draft, formats),
   }
   const v = useValidation(errors)
+  // The custom format scores are folded away until wanted; adding a format opens them.
+  const [scoresSignal, setScoresSignal] = useState(0)
+  const scoredFormats = draft ? formats.filter((f) => isScored(draft, f.id) || addedFormats.has(f.id)).length : 0
   // Counts the times a form has been opened, so it can be scrolled into view
   // and given the cursor each time (see useReveal).
   const [opened, setOpened] = useState(0)
@@ -402,8 +406,14 @@ export default function QualityProfilesSection({ rev = 0, onChanged, advanced = 
             </div>
           </div>
         </details>
-        {advanced && <details open={Object.values(draft.formatScores).some((s) => s.trim() !== '') || draft.minFormatScore !== '' || draft.cutoffFormatScore !== ''}>
-          <summary style={{ cursor: 'pointer' }}>{t('Custom format scores (optional)')}</summary>
+        {advanced && <Collapsible
+          id="profile-format-scores"
+          label={t('Custom format scores (optional)')}
+          showLabel
+          summary={plural(scoredFormats, '{n} format', '{n} formats')}
+          openSignal={scoresSignal}
+          forceOpen={formatScoreProblem(draft, formats) !== null}
+        >
           {formats.length === 0 ? (
             <p style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }}>{t('No custom formats yet. Import some under Custom formats below, from the TRaSH Guides or from Radarr or Sonarr.')}</p>
           ) : (
@@ -414,6 +424,7 @@ export default function QualityProfilesSection({ rev = 0, onChanged, advanced = 
               <AddFormatsPicker
                 candidates={formats.filter((f) => !isScored(draft, f.id) && !addedFormats.has(f.id))}
                 onAdd={(ids, scores) => {
+                  setScoresSignal((n) => n + 1)
                   setAddedFormats((cur) => new Set([...cur, ...ids]))
                   setDraft({ ...draft, formatScores: { ...draft.formatScores, ...scores } })
                 }}
@@ -461,7 +472,7 @@ export default function QualityProfilesSection({ rev = 0, onChanged, advanced = 
               <FieldError v={v} name="formatScores" />
             </div>
           )}
-        </details>}
+        </Collapsible>}
       </div>
       <div className="profile-form-actions">
         <button className="primary" onClick={save} disabled={saving}>

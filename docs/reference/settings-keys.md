@@ -89,6 +89,7 @@ The keys the app stores in its settings table. You normally change these from th
 | `library.keep_original_names` | "1" keeps the file name an imported video came with (folders are still named by the preset; a random, obfuscated name falls back to the preset); unset or "0" renames as the preset says |
 | `library.metadata_files` | JSON: movies and tv, each {nfo, artwork}, and replace (true replaces files Mediarium wrote earlier); unset = nothing is written |
 | `library.movie_copies_path` | where second copies of movies go (a 4K copy next to the 1080p one); unset = second copies of movies are off |
+| `library.movie_folder_format` | token string; unset = "{Movie Title} ({Year})" |
 | `library.movie_name_format` | token string, used when preset=custom |
 | `library.movies_extra_paths` | more movie folders next to the main one (a JSON list of paths); each movie says which one its files go to |
 | `library.movies_path` |  |
@@ -97,6 +98,7 @@ The keys the app stores in its settings table. You normally change these from th
 | `library.quality_profile` | legacy: an old preset key (any-1080p, ultra-hd, any); only read once to pick the initial default profile |
 | `library.roots_confirmed` | library folders Mediarium has seen with their .mediarium-root marker (a JSON list); one that loses its marker is refused until it is back |
 | `library.season_packs` | "1" looks for a season pack once a season has ended (a show can say otherwise for itself); unset or "0" leaves it off |
+| `library.series_folder_format` | the same for a new show; unset = "{Series Title} ({Year})" |
 | `library.trash_days` | days removed titles' files stay in the recycle bin (.mediarium-trash in the library folder); unset = 7, "0" = delete straight away |
 | `library.tv_copies_path` | the same for shows |
 | `library.tv_extra_paths` | the same for shows |
@@ -130,7 +132,8 @@ The keys the app stores in its settings table. You normally change these from th
 | `onboarding.done` | "1" once the first-run wizard completes |
 | `quality.language` | the audio language wanted, as a name like "English" (the default when unset); a release clearly in another language only is not picked automatically |
 | `quality.language_only` | "1" takes only releases that say they are in a wanted audio language (no untagged, English-only or bare multi releases unless English is wanted); unset or "0" keeps those as a lower-ranked fallback |
-| `quality.size_limits` | size limits per quality in MB per minute of runtime (JSON: enabled, limits); applied only while enabled is true |
+| `quality.size_limits` | size limits per quality for movies in MB per minute of runtime (JSON: enabled, limits); applied only while enabled is true |
+| `quality.size_limits_tv` |  |
 | `requests.options` | JSON: notifyRequester (tell people when their request or report is answered), quotaCount (requests per period, 0 = no limit), quotaPeriod (day or week), fourK (let people ask for a 4K copy), fourKProfileId (the quality profile of that copy), reports (let people report a problem with a title) |
 | `scripts.after_import` | JSON: script (a file name in /config/scripts; empty = off) and timeoutSec (default 300). Only a signed-in browser session can set it, not an API key |
 | `scripts.last_run` | what the last run did (JSON; set by the app, not user-editable) |

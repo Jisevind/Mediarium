@@ -104,7 +104,9 @@ You can still pick any release by hand from a title's release list.
 
 ### Size limits per quality
 
-**Settings > Library > Quality > Size limits** is a table with a smallest and a largest size for every quality, in **megabytes for each minute** of the film or episode, like the quality definitions in Radarr and Sonarr. A 2-hour film at 4 MB a minute is about 0.5 GB. The right-hand column shows what the numbers mean for a film of 100 minutes.
+**Settings > Library > Quality > Size limits** is a table with a smallest and a largest size for every quality, one table for **Movies** and one for **TV** (the two tabs above it, each with its own switch, **Reset to defaults** and **Apply TRaSH sizes**), in the same way that Radarr and Sonarr each have their own. A movie release is judged by the Movies table and an episode or season pack by the TV table. The card can be folded away; the line next to its arrow says where the limits are on.
+
+Each table has a smallest and a largest size for every quality, in **megabytes for each minute** of the film or episode, like the quality definitions in Radarr and Sonarr. A 2-hour film at 4 MB a minute is about 0.5 GB. The right-hand column shows what the numbers mean for a film of 100 minutes.
 
 - The switch **Use these size limits** is off at first and the table then does nothing.
 - Leave **Largest** empty for no upper limit. The defaults are Sonarr's: for example 4 to 130 MB a minute for WEBDL-1080p, 35 or more for a remux, with no upper limit for remuxes and for most 2160p.
@@ -113,14 +115,14 @@ You can still pick any release by hand from a title's release list.
 - Automatic searches skip a release outside its limits. In a title's release list, the release is marked "too large for WEBDL-1080p: 410.0 MB a minute, the largest is 130 MB a minute", and you can still pick it by hand.
 - The table, the built-in minimums above and a profile's **Largest download** all apply: a release has to pass every one, so the tightest wins. The release list now also names a release that is smaller than the built-in minimum or larger than the profile's limit.
 - **Reset to defaults** puts every number back (the switch stays as it is).
-- **Apply TRaSH sizes** next to the switch fills the table with the sizes the [TRaSH Guides](https://trash-guides.info/) recommend. Choose the list: **Movies**, **Movies, streaming (SQP)**, **Movies, 4K (SQP)**, **Anime movies**, **Series** or **Anime series**. The sizes are read from GitHub the same way the custom formats are (kept for six hours), and an unreachable GitHub gives a clear message. The card then names each quality that changed ("WEBDL-1080p 4 to 130 -> 12.5 and up"); nothing is saved until you press **Save**. How the numbers carry over:
+- **Apply TRaSH sizes** next to the switch fills the table with the sizes the [TRaSH Guides](https://trash-guides.info/) recommend. On the **Movies** tab choose the list **Movies**, **Movies, streaming (SQP)**, **Movies, 4K (SQP)** or **Anime movies** (Radarr's lists); on the **TV** tab, **Series** or **Anime series** (Sonarr's lists). The sizes are read from GitHub the same way the custom formats are (kept for six hours), and an unreachable GitHub gives a clear message. The card then names each quality that changed ("WEBDL-1080p 4 to 130 -> 12.5 and up"); nothing is saved until you press **Save**. How the numbers carry over:
   - TRaSH gives a smallest, a preferred and a largest size per quality, in MB a minute. The smallest and largest go into the table; the preferred size has no place here and is left out.
   - A largest size at the end of TRaSH's scale (1000 or more, which is how they write "no limit") becomes an empty **Largest**.
   - WEBRip counts as WEBDL, "Bluray-1080p Remux" as Remux-1080p. Qualities Mediarium has no row for (Bluray-480p, Bluray-576p) are named and skipped.
   - A quality TRaSH gives no size for (for example CAM/TeleSync) keeps the numbers it has.
-  - There is one table for movies and episodes, so the list you choose applies to both; pick the list for what you mostly download. The switch **Use these size limits** is not touched: if it is off, the card says so.
+  - A list only changes the table of its own tab, so the movie sizes never change the TV checks and the other way round. The switch **Use these size limits** is not touched: if it is off, the card says so.
 
-Scripts: `GET /api/quality/size-limits/trash/{list}` answers what a TRaSH list would put in the table (`radarr-movie`, `radarr-sqp-streaming`, `radarr-sqp-uhd`, `radarr-anime`, `sonarr-series` or `sonarr-anime`) without saving anything, as `{rows: [{quality, min, max}], skipped: [...]}`. `GET /api/quality/size-limits`, `PUT /api/quality/size-limits` with `{"enabled": true, "rows": [{"quality": "WEBDL-1080p", "min": 4, "max": 130}]}` and `POST /api/quality/size-limits/reset`. The saved table is the setting `quality.size_limits`.
+Scripts: `GET /api/quality/size-limits/trash/{list}` answers what a TRaSH list would put in the table (`radarr-movie`, `radarr-sqp-streaming`, `radarr-sqp-uhd`, `radarr-anime`, `sonarr-series` or `sonarr-anime`) without saving anything, as `{rows: [{quality, min, max}], skipped: [...]}`. The answer also says which table it is for (`kind`: `movie` for Radarr's lists, `tv` for Sonarr's). `GET /api/quality/size-limits`, `PUT /api/quality/size-limits` with `{"enabled": true, "rows": [{"quality": "WEBDL-1080p", "min": 4, "max": 130}]}` and `POST /api/quality/size-limits/reset` all take `?kind=movie` (the default) or `?kind=tv`. The saved tables are the settings `quality.size_limits` (movies) and `quality.size_limits_tv`. Before 3.3 there was one table for both: on upgrade the TV table starts as a copy of the table you had, so no check changes until you edit one of them.
 
 **Duplicate** next to a profile opens a copy of it ("1080p copy") to change and save as a new profile.
 
@@ -249,6 +251,8 @@ The activity list says when a fallback was used ("nothing matched the "1080p" pr
 
 ## Custom formats
 
+The **Custom formats** card, the **Size limits** card and the **Music** card on the Quality page are folded away until you open them (the arrow at the right of the bar), so the page doesn't run long. Each shows a short summary while folded ("5 formats", "On for movies"), and Mediarium remembers which ones you opened, in your browser. The Custom formats card opens by itself when you import or change a format in it.
+
 A custom format spots something in a release name: HDR, Dolby Vision, a codec, a streaming service, a release group, a remux, an edition. Each quality profile gives the formats it cares about a score. A release's **format score** is the total of the scores of every format it matches. Formats work the way they do in Radarr and Sonarr, so formats from either, and from the [TRaSH Guides](https://trash-guides.info/), work unchanged, including their patterns.
 
 What the score does:
@@ -276,7 +280,7 @@ Then open a profile with **Edit** and set the scores under **Custom format score
 ### Giving many formats a score at once
 
 - **In the Custom formats card**, tick formats in **Your formats** (the box in the header ticks all), press **Add to profiles...**, tick one or more profiles and choose **TRaSH's score for each** or **The same score for all** with a score you type. A score the profile already has for one of these formats is replaced; a typed 0 takes the format out of the profile. Formats that came from the guides get the score the guides give them now (read from GitHub, or the last one Mediarium saw if GitHub can't be reached), a score of 0 included: the format is added with 0. A format that didn't come from the guides is left alone and named afterwards.
-- **On a profile's edit form**, under **Custom format scores**, **Add formats** opens a list of the formats the profile doesn't score yet. Tick some, choose TRaSH's score or one typed score, and they appear in the form with their scores. Nothing is saved until you press **Save profile**.
+- **On a profile's edit form**, under **Custom format scores** (folded away at first, with the number of formats scored next to it; it opens by itself when you add formats or when a score has a mistake), **Add formats** opens a list of the formats the profile doesn't score yet. Tick some, choose TRaSH's score or one typed score, and they appear in the form with their scores. Nothing is saved until you press **Save profile**.
 - **A score of 0 is a score.** A format in the list with 0 stays in the profile (and in `formatScores` in the API); it changes no release's score. Only an empty box leaves a format out. To take a format out of the profile, press the bin button at the end of its row (**Remove ... from this profile**), then **Save profile**.
 
 Scores given from the Custom formats card (an import into a profile, or **Add to profiles...**) are saved straight away and show up in the profile's form, also when the form is already open: it picks up the new scores and keeps anything you typed in it.
