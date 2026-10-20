@@ -63,6 +63,9 @@ func whyNotBest(profile quality.Profile, best *indexers.Result, bestRel parser.R
 		text = "It has no seeders, so an automatic search only takes it when nothing alive is left."
 	case bk.language != k.language:
 		text = "The best match fits your preferred language better."
+		if len(quality.ParseLanguages(profile.Language)) > 1 {
+			text = "The best match names your languages better."
+		}
 	case bk.tier != k.tier:
 		text = fmt.Sprintf("The best match has a higher quality: %s against %s.", quality.Classify(bestRel), quality.Classify(rel))
 	case bk.cached != k.cached:

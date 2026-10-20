@@ -28,6 +28,7 @@ func TestNotBestSaysWhichStepDecided(t *testing.T) {
 		{"score with nothing matched", "", []indexers.Result{usenet(i91Fun), usenet("Some.Movie.2020.1080p.BluRay.x264-GRP")}, "This release: 0."},
 		{"tier", "", []indexers.Result{usenet("Some.Movie.2020.1080p.BluRay.x264-GRP"), usenet("Some.Movie.2020.1080p.WEB-DL.x264-GRP")}, "Bluray-1080p against WEBDL-1080p"},
 		{"language", "English", []indexers.Result{usenet(i91Bdrip), usenet(i91FunDE)}, "fits your preferred language better"},
+		{"language, several wanted", "German,English", []indexers.Result{usenet(i91FunDE), usenet("Some.Movie.2020.German.1080p.BluRay.x265-FuN")}, "The best match names your languages better."},
 		{"dead torrent", "", []indexers.Result{torrent(i91Bdrip, 5), torrent(i91Fun, 0)}, "no seeders"},
 		{"indexer priority", "", []indexers.Result{withPriority(usenet(i91Fun), 1), withPriority(usenet(i91Fun), 40)}, "indexer with a higher priority"},
 		{"protocol", "", []indexers.Result{usenet(i91Fun), torrent(i91Fun, 9)}, "protocol of the best match first"},

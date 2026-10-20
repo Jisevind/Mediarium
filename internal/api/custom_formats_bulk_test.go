@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 )
 
 const (
@@ -247,8 +248,15 @@ func TestBulkAssignAndTrashUpdate(t *testing.T) {
 			t.Fatalf("a second update has nothing to do: %v", again)
 		}
 		act := getJSON[[]any](t, client, api+"/activity")
-		if !strings.Contains(toJSONString(act), "Updated 2 custom formats from the TRaSH Guides") {
+		if !strings.Contains(toJSONString(act), "Checked the TRaSH Guides: 2 formats updated") {
 			t.Fatalf("no Activity line: %v", act)
+		}
+		if c, _ := applied["check"].(map[string]any); c == nil || c["updated"] != float64(2) {
+			t.Fatalf("the result should say what was checked: %v", applied["check"])
+		}
+		st := getJSON[map[string]any](t, client, api+"/custom-formats/trash-update/status")
+		if last, _ := st["last"].(map[string]any); last == nil || last["updated"] != float64(0) {
+			t.Fatalf("the last check is the second one, with nothing to update: %v", st)
 		}
 	})
 }
@@ -300,5 +308,67 @@ func TestTrashUpdateJobRunsOncePerDayAndOnlyWhenOn(t *testing.T) {
 	server.TestTrashFormatsJob(t.Context())
 	if guides.listings() != afterFirst {
 		t.Fatal("the job read the guides twice in one day")
+	}
+}
+
+func TestTrashCheckStatusAndEveryWeek(t *testing.T) {
+	server, httpSrv, client := newHuntTestServer(t)
+	postJSON[map[string]any](t, client, httpSrv.URL+"/api/onboarding/admin", map[string]string{
+		"username": "ryan", "password": "correct-horse-battery-staple", "firstName": "Ryan", "lastName": "Tester",
+	}, http.StatusCreated)
+	guides := newChangingGuides(t)
+	server.SetTrashGuidesSource(guides.srv.URL+"/api", guides.srv.URL+"/raw")
+	api := httpSrv.URL + "/api"
+	postJSON[map[string]any](t, client, api+"/trash-guides/radarr/formats", map[string]any{"trashIds": []string{hdrTrashID}}, http.StatusOK)
+
+	if st := getJSON[map[string]any](t, client, api+"/custom-formats/trash-update/status"); st["last"] != nil || st["next"] != nil {
+		t.Fatalf("nothing checked and the switch off: %v", st)
+	}
+	if s := getJSON[map[string]any](t, client, api+"/settings"); s["trashFormatsEveryDays"] != float64(1) {
+		t.Fatalf("every day by default: %v", s["trashFormatsEveryDays"])
+	}
+	for _, bad := range []int{0, 2, 30} {
+		putJSONStatus(t, client, api+"/settings", map[string]any{"trashFormatsEveryDays": bad}, http.StatusBadRequest)
+	}
+	putJSONStatus(t, client, api+"/settings", map[string]any{"trashFormatsEveryDays": 7, "trashFormatsAuto": true}, http.StatusOK)
+	if s := getJSON[map[string]any](t, client, api+"/settings"); s["trashFormatsEveryDays"] != float64(7) {
+		t.Fatalf("every week: %v", s["trashFormatsEveryDays"])
+	}
+
+	// The job makes a check, and the card can see it.
+	server.TestTrashFormatsJob(t.Context())
+	st := getJSON[map[string]any](t, client, api+"/custom-formats/trash-update/status")
+	last, _ := st["last"].(map[string]any)
+	if last == nil || last["daily"] != true || last["error"] != nil {
+		t.Fatalf("the daily check should be kept: %v", st)
+	}
+	next, err := time.Parse(time.RFC3339, st["next"].(string))
+	if err != nil || time.Until(next) < 6*24*time.Hour {
+		t.Fatalf("the next check is a week away: %v (%v)", st["next"], err)
+	}
+	if act := toJSONString(getJSON[[]any](t, client, api+"/activity")); !strings.Contains(act, "Checked the TRaSH Guides") {
+		t.Fatalf("the job should write to Activity: %s", act)
+	}
+}
+
+// Scores given by importing TRaSH formats into a profile, or by adding formats
+// to profiles, are what the profile returns afterwards; a form that saves the
+// profile later with the scores it holds now keeps them.
+func TestAssignedScoresReachTheProfile(t *testing.T) {
+	server, httpSrv, client := newHuntTestServer(t)
+	postJSON[map[string]any](t, client, httpSrv.URL+"/api/onboarding/admin", map[string]string{
+		"username": "ryan", "password": "correct-horse-battery-staple", "firstName": "Ryan", "lastName": "Tester",
+	}, http.StatusCreated)
+	guides := newChangingGuides(t)
+	server.SetTrashGuidesSource(guides.srv.URL+"/api", guides.srv.URL+"/raw")
+	api := httpSrv.URL + "/api"
+	created := postJSON[map[string]any](t, client, api+"/quality-profiles", map[string]any{
+		"name": "Scored", "allowed": []string{"WEBDL-1080p"}, "cutoff": "WEBDL-1080p",
+	}, http.StatusCreated)
+	pid := int64(created["id"].(float64))
+	imp := postJSON[map[string]any](t, client, api+"/trash-guides/radarr/formats", map[string]any{"trashIds": []string{hdrTrashID}, "profileId": pid}, http.StatusOK)
+	hdr := imp["formats"].([]any)[0].(map[string]any)["id"].(float64)
+	if sc, ok := scoreOf(profileByID(t, client, httpSrv.URL, pid), hdr); !ok || sc == 0 {
+		t.Fatalf("the import should score the format in the profile: %v", profileByID(t, client, httpSrv.URL, pid))
 	}
 }

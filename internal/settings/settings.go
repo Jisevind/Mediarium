@@ -21,6 +21,8 @@ const (
 	KeyShowAdvanced        = "ui.show_advanced"                 // "1" shows custom formats and format scores on the Quality page; unset follows whether any custom format exists
 	KeyTrashFormatsAuto    = "formats.trash_auto_update"        // "1" re-reads the TRaSH Guides once a day and updates the custom formats that came from them; unset or "0" only updates on request
 	KeyTrashFormatsLast    = "formats.trash_last_update"        // when the TRaSH Guides were last read for the daily update (RFC 3339)
+	KeyTrashFormatsEvery   = "formats.trash_every_days"         // how often the daily update reads the guides: "1" every day (the default) or "7" every week
+	KeyTrashFormatsCheck   = "formats.trash_last_check"         // what the last check of the TRaSH Guides found, as JSON (shown under the switch on the Custom formats card)
 	KeyUnmonitorDownloaded = "library.unmonitor_downloaded"     // "1" stops monitoring a movie once it is downloaded; unset or "0" keeps it monitored
 	KeyUnmonitorFinished   = "library.unmonitor_finished_shows" // "1" stops monitoring a show once it has ended and every monitored episode is in; unset or "0" keeps it monitored
 	KeyRootsConfirmed      = "library.roots_confirmed"          // library folders Mediarium has seen with their .mediarium-root marker (a JSON list); one that loses its marker is refused until it is back

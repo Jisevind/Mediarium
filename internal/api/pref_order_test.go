@@ -14,10 +14,12 @@ import (
 // orders and a spread of situations, so an order effect shows up as a failure.
 
 const (
-	i91Bdrip = "Some.Movie.2020.BDRip.DL.1080p.x265.AAC-2BA"
-	i91Fun   = "Some.Movie.2020.DL.AC3.1080p.BluRay.x265-FuN"
-	i91FunDE = "Some.Movie.2020.German.DL.AC3.1080p.BluRay.x265-FuN"
-	i91Web   = "Some.Movie.2020.DL.1080p.WEB-DL.x265-FuN"
+	i91Bdrip   = "Some.Movie.2020.BDRip.DL.1080p.x265.AAC-2BA"
+	i91Fun     = "Some.Movie.2020.DL.AC3.1080p.BluRay.x265-FuN"
+	i91BdripDE = "Some.Movie.2020.German.BDRip.DL.1080p.x265.AAC-2BA"
+	i91PlainDE = "Some.Movie.2020.German.1080p.BluRay.x265-FuN"
+	i91FunDE   = "Some.Movie.2020.German.DL.AC3.1080p.BluRay.x265-FuN"
+	i91Web     = "Some.Movie.2020.DL.1080p.WEB-DL.x265-FuN"
 )
 
 func i91Orders() map[string][]quality.Preferred {
@@ -41,6 +43,10 @@ func TestPreferredTermOrderDoesNotChangeThePick(t *testing.T) {
 		{"same, the other way round in the list", "", []indexers.Result{torrent(i91Fun, 5, true), torrent(i91Bdrip, 5, true)}, i91Fun},
 		{"German wanted, neither names German: the score decides", "German", []indexers.Result{torrent(i91Bdrip, 5, true), torrent(i91Fun, 5, true)}, i91Fun},
 		{"German wanted, the winner names German too", "German", []indexers.Result{torrent(i91Bdrip, 5, true), torrent(i91FunDE, 5, true)}, i91FunDE},
+		{"German wanted alone: plain German beats German DL", "German", []indexers.Result{torrent(i91FunDE, 5, true), torrent(i91PlainDE, 5, true)}, i91PlainDE},
+		{"German then English: German DL beats plain German", "German,English", []indexers.Result{torrent(i91PlainDE, 5, true), torrent(i91FunDE, 5, true)}, i91FunDE},
+		{"German then English: German DL beats plain German, other order", "German,English", []indexers.Result{torrent(i91FunDE, 5, true), torrent(i91PlainDE, 5, true)}, i91FunDE},
+		{"German then English: both German DL, the score decides", "German,English", []indexers.Result{torrent(i91BdripDE, 5, true), torrent(i91FunDE, 5, true)}, i91FunDE},
 		{"English wanted and the better score is a German DL: language wins, whatever the order", "English", []indexers.Result{torrent(i91Bdrip, 5, true), torrent(i91FunDE, 5, true)}, i91Bdrip},
 		{"the better score has no seeders: it is dead", "", []indexers.Result{torrent(i91Bdrip, 5, true), torrent(i91Fun, 0, true)}, i91Bdrip},
 		{"seeders unknown is not dead", "", []indexers.Result{torrent(i91Bdrip, 5, true), torrent(i91Fun, 0, false)}, i91Fun},

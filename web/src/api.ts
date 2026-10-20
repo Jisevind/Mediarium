@@ -654,7 +654,8 @@ export interface Settings {
   subtitleCountEmbedded?: boolean // subtitle tracks inside the video count as there (on by default)
   subtitleWizdom?: boolean // also look for Hebrew subtitles on Wizdom (off by default)
   showAdvanced?: boolean // show custom formats and format scores on the Quality page
-  trashFormatsAuto?: boolean // read the TRaSH Guides once a day and update the formats that came from them
+  trashFormatsAuto?: boolean // read the TRaSH Guides on a schedule and update the formats that came from them
+  trashFormatsEveryDays?: number // 1 (every day, the default) or 7 (every week)
   trailerBackground?: boolean // play the trailer behind movie and show pages for everyone (on by default)
   trailerSound?: boolean // start that trailer with its sound on (off by default)
   unmonitorDownloaded?: boolean // stop monitoring a movie once it is downloaded (off by default)
@@ -1148,9 +1149,27 @@ export interface TrashFormatChange {
   profiles: string[]
 }
 
+// What one look at the TRaSH Guides found (the button, or the daily or weekly check).
+export interface TrashCheck {
+  at: string
+  error?: string
+  updated: number
+  upToDate: number
+  scores: number
+  profiles: number
+  names: string[]
+  daily: boolean
+}
+
 export interface TrashUpdateResult {
   changes: TrashFormatChange[]
   checked: number
+  check?: TrashCheck
+}
+
+export interface TrashUpdateStatus {
+  last: TrashCheck | null
+  next?: string
 }
 
 export interface TrashFormat {
@@ -3224,6 +3243,7 @@ export const api = {
   trashDefaultScores: (formatIds: number[]) => post<{ scores: FormatScore[] }>('/custom-formats/default-scores', { formatIds }),
   trashUpdatePreview: () => get<TrashUpdateResult>('/custom-formats/trash-update'),
   trashUpdate: () => post<TrashUpdateResult>('/custom-formats/trash-update', {}),
+  trashUpdateStatus: () => get<TrashUpdateStatus>('/custom-formats/trash-update/status'),
   trashGuides: (app: 'radarr' | 'sonarr') => get<{ formats: TrashFormat[]; profiles: TrashProfile[] }>(`/trash-guides/${app}`),
   importTrashFormats: (app: 'radarr' | 'sonarr', trashIds: string[], profileId?: number) =>
     post<FormatImportResult>(`/trash-guides/${app}/formats`, { trashIds, profileId: profileId ?? 0 }),

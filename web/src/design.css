@@ -2254,6 +2254,15 @@ legend .srv-dot { margin-left: 6px; }
 .trash-score { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-dim); margin-left: auto; }
 .trash-update-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; margin-bottom: 14px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius, 8px); }
 .trash-update-bar > :first-child { flex: 1 1 360px; min-width: 0; }
+.trash-update { margin-bottom: 14px; }
+.trash-update .trash-update-bar { margin-bottom: 8px; }
+.trash-update-actions { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 16px; }
+.trash-update-every { min-width: 150px; margin: 0; }
+.trash-update-when { margin: 0 0 8px; color: var(--text-dim); font-size: 0.85rem; }
+.trash-update-result { padding: 10px 14px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius, 8px); }
+.trash-update-result.error { border-left-color: var(--danger, #d33); }
+.trash-update-result p { margin: 0; }
+.trash-update-result .trash-update-names { margin-top: 4px; color: var(--text-dim); font-size: 0.85rem; overflow-wrap: anywhere; }
 .assign-bar { margin-bottom: 12px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius, 8px); }
 .assign-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .assign-body { display: grid; gap: 10px; margin-top: 10px; }

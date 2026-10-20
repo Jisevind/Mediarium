@@ -8,6 +8,24 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.2.15] - 2026-10-20
+
+In short: multi-language releases rank better when you list several languages, and the TRaSH update tells you what it did.
+
+### Fixed
+
+- A German release with `DL` after the source (`German.BDRip.DL`) is now read as dual language, the same as `German.DL.AC3`, so both rank the same. Reported by mirisbowring on GitHub, #91.
+- Formats imported from the TRaSH tab, or added with "Add to profiles...", now show up in a profile's edit form that is already open, instead of leaving it out of date (and saving it would drop the new scores). The form picks up the new scores and keeps anything you typed. Reported by Bayharbourbutcher1 on GitHub, #87.
+
+### Changed
+
+- When you list several audio languages (for example German, English), a multi-language release that has the first one now ranks above a plain release in that language, because it also carries the others. With one language nothing changes. Reported by mirisbowring on GitHub, #91.
+
+### Added
+
+- "Update from TRaSH" now leaves a result on the Custom formats card ("Checked the TRaSH Guides: 3 formats updated, 12 already up to date, 2 profile scores changed", or nothing to update). The same line goes to Activity and the server log, for the automatic check too. Suggested by Bayharbourbutcher1 on GitHub, #87.
+- Under the "Keep TRaSH formats up to date" switch the card shows when the guides were last checked and about when the next check is, and you can choose every day or every week. Suggested by Bayharbourbutcher1 on GitHub, #87.
+
 ## [3.2.14] - 2026-10-19
 
 In short: the search list says why a release was not the best match.

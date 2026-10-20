@@ -1,10 +1,11 @@
-import { Fragment, useCallback, useEffect, useState } from 'react'
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react'
 import FallbackEditor from './FallbackEditor'
 import Icon from './Icon'
 import { useToast } from './Toast'
 import { profileBlurb, sortProfiles } from './qualityBlurb'
 import { api, type CustomFormat, type PreferredTerm, type QualityProfile } from '../api'
 import { addAnimeTerms } from '../animeGroups'
+import { syncFormatScores } from '../profileScoreSync'
 import { useConfirm } from './ConfirmProvider'
 import { firstError, maxLength, required } from '../validate'
 import { FieldError, FormProblem, useValidation } from '../useValidation'
@@ -166,6 +167,11 @@ export default function QualityProfilesSection({ rev = 0, onChanged, advanced = 
   const [saving, setSaving] = useState(false)
   // Formats added with Add formats stay in the score list even while their score is empty.
   const [addedFormats, setAddedFormats] = useState<Set<number>>(new Set())
+  // The scores the open form was loaded with, to tell what the person typed
+  // from what changed behind the form (formats imported from the Custom formats card).
+  const baseScores = useRef<Record<number, string>>({})
+  const draftRef = useRef<Draft | null>(null)
+  draftRef.current = draft
   const orderedFor = (d: Draft) => tiers.filter((t) => d.allowed.includes(t))
   const errors = {
     name: firstError(required(draft?.name, t('Give this profile a name, for example Movies 1080p.')), maxLength(draft?.name ?? '', 60, t('The name'))),
@@ -185,6 +191,7 @@ export default function QualityProfilesSection({ rev = 0, onChanged, advanced = 
   function openDraft(d: Draft | null) {
     v.reset()
     setDraft(d)
+    baseScores.current = d ? { ...d.formatScores } : {}
     setAddedFormats(new Set(d ? Object.keys(d.formatScores).map(Number).filter((id) => isScored(d, id)) : []))
     if (d) setOpened((n) => n + 1)
   }
@@ -194,6 +201,17 @@ export default function QualityProfilesSection({ rev = 0, onChanged, advanced = 
       .listProfiles()
       .then((r) => {
         setProfiles(sortProfiles(r.profiles))
+        // A form that is open keeps what the person typed, and picks up scores
+        // added to the profile elsewhere in the meantime.
+        const cur = draftRef.current
+        const fresh = cur?.id ? r.profiles.find((p) => p.id === cur.id) : undefined
+        if (cur && fresh) {
+          const server = draftFrom(fresh).formatScores
+          const synced = syncFormatScores(baseScores.current, cur.formatScores, server)
+          baseScores.current = server
+          setDraft({ ...cur, formatScores: synced })
+          setAddedFormats((added) => new Set([...added, ...Object.keys(synced).map(Number).filter((id) => (synced[id] ?? '').trim() !== '' && Number(synced[id]) !== 0)]))
+        }
         setTiers(r.tiers)
         setDefaultId(r.defaultId)
         setDefaultTvId(r.defaultTvId || 0)
