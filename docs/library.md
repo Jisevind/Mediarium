@@ -20,6 +20,7 @@ To do the same thing to many titles at once, use **Select**.
 - **Sort direction.** The button with the up-and-down arrows next to **Sort** reverses the order (oldest first, Z to A, smallest first). The sort and its direction are remembered in this browser.
 - **Poster size.** In the grid, the slider next to the grid and list buttons makes the posters bigger or smaller. It is remembered in this browser (and hidden on small screens).
 - **Press `/`** anywhere (except while you type in a box) to jump to the search box at the top, and **Esc** to leave it.
+- **The search box also finds settings.** Type `folders` or `temp folder` and a **Settings** group appears with the page or the setting, for example **Library › Folders** or **Temporary download folder** under Download rules. Pick one to open the page; it scrolls to the card and lights it up for a moment. Accents and capitals don't matter, and a small typo is forgiven. You only see the pages your account may open.
 
 ## Looking at the files on your disk again
 
@@ -299,6 +300,7 @@ The switch is off unless you turn it on. In the settings file and with `PUT /api
 With **Custom** you can:
 
 - **Start from** a ready-made format (Plex, Jellyfin / Emby, Kodi, *Detailed, like Radarr and Sonarr*, or *Plex with editions*) and change it.
+- **Start from a TRaSH recommended format.** *TRaSH recommended* is the file name from the [TRaSH Guides' naming guide](https://trash-guides.info/Radarr/Radarr-recommended-naming-scheme/) for Radarr and Sonarr, for movies and for episodes. Three more add a TMDb id for a media server: *TRaSH recommended, Plex with TMDb id*, *Emby with TMDb id* and *Jellyfin with TMDb id*. For example `The Movie Title (2010) - {Ultimate Extended Edition} [3D][Bluray-2160p Proper][EAC3 Atmos][DV HDR10][x265]-RlsGrp`, and `The Series Title (2010) - S01E01 - Episode Title [WEBDL-1080p Proper][DTS][x264]-RlsGrp` for an episode. They are only choices in the list: nothing changes until you pick one and save. What is left out, because Mediarium can't write it: the audio channels (`5.1`), the bit depth and subtitle languages, the names of matched custom formats, the IMDb id (Mediarium has no IMDb id for a title, so the IMDb variants aren't offered), the absolute episode number of the anime format and the air-date form for daily shows (an episode file is always named with its season and episode). The folder names are not part of these formats: movie and series folders keep the names Mediarium gives them.
 - **Paste the format you already use in Radarr or Sonarr.** Mediarium understands their token names, so `{Movie CleanTitle} ({Release Year}) - {Custom Formats}{ - Edition Tags}` works as it is.
 - **Click a token** in the list next to the boxes to add it where the cursor is.
 

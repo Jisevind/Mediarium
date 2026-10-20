@@ -2259,8 +2259,13 @@ legend .srv-dot { margin-left: 6px; }
 /* Custom format scores in the profile form, and the Custom formats card. */
 .format-scores { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); gap: 6px 14px; max-height: 320px; overflow-y: auto; padding-right: 4px; }
 .grid-form .format-score-row { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; color: var(--text); font-size: 0.85rem; }
-.format-score-row > span { min-width: 0; overflow-wrap: anywhere; }
+.format-score-row > span { min-width: 0; flex: 1; overflow-wrap: anywhere; }
 .format-score-row small { color: var(--text-dim); }
+.format-score-row .icon-btn { flex: none; }
+.size-trash { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; margin-top: 14px; }
+.size-trash label { display: flex; flex-direction: column; gap: 4px; min-width: min(100%, 220px); }
+.size-trash-result { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.88rem; }
+.size-trash-result ul { margin: 2px 0; padding-left: 18px; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); gap: 2px 18px; }
 .format-score-row input { width: 84px; flex: none; text-align: right; font-family: var(--font-mono); }
 .format-thresholds { display: flex; flex-wrap: wrap; gap: 12px; }
 .format-thresholds > label { flex: 1 1 180px; }
@@ -2281,6 +2286,15 @@ legend .srv-dot { margin-left: 6px; }
 .trash-score { font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-dim); margin-left: auto; }
 .trash-update-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; margin-bottom: 14px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius, 8px); }
 .trash-update-bar > :first-child { flex: 1 1 360px; min-width: 0; }
+.trash-update { margin-bottom: 14px; }
+.trash-update .trash-update-bar { margin-bottom: 8px; }
+.trash-update-actions { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px 16px; }
+.trash-update-every { min-width: 150px; margin: 0; }
+.trash-update-when { margin: 0 0 8px; color: var(--text-dim); font-size: 0.85rem; }
+.trash-update-result { padding: 10px 14px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: var(--radius, 8px); }
+.trash-update-result.error { border-left-color: var(--danger, #d33); }
+.trash-update-result p { margin: 0; }
+.trash-update-result .trash-update-names { margin-top: 4px; color: var(--text-dim); font-size: 0.85rem; overflow-wrap: anywhere; }
 .assign-bar { margin-bottom: 12px; padding: 10px 14px; border: 1px solid var(--border); border-radius: var(--radius, 8px); }
 .assign-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
 .assign-body { display: grid; gap: 10px; margin-top: 10px; }
@@ -3200,3 +3214,6 @@ img[data-broken] { visibility: hidden; }
 /* Episode list: dates, status, quality and size stay whole; only the title wraps. */
 .ep-table th, .ep-table td:not(:nth-child(3)) { white-space: nowrap; }
 .ep-table td:nth-child(3) { overflow-wrap: anywhere; }
+
+.searchbox-hit-trail { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.searchbox-settings-icon { flex: 0 0 auto; width: 38px; height: 38px; display: grid; place-items: center; border-radius: 10px; background: var(--surface-2); color: var(--text-dim); }

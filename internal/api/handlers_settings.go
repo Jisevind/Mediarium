@@ -136,6 +136,9 @@ type settingsPayload struct {
 	// TrashFormatsAuto keeps the custom formats that came from the TRaSH Guides
 	// up to date: the guides are read once a day (off by default).
 	TrashFormatsAuto *bool `json:"trashFormatsAuto,omitempty"`
+	// TrashFormatsEveryDays is how often that update reads the guides: 1 (every
+	// day, the default) or 7 (every week).
+	TrashFormatsEveryDays *int `json:"trashFormatsEveryDays,omitempty"`
 	// TrailerBackground plays the trailer behind movie and show pages for every
 	// account (a browser can still switch it off for itself).
 	TrailerBackground *bool `json:"trailerBackground,omitempty"`
@@ -362,6 +365,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	qualityLanguageOnly := s.languageOnly()
 	showAdvanced := s.showAdvanced()
 	trashFormatsAuto := s.trashAutoUpdate()
+	trashFormatsEveryDays := s.trashEveryDays()
 	trailerBackground := s.trailerBackground()
 	trailerSound := s.trailerSound()
 	transcodeOn := s.transcodeEnabled()
@@ -457,6 +461,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		UnmonitorDownloaded:      &unmonitorDownloaded,
 		ShowAdvanced:             &showAdvanced,
 		TrashFormatsAuto:         &trashFormatsAuto,
+		TrashFormatsEveryDays:    &trashFormatsEveryDays,
 		TrailerBackground:        &trailerBackground,
 		TrailerSound:             &trailerSound,
 		TranscodeEnabled:         &transcodeOn,
@@ -859,6 +864,16 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.TrashFormatsAuto != nil {
 		if err := setBool(tx, settings.KeyTrashFormatsAuto, *req.TrashFormatsAuto); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if req.TrashFormatsEveryDays != nil {
+		if *req.TrashFormatsEveryDays != 1 && *req.TrashFormatsEveryDays != 7 {
+			writeError(w, http.StatusBadRequest, "Choose to check the TRaSH Guides every day or every week.")
+			return
+		}
+		if err := tx.Set(settings.KeyTrashFormatsEvery, strconv.Itoa(*req.TrashFormatsEveryDays), false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}

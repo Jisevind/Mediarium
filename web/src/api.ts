@@ -672,7 +672,8 @@ export interface Settings {
   subtitleCountEmbedded?: boolean // subtitle tracks inside the video count as there (on by default)
   subtitleWizdom?: boolean // also look for Hebrew subtitles on Wizdom (off by default)
   showAdvanced?: boolean // show custom formats and format scores on the Quality page
-  trashFormatsAuto?: boolean // read the TRaSH Guides once a day and update the formats that came from them
+  trashFormatsAuto?: boolean // read the TRaSH Guides on a schedule and update the formats that came from them
+  trashFormatsEveryDays?: number // 1 (every day, the default) or 7 (every week)
   trailerBackground?: boolean // play the trailer behind movie and show pages for everyone (on by default)
   trailerSound?: boolean // start that trailer with its sound on (off by default)
   transcodeEnabled?: boolean // convert videos the browser can't play, on by default
@@ -824,6 +825,13 @@ export interface SizeRow {
   defaultMin: number
   defaultMax: number
 }
+// The sizes the TRaSH Guides recommend, mapped onto the size table (max 0 = no limit).
+export interface TrashSizes {
+  list: string
+  rows: { quality: string; min: number; max: number }[]
+  skipped: string[]
+}
+
 export interface SizeTable {
   enabled: boolean
   rows: SizeRow[]
@@ -1045,6 +1053,8 @@ export interface SearchResult {
   // minimum score and the score it stops upgrading at (0 when not set), and
   // everything that makes an automatic search skip the release, by kind.
   formats?: { name: string; score: number }[]
+  // The preferred terms of the profile the release matched, with their scores.
+  terms?: { term: string; score: number }[]
   minScore?: number
   upgradeUntil?: number
   reasons?: { kind: string; text: string }[]
@@ -1168,9 +1178,27 @@ export interface TrashFormatChange {
   profiles: string[]
 }
 
+// What one look at the TRaSH Guides found (the button, or the daily or weekly check).
+export interface TrashCheck {
+  at: string
+  error?: string
+  updated: number
+  upToDate: number
+  scores: number
+  profiles: number
+  names: string[]
+  daily: boolean
+}
+
 export interface TrashUpdateResult {
   changes: TrashFormatChange[]
   checked: number
+  check?: TrashCheck
+}
+
+export interface TrashUpdateStatus {
+  last: TrashCheck | null
+  next?: string
 }
 
 export interface TrashFormat {
@@ -3245,6 +3273,7 @@ export const api = {
   trashDefaultScores: (formatIds: number[]) => post<{ scores: FormatScore[] }>('/custom-formats/default-scores', { formatIds }),
   trashUpdatePreview: () => get<TrashUpdateResult>('/custom-formats/trash-update'),
   trashUpdate: () => post<TrashUpdateResult>('/custom-formats/trash-update', {}),
+  trashUpdateStatus: () => get<TrashUpdateStatus>('/custom-formats/trash-update/status'),
   trashGuides: (app: 'radarr' | 'sonarr') => get<{ formats: TrashFormat[]; profiles: TrashProfile[] }>(`/trash-guides/${app}`),
   importTrashFormats: (app: 'radarr' | 'sonarr', trashIds: string[], profileId?: number) =>
     post<FormatImportResult>(`/trash-guides/${app}/formats`, { trashIds, profileId: profileId ?? 0 }),
@@ -3317,6 +3346,7 @@ export const api = {
   sizeLimits: () => get<SizeTable>('/quality/size-limits'),
   putSizeLimits: (table: SizeTable) => put<SizeTable>('/quality/size-limits', table),
   resetSizeLimits: () => post<SizeTable>('/quality/size-limits/reset'),
+  trashSizes: (list: string) => get<TrashSizes>(`/quality/size-limits/trash/${encodeURIComponent(list)}`),
   calendarFeed: () => get<{ on: boolean; path?: string }>('/calendar/feed'),
   newCalendarFeed: () => post<{ on: boolean; path?: string }>('/calendar/feed'),
   removeCalendarFeed: () => del<{ on: boolean; path?: string }>('/calendar/feed'),

@@ -158,7 +158,7 @@ func (p Profile) IsUpgradeOverRel(currentTier Tier, currentRelease, candidateTit
 func encodeFormatScores(m map[int64]int) string {
 	out := map[string]int{}
 	for id, s := range m {
-		if s != 0 && id > 0 {
+		if id > 0 {
 			out[strconv.FormatInt(id, 10)] = s
 		}
 	}
@@ -171,7 +171,7 @@ func decodeFormatScores(s string) map[int64]int {
 	_ = json.Unmarshal([]byte(s), &raw)
 	out := map[int64]int{}
 	for k, v := range raw {
-		if id, err := strconv.ParseInt(k, 10, 64); err == nil && id > 0 && v != 0 {
+		if id, err := strconv.ParseInt(k, 10, 64); err == nil && id > 0 {
 			out[id] = v
 		}
 	}

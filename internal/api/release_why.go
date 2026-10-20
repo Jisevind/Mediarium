@@ -8,7 +8,9 @@ import "fmt"
 
 // releaseReason is one thing that makes an automatic search leave a release
 // out or rank it lower, in plain words. Kind groups them for the screen:
-// profile, quality, language, upgrade, size, age, release, blocklist, seeders.
+// profile, quality, language, upgrade, size, age, release, blocklist, seeders,
+// and notBest, which is no reason to skip a release but says why another one
+// was taken instead (see not_best.go).
 type releaseReason struct {
 	Kind string `json:"kind"`
 	Text string `json:"text"`

@@ -12,6 +12,64 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 - **The built-in player now plays videos the browser cannot play on its own.** Before playback, Mediarium probes the file with ffprobe. MP4/MOV and WebM files with browser-friendly streams are still sent directly, unchanged. Other containers, and files whose audio codec browsers do not support (AC-3, EAC-3, DTS, TrueHD), are converted on demand to H.264 and AAC in HLS segments. An MP4 with H.264 video keeps its video stream when only the audio needs converting; MKV is re-encoded so seeking and sound stay in step. Playback starts after the first segment and seeking converts only the part you jump to. Hardware VAAPI, Intel Quick Sync and NVIDIA NVENC are detected and tested, with libx264 as the fallback; a missing or broken ffmpeg falls back to the old direct-play path. Text subtitle tracks inside MKV/MP4 files (SubRip, ASS/SSA, WebVTT and MP4 text tracks) now appear in the player's subtitle menu, extracted as WebVTT, with language, SDH and forced labels; bitmap tracks such as PGS and VobSub are left out. Settings > General > Playback has the on/off switch, an ffmpeg path for your own build and the hardware picker ([playback.md](docs/playback.md)).
 - **Settings > General has a Reduce effects switch.** It stops the decorative background motion (the drifting shapes, the moving grain and the film-strip edge) in this browser, while loading spinners and progress bars keep moving. It helps on low-powered devices where the constant movement keeps the browser busy.
 
+## [3.2.17] - 2026-10-20
+
+In short: phone apps can search for releases, the search box finds settings, and more TRaSH help.
+
+### Added
+
+- Each row in a profile's Custom format scores list has a bin button that takes the format out of the profile. (Bayharbourbutcher1 on GitHub, #87)
+- New file name choices under Settings > File names and importing > Custom > Start from: "TRaSH recommended", plus Plex, Emby and Jellyfin versions with the TMDb id. Nothing existing changes. (Bayharbourbutcher1 on GitHub, #95)
+- "Apply TRaSH sizes" on the Size limits card fills the table with the sizes the TRaSH Guides recommend (movies, streaming and 4K SQP, anime, series, anime series). It shows what changed first and saves nothing until you press Save. (Bayharbourbutcher1 on GitHub, #95)
+- Phone apps built for Radarr and Sonarr (nzb360 and others) can now run an interactive release search: pick a movie, episode or season, see what your indexers have, and tap one to download it (Bayharbourbutcher1 on GitHub, #94).
+- Radarr and Sonarr apps also get the list of your indexers and a download client entry, and a request Mediarium does not answer is written to the log with its address instead of failing without a trace (Bayharbourbutcher1 on GitHub, #94).
+- The search box at the top also finds settings. Type "folders" or "temp folder" and a Settings group shows the page or the setting; picking one opens the page, scrolls to the card and lights it up for a moment (mirisbowring on GitHub, #93).
+
+### Fixed
+
+- Importing TRaSH custom formats that score 0 now adds them to the quality profile with a score of 0 instead of skipping them, from the TRaSH tab, "Add to profiles" and "Add formats" on a profile. They show in the profile's Custom format scores list. A 0 changes no release's score. (Bayharbourbutcher1 on GitHub, #87)
+
+## [3.2.16] - 2026-10-20
+
+In short: Usenet downloads with a split 7z archive are unpacked.
+
+### Fixed
+
+- Usenet downloads where the video is inside a 7z archive cut into pieces (`name.7z.001`, `.002`, ...) are now unpacked. Before, only a plain `.7z` was recognised, so these ended as "No video in a download". Reported by xrandallx1 on GitHub (#92) and u/troelsdk on Reddit.
+
+## [3.2.15] - 2026-10-20
+
+In short: multi-language releases rank better when you list several languages, and the TRaSH update tells you what it did.
+
+### Fixed
+
+- A German release with `DL` after the source (`German.BDRip.DL`) is now read as dual language, the same as `German.DL.AC3`, so both rank the same. Reported by mirisbowring on GitHub, #91.
+- Formats imported from the TRaSH tab, or added with "Add to profiles...", now show up in a profile's edit form that is already open, instead of leaving it out of date (and saving it would drop the new scores). The form picks up the new scores and keeps anything you typed. Reported by Bayharbourbutcher1 on GitHub, #87.
+
+### Changed
+
+- When you list several audio languages (for example German, English), a multi-language release that has the first one now ranks above a plain release in that language, because it also carries the others. With one language nothing changes. Reported by mirisbowring on GitHub, #91.
+
+### Added
+
+- "Update from TRaSH" now leaves a result on the Custom formats card ("Checked the TRaSH Guides: 3 formats updated, 12 already up to date, 2 profile scores changed", or nothing to update). The same line goes to Activity and the server log, for the automatic check too. Suggested by Bayharbourbutcher1 on GitHub, #87.
+- Under the "Keep TRaSH formats up to date" switch the card shows when the guides were last checked and about when the next check is, and you can choose every day or every week. Suggested by Bayharbourbutcher1 on GitHub, #87.
+
+## [3.2.14] - 2026-10-19
+
+In short: the search list says why a release was not the best match.
+
+### Changed
+- The details row under a release in interactive search now says why a release that was not rejected was not the best match: your preferred language, a higher quality, a cached release, a higher score (with the matched terms and formats of both releases), a torrent with no seeders, or, between two equal releases, the indexer's priority, the protocol or the seeders. Thanks to mirisbowring on GitHub, #91.
+- The details row also lists the preferred terms a release matched, with their scores, next to the custom formats. Thanks to mirisbowring on GitHub, #91.
+
+## [3.2.13] - 2026-10-19
+
+In short: subtitle results get a Fit even when your video file's name says nothing about its release.
+
+### Changed
+- In the subtitle list, Fit now also compares each result with the name of the release that was downloaded for the video (Mediarium remembers it) and with the stored quality, and takes the best score, so a movie that came from a YTS release can match a YTS subtitle even though the file is named `Title (Year).mp4`. Rating stays empty for SubDL, which sends none. The same comparison is used when Mediarium picks a subtitle by itself (asked for by SanketBaraiya on GitHub, #83).
+
 ## [3.2.12] - 2026-10-19
 
 In short: the address of a site on your own network could not be edited yet.

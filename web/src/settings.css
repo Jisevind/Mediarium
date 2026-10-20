@@ -259,3 +259,17 @@ label.field { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px
 .settings-content label:not(.field):not(.check-hint):not(.grid-form label):not(.form-cols > label):not(.picker-row label):not(.switch-row) > :is(select, input:not([type='checkbox'], [type='radio'], [type='range'], [type='file'])) {
   margin: 4px 0 4px 10px;
 }
+
+/* A card or setting found from the search bar: lit up for a moment. */
+.find-hit {
+  border-radius: 12px;
+  box-shadow: 0 0 0 2px var(--accent), 0 0 22px color-mix(in srgb, var(--accent) 35%, transparent);
+  animation: find-hit 2.6s ease-out forwards;
+}
+@keyframes find-hit {
+  0%, 55% { box-shadow: 0 0 0 2px var(--accent), 0 0 22px color-mix(in srgb, var(--accent) 35%, transparent); }
+  100% { box-shadow: 0 0 0 2px transparent, 0 0 22px transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .find-hit { animation: none; }
+}

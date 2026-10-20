@@ -807,6 +807,7 @@ func (s *Server) protectedRoutes() *routeTable {
 	admin.HandleFunc("POST /api/custom-formats/default-scores", s.handleTrashDefaultScores)
 	admin.HandleFunc("GET /api/custom-formats/trash-update", s.handleTrashUpdatePreview)
 	admin.HandleFunc("POST /api/custom-formats/trash-update", s.handleTrashUpdate)
+	admin.HandleFunc("GET /api/custom-formats/trash-update/status", s.handleTrashUpdateStatus)
 	admin.HandleFunc("GET /api/trash-guides/{app}", s.handleTrashList)
 	admin.HandleFunc("POST /api/trash-guides/{app}/formats", s.handleTrashImportFormats)
 	admin.HandleFunc("POST /api/trash-guides/{app}/profiles", s.handleTrashImportProfile)

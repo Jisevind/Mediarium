@@ -24,7 +24,7 @@ export interface ScorePreview {
 export function scorePreview(f: TrashScoreInput, scores: Map<number, number> | null): ScorePreview {
   const current = f.importedId > 0 ? (scores?.get(f.importedId) ?? 0) : null
   if (scores === null) return { willGet: null, current, flag: null }
-  const willGet = f.defaultScore !== 0 ? f.defaultScore : null
+  const willGet = f.defaultScore
   let flag: ScorePreview['flag'] = null
   if (current !== null && f.defaultScore !== 0) {
     if (current === 0) flag = 'zero'

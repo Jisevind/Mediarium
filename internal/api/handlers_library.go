@@ -71,6 +71,9 @@ type searchResultPayload struct {
 	MinScore     int             `json:"minScore,omitempty"`
 	UpgradeUntil int             `json:"upgradeUntil,omitempty"`
 	Reasons      []releaseReason `json:"reasons,omitempty"`
+	// Terms are the profile's preferred terms the release matched, each with
+	// its score; they add to the score next to the custom formats.
+	Terms []preferredHit `json:"terms,omitempty"`
 	// AcceptedBy names the profile that accepts this release: the item's own
 	// profile, or one of its fallbacks (fallback true). Left out when none
 	// does. Only set for a search on a library item.

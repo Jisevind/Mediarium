@@ -184,6 +184,7 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | POST | `/api/custom-formats/test` | any account | says which formats a release name matches. |
 | GET | `/api/custom-formats/trash-update` | admin | lists what an update from the guides would change. |
 | POST | `/api/custom-formats/trash-update` | admin | updates the formats that came from the guides. |
+| GET | `/api/custom-formats/trash-update/status` | admin | tells when the guides were last checked and when the next check is due. |
 | DELETE | `/api/custom-formats/{id}` | admin |  |
 | PUT | `/api/custom-formats/{id}` | admin |  |
 
@@ -568,6 +569,7 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | GET | `/api/quality/size-limits` | admin |  |
 | PUT | `/api/quality/size-limits` | admin |  |
 | POST | `/api/quality/size-limits/reset` | admin | puts every quality back to its default. |
+| GET | `/api/quality/size-limits/trash/{list}` | admin | is GET /api/quality/size-limits/trash/{list}. |
 
 ## quality-profiles
 
@@ -862,4 +864,4 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | PUT | `/api/watched/settings` | admin | PUT /api/watched/settings {"sync": true, "cleanup": {...}} |
 | POST | `/api/watched/sync` | admin | POST /api/watched/sync: read what's been watched now. |
 
-522 routes.
+524 routes.

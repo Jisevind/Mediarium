@@ -178,7 +178,7 @@ export default function ReleaseTable({
                         {r.rejections[0]}
                       </span>
                     )}
-                    {!showScore && why && whyButton(r, why, t('Why this release may be skipped'))}
+                    {!showScore && why && whyButton(r, why, t('Details for this release'))}
                   </td>
                   <td className="rel-fit">{qualityLabel?.(r) || [r.resolution, r.source, r.codec].filter(Boolean).join(' · ') || '—'}</td>
                   {showLanguage && (
@@ -244,15 +244,21 @@ export default function ReleaseTable({
 function WhyDetails({ why }: { why: WhyInfo }) {
   return (
     <div className="rel-why">
-      {why.score !== undefined && (
+      {(why.score !== undefined || why.terms.length > 0) && (
         <div className="rel-why-col">
           <h4>{t('Why this score')}</h4>
-          {why.formats.length > 0 ? (
+          {why.formats.length + why.terms.length > 0 ? (
             <ul className="rel-why-formats">
               {why.formats.map((f) => (
-                <li key={f.name}>
+                <li key={`f${f.name}`}>
                   <span>{f.name}</span>
                   <span className={`format-score-cell${f.score < 0 ? ' neg' : ''}`}>{signed(f.score)}</span>
+                </li>
+              ))}
+              {why.terms.map((x) => (
+                <li key={`t${x.term}`}>
+                  <span>{x.term}</span>
+                  <span className={`format-score-cell${x.score < 0 ? ' neg' : ''}`}>{signed(x.score)}</span>
                 </li>
               ))}
             </ul>
@@ -261,13 +267,27 @@ function WhyDetails({ why }: { why: WhyInfo }) {
           )}
           <p className="rel-why-total">
             <span>{t('Total')}</span>
-            <span className={`format-score-cell${why.score < 0 ? ' neg' : ''}`}>{signed(why.score)}</span>
+            <span className={`format-score-cell${why.total < 0 ? ' neg' : ''}`}>{signed(why.total)}</span>
             {why.belowMin && <span className="badge conflict">{t('below the minimum')}</span>}
           </p>
-          <p className="rel-why-limits">
-            {t('Minimum score: {n}', { n: signed(why.minScore) })}
-            {why.upgradeUntil > 0 && ` · ${t('Upgrades stop at: {n}', { n: signed(why.upgradeUntil) })}`}
-          </p>
+          {why.score !== undefined && (
+            <p className="rel-why-limits">
+              {t('Minimum score: {n}', { n: signed(why.minScore) })}
+              {why.upgradeUntil > 0 && ` · ${t('Upgrades stop at: {n}', { n: signed(why.upgradeUntil) })}`}
+            </p>
+          )}
+        </div>
+      )}
+      {why.notBest.length > 0 && (
+        <div className="rel-why-col">
+          <h4>{t('Why it was not the best match')}</h4>
+          <ul className="rel-why-reasons">
+            {why.notBest.map((text, i) => (
+              <li key={i} className="rel-why-notBest">
+                {st(text)}
+              </li>
+            ))}
+          </ul>
         </div>
       )}
       <div className="rel-why-col">

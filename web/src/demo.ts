@@ -417,6 +417,11 @@ function demoReleases() {
       resolution: '1080p', source: 'BluRay', best: true, sizeBytes: 31e9, formatScore: 350, ...limits,
       formats: [{ name: 'Remux Tier 01', score: 300 }, { name: 'DTS-HD MA', score: 50 }], acceptedBy: { profileId: 1, profileName: 'HD 1080p', fallback: false },
     }),
+    rel('Saltwind.Part.Two.2024.1080p.BluRay.x265-FuN', {
+      resolution: '1080p', source: 'BluRay', codec: 'x265', sizeBytes: 9e9, formatScore: 0, ...limits,
+      formats: [], terms: [{ term: 'x265-FuN', score: 100 }, { term: 'x265', score: 50 }],
+      reasons: [{ kind: 'notBest', text: 'The best match has a higher score: 350 against 150. Best match: Remux Tier 01 +300, DTS-HD MA +50. This release: x265-FuN +100, x265 +50.' }],
+    }),
     rel('Saltwind.Part.Two.2024.1080p.WEB-DL.DDP5.1.H.265-LUMEN', {
       indexerName: 'Indexer Two', protocol: 'torrent', seeders: 41, peers: 6, resolution: '1080p', source: 'WEB-DL', codec: 'x265', sizeBytes: 4.2e9, formatScore: -50, ...limits,
       formats: [{ name: 'x265 (HD)', score: -50 }],

@@ -334,6 +334,20 @@ func (p Profile) Score(title string) int {
 	return total
 }
 
+// PreferredHits are the preferred terms the title matches, in the order the
+// profile lists them, each with its score. Score adds them up (next to the
+// custom formats), so this is where a release's score comes from.
+func (p Profile) PreferredHits(title string) []Preferred {
+	norm := normalizeForMatch(title)
+	var hits []Preferred
+	for _, pr := range p.Preferred {
+		if containsTerm(norm, pr.Term) {
+			hits = append(hits, pr)
+		}
+	}
+	return hits
+}
+
 // AllowsTier reports whether a quality tier is in this profile's allow-list.
 func (p Profile) AllowsTier(t Tier) bool { return p.allows(t) }
 
