@@ -373,12 +373,14 @@ func (s *Server) runTVPipeline(queueID int64, series library.Series, season int,
 	for sn, eps := range bySeason {
 		_, _ = s.QueueRepo.ClearFailedForEpisodes(series.ID, sn, eps, queueID)
 	}
+	subtitleNote := s.importSubtitleNote(subtitleItems...)
 	s.autoSubtitlesFor(subtitleItems...)
 	message := fmt.Sprintf("%s: imported %s from %s", series.Title, plural(imported, "episode"), releaseTitle) + copiedNote
 	_ = s.QueueRepo.LogSeriesActivity(series.ID, "imported", message)
 	s.checkFinishedShowSoon(series.ID)
 	importedItem := seriesItemFor(series, season, importedEps)
 	importedItem.Quality, importedItem.SizeBytes, importedItem.Release = string(tier), fileSize(importedFiles...), releaseTitle
+	importedItem.Subtitles = subtitleNote
 	if len(importedFiles) == 1 {
 		importedItem.Path = importedFiles[0]
 	} else if len(importedFiles) > 1 {

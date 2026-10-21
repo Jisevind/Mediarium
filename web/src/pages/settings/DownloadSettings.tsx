@@ -1,7 +1,7 @@
 import DebridCard from '../../components/DebridCard'
 import DownloadChecksCard, { UsenetRetentionCard } from '../../components/DownloadChecksCard'
 import DownloadClientCard from '../../components/DownloadClientCard'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type DownloadsStatus, type Settings, type UsenetServer } from '../../api'
 import FolderStatus from '../../components/FolderStatus'
@@ -19,6 +19,7 @@ import { plural, t, tx, st } from '../../i18n'
 import InfoTip from '../../components/InfoTip'
 import TipLabel from '../../components/TipLabel'
 import SpeedSchedule from '../../components/SpeedSchedule'
+import { firstError, numberRange } from '../../validate'
 
 // Downloading: Mediarium downloads for itself. Usenet needs only your
 // provider's news-server account; torrents need nothing at all. There is no
@@ -293,9 +294,16 @@ function DefaultSourcesCard({ onChanged }: { onChanged: (value: string) => void 
   )
 }
 
+// The highest "Downloads at the same time" the server accepts (maxDownloadsAtOnce
+// in internal/api/dispatch.go).
+const MAX_DOWNLOADS_AT_ONCE = 500
+
 // How many downloads run together. Usenet and torrents share this number: the
 // rest wait in line, and the next one starts by itself when one is finished
-// (downloaded, repaired, unpacked and moved into your library).
+// (downloaded, repaired, unpacked and moved into your library). A number box,
+// not a few buttons, because a download client such as qBittorrent can run a
+// hundred torrents side by side. It saves a moment after you stop typing, or
+// when you leave the box, and only a whole number in range.
 function DownloadsAtOnceCard() {
   const atOnce = useAutosaveSetting<number>(
     (s) => s.downloadsAtOnce ?? 1,
@@ -303,6 +311,28 @@ function DownloadsAtOnceCard() {
     (saved) => (saved === 1 ? t('Saved: one download at a time.') : t('Saved: up to {n} downloads at the same time.', { n: saved })),
     1,
   )
+  // What is being typed; null shows the saved number.
+  const [atOnceDraft, setAtOnceDraft] = useState<string | null>(null)
+  const atOnceText = atOnceDraft ?? String(atOnce.value)
+  const atOnceTimer = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(atOnceTimer.current), [])
+  const atOnceError = firstError(
+    atOnceText.trim() === '' && t('Enter a number from {min} to {max}.', { min: 1, max: MAX_DOWNLOADS_AT_ONCE }),
+    numberRange(atOnceText, t('The number'), { min: 1, max: MAX_DOWNLOADS_AT_ONCE }),
+  )
+  const saveAtOnce = (text: string) => {
+    window.clearTimeout(atOnceTimer.current)
+    if (!atOnce.loaded || numberRange(text, t('The number'), { min: 1, max: MAX_DOWNLOADS_AT_ONCE, allowBlank: false })) return
+    const n = Number(text.trim())
+    // Back to showing the saved number; a refused save puts the old one back.
+    setAtOnceDraft(null)
+    if (n !== atOnce.value) void atOnce.change(n)
+  }
+  const editAtOnce = (text: string) => {
+    setAtOnceDraft(text)
+    window.clearTimeout(atOnceTimer.current)
+    atOnceTimer.current = window.setTimeout(() => saveAtOnce(text), 1200)
+  }
   const newest = useAutosaveSetting<boolean>(
     (s) => s.newestFirst ?? false,
     (v) => ({ newestFirst: v }),
@@ -320,13 +350,20 @@ function DownloadsAtOnceCard() {
       <p style={{ color: 'var(--text-dim)', marginTop: 0 }}>
         {t('Usenet and torrents share this number. The rest wait in line.')}
       </p>
-      <div className="seg" role="radiogroup" aria-label={t('Downloads at the same time')}>
-        {[1, 2, 3, 4, 5].map((n) => (
-          <button key={n} role="radio" aria-checked={atOnce.value === n} className={atOnce.value === n ? 'active' : ''} disabled={!atOnce.loaded || atOnce.saving} onClick={() => void atOnce.change(n)}>
-            {n}
-          </button>
-        ))}
-      </div>
+      <input
+        inputMode="numeric"
+        aria-label={t('Downloads at the same time')}
+        value={atOnceText}
+        disabled={!atOnce.loaded || atOnce.saving}
+        onChange={(e) => editAtOnce(e.target.value)}
+        onBlur={(e) => saveAtOnce(e.target.value)}
+        onKeyDown={(e) => e.key === 'Enter' && saveAtOnce(atOnceText)}
+        aria-invalid={atOnceError ? true : undefined}
+        style={{ width: 80 }}
+      />
+      {atOnceError && (
+        <small style={{ display: 'block', color: 'var(--danger)' }}>{atOnceError}</small>
+      )}
       <label className="inline-field" style={{ marginTop: 12 }}>
         <input type="checkbox" checked={newest.value} disabled={!newest.loaded || newest.saving} onChange={(e) => void newest.change(e.target.checked)} />
         {t('Start newer releases first')}

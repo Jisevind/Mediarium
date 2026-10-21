@@ -119,9 +119,11 @@ func (s *Server) arrHandler(app arrApp) http.Handler {
 	h("GET", "/update", arrEmptyList)
 	h("GET", "/system/task", arrEmptyList)
 	h("GET", "/log", arrLogPage)
-	h("GET", "/history", func(w http.ResponseWriter, r *http.Request) {
-		writeJSON(w, http.StatusOK, arrPage{Page: 1, PageSize: 10, SortKey: "date", SortDirection: "descending", Records: []any{}})
-	})
+	h("GET", "/history", s.arrHistory(app))
+	h("GET", "/history/since", s.arrHistoryList(app))
+	h("GET", "/parse", s.arrParse(app))
+	h("GET", "/rename", arrEmptyList)
+	h("GET", "/manualimport", arrEmptyList)
 
 	switch app {
 	case arrRadarr:
@@ -135,6 +137,8 @@ func (s *Server) arrHandler(app arrApp) http.Handler {
 		h("PUT", "/movie/{id}", s.arrUpdateMovie)
 		h("DELETE", "/movie/{id}", s.arrDeleteMovie)
 		h("GET", "/moviefile", s.arrMovieFiles)
+		h("GET", "/moviefile/{id}", s.arrGetMovieFile)
+		h("GET", "/history/movie", s.arrHistoryList(arrRadarr))
 		h("GET", "/release", s.arrListReleases(arrRadarr))
 		h("POST", "/release", s.arrGrabRelease(arrRadarr))
 		h("POST", "/release/push", arrPushRelease)
@@ -151,7 +155,9 @@ func (s *Server) arrHandler(app arrApp) http.Handler {
 		h("GET", "/episode/{id}", s.arrGetEpisode)
 		h("PUT", "/episode/{id}", s.arrUpdateEpisode)
 		h("PUT", "/episode/monitor", s.arrMonitorEpisodes)
-		h("GET", "/episodefile", func(w http.ResponseWriter, r *http.Request) { writeJSON(w, http.StatusOK, []any{}) })
+		h("GET", "/episodefile", s.arrEpisodeFiles)
+		h("GET", "/episodefile/{id}", s.arrGetEpisodeFile)
+		h("GET", "/history/series", s.arrHistoryList(arrSonarr))
 		h("GET", "/release", s.arrListReleases(arrSonarr))
 		h("POST", "/release", s.arrGrabRelease(arrSonarr))
 		h("POST", "/release/push", arrPushRelease)

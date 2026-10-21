@@ -423,6 +423,7 @@ export default function QualityProfilesSection({ rev = 0, onChanged, advanced = 
               </p>
               <AddFormatsPicker
                 candidates={formats.filter((f) => !isScored(draft, f.id) && !addedFormats.has(f.id))}
+                total={formats.length}
                 onAdd={(ids, scores) => {
                   setScoresSignal((n) => n + 1)
                   setAddedFormats((cur) => new Set([...cur, ...ids]))

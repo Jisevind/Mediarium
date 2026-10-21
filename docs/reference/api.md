@@ -561,6 +561,8 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 
 | Method | Path | Access | What it does |
 |---|---|---|---|
+| GET | `/api/quality/min-size-check` | admin | says whether the built-in minimum size check is on. |
+| PUT | `/api/quality/min-size-check` | admin | switches the built-in minimum size check: {"enabled": false} turns it off. |
 | GET | `/api/quality/size-limits` | admin |  |
 | PUT | `/api/quality/size-limits` | admin |  |
 | POST | `/api/quality/size-limits/reset` | admin | puts every quality back to its default. |
@@ -858,4 +860,4 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | PUT | `/api/watched/settings` | admin | PUT /api/watched/settings {"sync": true, "cleanup": {...}} |
 | POST | `/api/watched/sync` | admin | POST /api/watched/sync: read what's been watched now. |
 
-518 routes.
+520 routes.

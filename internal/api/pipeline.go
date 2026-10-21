@@ -204,7 +204,9 @@ func (s *Server) runPipeline(queueID, movieID int64, movieTitle string, movieYea
 	// Subtitles that came with the release go next to the movie before any
 	// download is considered, so they count as already there.
 	s.importSidecarSubtitles(s.sidecarsIn(incompleteDir), result.DestPath, movieID, movieTitle)
-	s.autoSubtitlesFor(subtitleItem{kind: "movie", id: movieID, title: movieTitle, tmdbID: tmdbID, filePath: result.DestPath})
+	movieSub := subtitleItem{kind: "movie", id: movieID, title: movieTitle, tmdbID: tmdbID, filePath: result.DestPath}
+	subtitleNote := s.importSubtitleNote(movieSub)
+	s.autoSubtitlesFor(movieSub)
 	if err := s.QueueRepo.SetStatus(queueID, queue.StatusCompleted, ""); err != nil {
 		return fail(err)
 	}
@@ -215,6 +217,7 @@ func (s *Server) runPipeline(queueID, movieID int64, movieTitle string, movieYea
 	_ = s.QueueRepo.LogActivity(movieID, "imported", importedMessage)
 	importedItem := s.movieItemByID(movieID, movieTitle, movieYear, tmdbID)
 	importedItem.Quality, importedItem.SizeBytes, importedItem.Path = string(tier), fileSize(result.DestPath), result.DestPath
+	importedItem.Subtitles = subtitleNote
 	s.notifyItem("imported", importedItem)
 	s.movieImported(result.DestPath)
 	s.pushTagsAfterImport(library.TagMovie, movieID)
@@ -269,9 +272,21 @@ func (s *Server) prepareDownload(ctx context.Context, queueID int64, downloadURL
 	case protocol == indexers.ProtocolTorrent && s.debridOn():
 		downloadErr = s.downloadDebrid(ctx, queueID, downloadURL, incompleteDir)
 	case protocol == indexers.ProtocolTorrent:
-		downloadErr = s.downloadTorrent(ctx, queueID, downloadURL, incompleteDir)
+		// The built-in engines keep their own cap, whatever "Downloads at the
+		// same time" is set to (builtin_slots.go).
+		if release, err := s.torrentSlots.acquire(ctx, builtinTorrentLimit); err != nil {
+			downloadErr = err
+		} else {
+			downloadErr = s.downloadTorrent(ctx, queueID, downloadURL, incompleteDir)
+			release()
+		}
 	default:
-		missing, downloadErr = s.downloadUsenet(ctx, queueID, downloadURL, incompleteDir)
+		if release, err := s.usenetSlots.acquire(ctx, s.builtinUsenetLimit); err != nil {
+			downloadErr = err
+		} else {
+			missing, downloadErr = s.downloadUsenet(ctx, queueID, downloadURL, incompleteDir)
+			release()
+		}
 	}
 	if downloadErr != nil {
 		// A release held back for what it contains, or as a duplicate, did not

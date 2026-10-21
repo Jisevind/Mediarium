@@ -26,6 +26,7 @@ import (
 func (s *Server) setupSearchExtras() {
 	s.delays = delay.NewStore(s.db, nil)
 	setPreferredProtocol(s.delayConfig().PreferredProtocol)
+	s.loadMinSizeCheck()
 	s.setCachedPolicy()
 	tr := s.IndexerRepo.Tracker()
 	s.QueueRepo.SetOnEnqueue(func(it queue.Item) { tr.NoteGrab(it.NZBURL) })
@@ -76,8 +77,8 @@ func (s *Server) sizeRejections(table quality.SizeLimits, minutes float64, profi
 	}
 	var out []string
 	tier := quality.Classify(parser.Parse(title))
-	if !quality.SizePlausible(tier, size, episodes) {
-		out = append(out, fmt.Sprintf("smaller than a real %s release is likely to be", tier))
+	if !builtinSizeOK(tier, size, episodes, minutes) {
+		out = append(out, fmt.Sprintf("smaller than a real %s release is likely to be (you can turn this check off in Settings > Library > Quality)", tier))
 	}
 	if !profile.SizeAllowed(size) {
 		out = append(out, fmt.Sprintf("larger than the %q profile's limit of %s GB", profile.Name, trimFloat(profile.MaxSizeGB)))
@@ -116,7 +117,7 @@ func (s *Server) tvSizeRejections(ctx context.Context, series library.Series, pr
 	mapper := s.releaseMapper(series)
 	var minutes float64
 	return func(title string, size int64) []string {
-		if table.Enabled && minutes == 0 {
+		if (table.Enabled || minSizeCheckOn()) && minutes == 0 {
 			minutes = s.episodeRuntime(ctx, series)
 		}
 		return s.sizeRejections(table, minutes, profile, title, size, episodeCount(mapper, parser.Parse(title)))
@@ -300,6 +301,7 @@ func (s *Server) limitTVResults(series library.Series, season, episode int, prof
 func (s *Server) limitTV(series library.Series, season, episode int, profile quality.Profile, current *upgradeBase, mode limitMode, results []indexers.Result) ([]indexers.Result, limitReport) {
 	var rep limitReport
 	mapper := s.releaseMapper(series)
+	s.warmEpisodeRuntime(series, results)
 	results, rep.size = s.applySizeTable("tv", results, func() float64 { return s.episodeRuntime(context.Background(), series) },
 		func(res indexers.Result) int { return episodeCount(mapper, res.Parsed()) })
 	if mode != limitDry {
@@ -472,6 +474,8 @@ func (s *Server) searchRoutes(admin routeGroup, member routeGroup) {
 	admin.HandleFunc("GET /api/quality/size-limits", s.handleGetSizeLimits)
 	admin.HandleFunc("PUT /api/quality/size-limits", s.handlePutSizeLimits)
 	admin.HandleFunc("POST /api/quality/size-limits/reset", s.handleResetSizeLimits)
+	admin.HandleFunc("GET /api/quality/min-size-check", s.handleGetMinSize)
+	admin.HandleFunc("PUT /api/quality/min-size-check", s.handlePutMinSize)
 	admin.HandleFunc("GET /api/quality/size-limits/trash/{list}", s.handleTrashSizes)
 	admin.HandleFunc("POST /api/indexers/{id}/resume", s.handleResumeIndexer)
 	admin.HandleFunc("GET /api/stats/indexers", s.handleIndexerStats)

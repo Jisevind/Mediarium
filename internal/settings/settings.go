@@ -169,7 +169,7 @@ const (
 	KeyAppLinks            = "apps.links"             // JSON list of add-ons: other programs next to Mediarium with a link to each (name, address, how it opens)
 	KeyQuietUntil          = "automation.quiet_until" // RFC 3339: until then the heavy background jobs do nothing ("Quiet for a while"); unset = not quiet
 	KeyNewestFirst         = "downloads.newest_first" // "1": among the downloads the automatic searches added, newer releases start first; unset = in the order they were added
-	KeyDownloadsConcurrent = "downloads.concurrent"   // how many downloads run at the same time, Usenet and torrents together: 1 to 5; unset = 1
+	KeyDownloadsConcurrent = "downloads.concurrent"   // how many downloads run at the same time, Usenet and torrents together: 1 to 500; unset = 1
 
 	// When the person accepted the legal notice (RFC 3339); unset until then.
 	KeyLegalAcknowledgedAt = "legal.acknowledged_at"
@@ -261,6 +261,7 @@ const (
 	KeyAuthLDAP        = "auth.ldap"         // encrypted; sign-in with a directory (LDAP or Active Directory) (JSON: enabled, server, bind account and password, filters, attribute names, account rules). Off unless enabled is true. Only a signed-in browser session can read or set it, not an API key. MEDIARIUM_DISABLE_SSO=1 overrides it
 	KeyAuthIdleDays    = "auth.idle_days"    // browser sessions not used for this many days (1 to 7) end and the person signs in again. Unset or "0" leaves it off. API keys, calendar feeds and e-reader passwords are not affected
 	KeyAuthPasskeys    = "auth.passkeys"     // "1" lets people sign in with a passkey; needs the public address (server.public_url). Unset or "0" leaves it off
+	KeyAuthAutoSignIn  = "auth.auto_signin"  // "oidc" sends visitors who are not signed in straight to the single sign-on provider from the sign-in page (add ?no-redirect=1 to the address to see the normal page); unset or empty leaves it off. Only a signed-in browser session can set it, and only while single sign-on works
 	KeyAuthLocalSignIn = "auth.local_signin" // "0" turns the username and password form off (only possible once an administrator has signed in with another method); anything else (including unset) leaves it on
 
 	// A script to run after each import (Settings > System > Server and updates). See docs/scripts.md.
@@ -268,8 +269,9 @@ const (
 	KeyScriptLastRun     = "scripts.last_run"     // what the last run did (JSON; set by the app, not user-editable)
 
 	// Search and quality (Settings > Library). Both off until switched on.
-	KeySearchDelay = "search.delay_profile" // delay profile (JSON: preferredProtocol, usenetMinutes, torrentMinutes, bypassIfHighestQuality): automatic searches hold back releases of the less liked protocol for that many minutes; unset or 0 minutes = no wait
-	KeySizeLimits  = "quality.size_limits"  // size limits per quality for movies in MB per minute of runtime (JSON: enabled, limits); applied only while enabled is true
+	KeySearchDelay  = "search.delay_profile"  // delay profile (JSON: preferredProtocol, usenetMinutes, torrentMinutes, bypassIfHighestQuality): automatic searches hold back releases of the less liked protocol for that many minutes; unset or 0 minutes = no wait
+	KeyMinSizeCheck = "search.min_size_check" // "0" turns the built-in minimum size per quality off (Settings > Library > Quality > Size limits); anything else, including unset, leaves it on
+	KeySizeLimits   = "quality.size_limits"   // size limits per quality for movies in MB per minute of runtime (JSON: enabled, limits); applied only while enabled is true
 
 	// The same table for shows (it started as a copy of the movie table).
 	KeySizeLimitsTV = "quality.size_limits_tv"

@@ -7,6 +7,7 @@ import { outsideService, slowServiceMessage } from './outsideService'
 import { signalFor } from './requestSignal'
 import { st, t } from './i18n.ts'
 import type { Diagnostics } from './supportReport'
+import type { ProfileScoreChange } from './formatChanges'
 import type { ProblemCounts, ProblemList } from './problemsView'
 import { BASE_PATH, rebasePictures, withBase } from './base'
 import { noteEndReason, noteSessionEnded, sessionEnded } from './sessionEnd'
@@ -718,7 +719,7 @@ export interface Settings {
   publicUrl?: string // the address Mediarium is opened at; links in notification messages use it
   huntIntervalHours?: number // hours between searches for missing items and better versions, 1 to 168
   releaseCheckMinutes?: number // minutes between checks of each indexer's newest releases, 5 to 1440
-  downloadsAtOnce?: number // how many downloads run at the same time, 1 to 5 (the rest wait in line)
+  downloadsAtOnce?: number // how many downloads run at the same time, 1 to 500 (the rest wait in line)
   usenetRetentionDays?: number // Usenet posts older than this many days are not taken; 0 = no limit
   rejectExecutables?: boolean // refuse releases that hold programs or scripts; on unless switched off
   skipDuplicates?: boolean // do not download the same release twice; off unless switched on
@@ -1145,12 +1146,15 @@ export interface FormatImportResult {
   updated: number
   formats: CustomFormat[]
   missing?: string[]
+  // What happened to the scores in the chosen profile (when one was chosen).
+  profile?: ProfileScoreChange
 }
 
 export interface FormatAssignResult {
   profiles: number
   scored: number
   unscored: string[]
+  changes: ProfileScoreChange[]
 }
 
 export interface TrashFormatChange {
@@ -2858,6 +2862,7 @@ export interface SignInMethods {
   ldap: boolean // the form also takes directory accounts
   passkeys: boolean
   passkeyHost?: string // passkeys only work on pages opened at this host
+  autoSignIn?: 'oidc' // the sign-in page sends visitors to this method by itself
 }
 
 // Settings > Account & Access > All accounts: the general sign-in switches.
@@ -2871,6 +2876,8 @@ export interface SignInSettings {
   externalOn: boolean
   canTurnOffLocal: boolean
   sessionMethod: string
+  autoSignIn: '' | 'oidc' // visitors are sent to this method by themselves
+  autoSignInChoices: { id: 'oidc'; name: string }[] // the ones that can be picked now
 }
 
 // Single sign-on with an OpenID Connect provider.
@@ -3113,7 +3120,7 @@ export const api = {
   createAPIKey: (name: string, readOnly = false) => post<APIKey>('/auth/api-keys', { name, readOnly }),
   signInMethods: () => get<SignInMethods>('/auth/methods'),
   getSignIn: () => get<SignInSettings>('/auth/sign-in'),
-  putSignIn: (data: { localSignIn?: boolean; passkeys?: boolean }) => put<SignInSettings>('/auth/sign-in', data),
+  putSignIn: (data: { localSignIn?: boolean; passkeys?: boolean; autoSignIn?: '' | 'oidc' }) => put<SignInSettings>('/auth/sign-in', data),
   getOidc: () => get<OidcSettings>('/auth/oidc'),
   putOidc: (data: Partial<OidcSettings>) => put<OidcSettings>('/auth/oidc', data),
   testOidc: (data: Partial<OidcSettings>) => post<OidcTestResult>('/auth/oidc/test', data),
@@ -3252,15 +3259,15 @@ export const api = {
   renameCustomFormat: (id: number, name: string) => put<CustomFormat>(`/custom-formats/${id}`, { name }),
   deleteCustomFormat: (id: number) => del<null>(`/custom-formats/${id}`),
   testCustomFormats: (title: string, profileId?: number) => post<FormatTestResult>('/custom-formats/test', { title, profileId: profileId ?? 0 }),
-  assignCustomFormats: (formatIds: number[], profileIds: number[], mode: { trash: true } | { score: number }) =>
-    post<FormatAssignResult>('/custom-formats/assign', { formatIds, profileIds, mode: 'trash' in mode ? 'trash' : 'score', score: 'score' in mode ? mode.score : 0 }),
+  assignCustomFormats: (formatIds: number[], profileIds: number[], mode: { trash: true } | { score: number }, replaceScores = false) =>
+    post<FormatAssignResult>('/custom-formats/assign', { formatIds, profileIds, mode: 'trash' in mode ? 'trash' : 'score', score: 'score' in mode ? mode.score : 0, replaceScores }),
   trashDefaultScores: (formatIds: number[]) => post<{ scores: FormatScore[] }>('/custom-formats/default-scores', { formatIds }),
   trashUpdatePreview: () => get<TrashUpdateResult>('/custom-formats/trash-update'),
   trashUpdate: () => post<TrashUpdateResult>('/custom-formats/trash-update', {}),
   trashUpdateStatus: () => get<TrashUpdateStatus>('/custom-formats/trash-update/status'),
   trashGuides: (app: 'radarr' | 'sonarr') => get<{ formats: TrashFormat[]; profiles: TrashProfile[] }>(`/trash-guides/${app}`),
-  importTrashFormats: (app: 'radarr' | 'sonarr', trashIds: string[], profileId?: number) =>
-    post<FormatImportResult>(`/trash-guides/${app}/formats`, { trashIds, profileId: profileId ?? 0 }),
+  importTrashFormats: (app: 'radarr' | 'sonarr', trashIds: string[], profileId?: number, replaceScores = false) =>
+    post<FormatImportResult>(`/trash-guides/${app}/formats`, { trashIds, profileId: profileId ?? 0, replaceScores }),
   importTrashProfile: (app: 'radarr' | 'sonarr', trashId: string) =>
     post<{ profile: QualityProfile; formats: FormatImportResult }>(`/trash-guides/${app}/profiles`, { trashId }),
   // searching: the file is below the new profile, so a better release is being looked for now
@@ -3331,6 +3338,8 @@ export const api = {
   sizeLimits: (kind: 'movie' | 'tv' = 'movie') => get<SizeTable>(`/quality/size-limits?kind=${kind}`),
   putSizeLimits: (table: SizeTable, kind: 'movie' | 'tv' = 'movie') => put<SizeTable>(`/quality/size-limits?kind=${kind}`, table),
   resetSizeLimits: (kind: 'movie' | 'tv' = 'movie') => post<SizeTable>(`/quality/size-limits/reset?kind=${kind}`),
+  minSizeCheck: () => get<{ enabled: boolean }>('/quality/min-size-check'),
+  putMinSizeCheck: (enabled: boolean) => put<{ enabled: boolean }>('/quality/min-size-check', { enabled }),
   trashSizes: (list: string) => get<TrashSizes>(`/quality/size-limits/trash/${encodeURIComponent(list)}`),
   calendarFeed: () => get<{ on: boolean; path?: string }>('/calendar/feed'),
   newCalendarFeed: () => post<{ on: boolean; path?: string }>('/calendar/feed'),

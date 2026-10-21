@@ -8,6 +8,28 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.2.20] - 2026-10-21
+
+In short: phone apps get a real history, notifications mention subtitles, optional automatic single sign-on, up to 500 downloads at once, and several fixes.
+
+### Added
+
+- Apps like nzb360 now get a real history from Mediarium, so their "Recently downloaded" cards fill up instead of saying "No results found". Each download shows as grabbed, and as imported or failed once it ends. Also answered: history since a date, history of one movie or show, episode and movie files, the calendar with the episode file, parsing a release name, and empty lists for rename and manual import. Thanks to Bayharbourbutcher1 on GitHub, #94.
+- The "ready to watch" notification now says where the subtitles stand: "Already there (en, nl)", "None yet, searching for en" and so on. It appears in every channel (Discord, Telegram, email, push, webhook) and only while subtitles are switched on. Webhooks get a new `subtitles` field, and custom webhook bodies get `{{subtitles}}`. (SanketBaraiya on GitHub, #106)
+- New setting "Sign in automatically with" (Settings > Account & Access > All accounts). With single sign-on chosen, visitors who are not signed in go straight to the provider and come back to the page they asked for. Open the address with `?no-redirect=1` (or `?disable-auth-redirect`) for the normal sign-in page. Off by default. (mirisbowring on GitHub, #105)
+- A switch "Built-in minimum size check" (Settings > Library > Quality > Size limits). On by default. Off, automatic searches no longer skip a release for being too small for its quality, and the release list stops showing "smaller than a real ... release is likely to be". Reported from inside the app (Mediarium reference 20261020-200637-1fa7f504).
+- **Downloads at the same time** is a number box from 1 to 500 instead of five buttons, so a download client such as qBittorrent can run as many torrents at once as it did for Radarr and Sonarr. It saves by itself a moment after you stop typing. The built-in Usenet and torrent downloaders keep their own limit (Usenet: your provider's connections, 5 to 50; torrents: 20), the rest wait in line. Thanks to WassawRoki on GitHub, #102.
+
+### Changed
+
+- The built-in minimum for a TV episode now shrinks with the episode length when TMDB says it is under 30 minutes (table value times runtime over 30, never under 15 MB), so real releases of short shows (a 5 minute WEB-DL 1080p episode needs about 25 MB instead of 150 MB) are no longer skipped. Movies and normal episodes are unchanged.
+- Development: vite 8.3.5 (Dependabot, #103).
+
+### Fixed
+
+- Adding custom formats that a quality profile already has no longer re-scores them silently. They are skipped and keep their score, and the message says per profile how many were added and how many were already there. A new box, "Replace the score if the profile already has the format", gives them the new score on purpose. The Add formats list in a profile says when every format is already in it. Thanks to Bayharbourbutcher1 on GitHub, #87.
+- The "More" menu on a torrent card in Activity > Download clients no longer opens behind the next card. An open menu now sits above the cards around it, and it scrolls into view when it opens near the bottom of the window. Thanks to nexus4004 on GitHub, #107.
+
 ## [3.2.19] - 2026-10-20
 
 In short: nzb360 and other phone apps show scores, naming has folder formats and TRaSH presets that save, size limits are separate for movies and TV, and long cards fold away.

@@ -151,6 +151,9 @@ type Server struct {
 	torrents torrentRegistry // live torrent clients, so the on/off switch can stop them
 	irc      ircLibrary      // the titles IRC announcements are matched against (irc_announce_decide.go)
 
+	usenetSlots  slotGate // how many built-in Usenet downloads run at once (builtin_slots.go)
+	torrentSlots slotGate // the same for built-in torrents
+
 	grabMu sync.Mutex     // makes "is this already being downloaded?" and "queue it" one step (see grab_claim.go)
 	bg     sync.WaitGroup // download pipelines and automatic retries still running (see grab_claim.go)
 

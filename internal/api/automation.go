@@ -412,7 +412,7 @@ func pickBestFor(results []indexers.Result, profile quality.Profile, wantYear in
 		if wantYear != 0 && release.Year != 0 && release.Year != wantYear {
 			continue
 		}
-		if !quality.SizePlausible(quality.Classify(release), results[i].SizeBytes, 0) || !profile.SizeAllowed(results[i].SizeBytes) {
+		if !builtinSizeOK(quality.Classify(release), results[i].SizeBytes, 0, 0) || !profile.SizeAllowed(results[i].SizeBytes) {
 			continue
 		}
 		key := keyFor(profile, release, &results[i])
@@ -443,7 +443,7 @@ func pickUpgradeResult(results []indexers.Result, profile quality.Profile, curre
 		if wantYear != 0 && release.Year != 0 && release.Year != wantYear {
 			continue
 		}
-		if !quality.SizePlausible(quality.Classify(release), results[i].SizeBytes, 0) || !profile.SizeAllowed(results[i].SizeBytes) {
+		if !builtinSizeOK(quality.Classify(release), results[i].SizeBytes, 0, 0) || !profile.SizeAllowed(results[i].SizeBytes) {
 			continue
 		}
 		key := keyFor(profile, release, &results[i])

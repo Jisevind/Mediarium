@@ -262,6 +262,21 @@ function SizeTableEditor({ kind, onEnabled }: { kind: Kind; onEnabled: (on: bool
 // for shows. TRaSH's sizes differ between Radarr and Sonarr, so each side has
 // its own table and its own Apply TRaSH sizes.
 export default function SizeLimitsCard() {
+  const toast = useToast()
+  const [minCheck, setMinCheck] = useState<boolean | null>(null)
+  useEffect(() => {
+    api.minSizeCheck().then((r) => setMinCheck(r.enabled)).catch(() => undefined)
+  }, [])
+  async function toggleMinCheck(on: boolean) {
+    const was = minCheck
+    setMinCheck(on)
+    try {
+      await api.putMinSizeCheck(on)
+    } catch (e) {
+      setMinCheck(was)
+      toast.error(t('Not saved: {error}', { error: e instanceof Error ? e.message : String(e) }))
+    }
+  }
   const [kind, setKind] = useState<Kind>('movie')
   const [on, setOn] = useState<Record<Kind, boolean | null>>({ movie: null, tv: null })
   const setMovieOn = useCallback((v: boolean) => setOn((cur) => ({ ...cur, movie: v })), [])
@@ -278,6 +293,14 @@ export default function SizeLimitsCard() {
         {t("The smallest and largest release to take for each quality, in megabytes for each minute of the film or episode. A release outside them is skipped by automatic searches and marked in the list when you search yourself; you can still pick it by hand. They come on top of the built-in minimums and a profile's largest size: the tightest one wins. A release that doesn't say its size always passes, and a season pack is only checked against the smallest.")}
       </p>
       <p style={{ color: 'var(--text-dim)' }}>{t('Movies and TV each have their own table, so the TRaSH sizes for one never change the other.')}</p>
+      <Switch
+        checked={minCheck ?? true}
+        onChange={(on) => void toggleMinCheck(on)}
+        disabled={minCheck === null}
+        label={t('Built-in minimum size check')}
+        description={t('Skips releases that are much smaller than a real release of that quality should be (fakes and samples). Turn it off if you have short shows or small encodes.')}
+        showState
+      />
       <Collapsible id="size-limits" label={t('Size limits')} summary={summary}>
       <div className="seg" role="tablist" aria-label={t('Size limits')} style={{ marginBottom: 14 }}>
         {tabs.map((tab) => (
