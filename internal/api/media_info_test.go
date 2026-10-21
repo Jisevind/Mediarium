@@ -50,9 +50,8 @@ func mkvTrack(kind byte, codec, lang string, extra ...[]byte) []byte {
 	for _, e := range extra {
 		put(e)
 	}
-	out := []byte{0xAE, 0x80 | 0x00}
 	n := body.Len()
-	out = []byte{0xAE, 0x40 | byte(n>>8), byte(n)}
+	out := []byte{0xAE, 0x40 | byte(n>>8), byte(n)}
 	return append(out, body.Bytes()...)
 }
 

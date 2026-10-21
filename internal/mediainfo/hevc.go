@@ -145,7 +145,8 @@ func spsTransfer(nal []byte) int {
 	for i := 0; i < 6; i++ { // block size limits
 		r.ue()
 	}
-	if r.bit() == 1 && r.bit() == 1 { // scaling lists, and their data
+	scalingOn := r.bit() == 1
+	if scalingOn && r.bit() == 1 { // scaling lists, and their data
 		for size := 0; size < 4 && !r.bad; size++ {
 			step := 1
 			if size == 3 {
