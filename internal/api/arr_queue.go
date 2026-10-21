@@ -429,7 +429,7 @@ func (s *Server) arrCalendar(app arrApp) http.HandlerFunc {
 				e := toArrEpisode(se.ep)
 				e.Series = series[se.series.ID]
 				if queryBool(r, "includeEpisodeFile") {
-					e.EpisodeFile = toArrEpisodeFile(se.ep)
+					e.EpisodeFile = s.toArrEpisodeFile(se.ep)
 				}
 				out = append(out, e)
 			}

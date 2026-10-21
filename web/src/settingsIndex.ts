@@ -152,6 +152,7 @@ function cardSpecs(): Spec[] {
     // Other apps
     { to: 'other-apps', label: t('Connect apps made for Radarr, Sonarr and Lidarr'), words: 'overseerr jellyseerr homepage homarr nzb360 lunasea ruddarr api' },
     { to: 'other-apps', label: t('The API key'), words: 'api key token integration' },
+    { to: 'other-apps', label: t('Let AI assistants connect (MCP)'), words: 'mcp ai assistant chat voice home assistant llm' },
     // Your profile
     { to: 'profile', label: t('Your details'), words: 'name email avatar picture' },
     { to: 'profile', label: t('Change password'), words: 'password reset' },

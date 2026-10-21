@@ -717,11 +717,20 @@ type arrLanguage struct {
 
 var arrEnglish = arrLanguage{ID: 1, Name: "English"}
 
+// arrProfileItem is one entry of a profile's quality list: a quality, or (with
+// Name, ID and Items set and no Quality) a group of them, as Radarr and Sonarr
+// show it.
 type arrProfileItem struct {
-	Quality arrQualityName `json:"quality"`
-	Items   []any          `json:"items"`
-	Allowed bool           `json:"allowed"`
+	ID      int             `json:"id,omitempty"`
+	Name    string          `json:"name,omitempty"`
+	Quality *arrQualityName `json:"quality"`
+	Items   []any           `json:"items"`
+	Allowed bool            `json:"allowed"`
 }
+
+// arrGroupIDBase is where the ids of quality groups start, above every
+// quality id, as Radarr and Sonarr number theirs.
+const arrGroupIDBase = 1000
 
 type arrProfile struct {
 	ID                int64            `json:"id"`
@@ -742,11 +751,42 @@ func toArrProfile(app arrApp, p quality.Profile) arrProfile {
 	}
 	out := arrProfile{ID: p.ID, Name: p.Name, UpgradeAllowed: p.UpgradeAllowed, Cutoff: arrQualityOf(app, p.Cutoff).ID,
 		MinFormatScore: p.MinFormatScore, CutoffFormatScore: p.CutoffFormatScore, FormatItems: []map[string]any{}}
+	single := func(t quality.Tier, ok bool) arrProfileItem {
+		q := arrQualityOf(app, t)
+		return arrProfileItem{Quality: &q, Items: []any{}, Allowed: ok}
+	}
 	for _, t := range quality.AllTiers() {
 		if app == arrSonarr && t == quality.TierPreRelease {
 			continue
 		}
-		out.Items = append(out.Items, arrProfileItem{Quality: arrQualityOf(app, t), Items: []any{}, Allowed: allowed[t]})
+		if p.HasCustomOrder() && p.ItemOf(t) >= 0 {
+			continue // listed below, in the profile's own order
+		}
+		out.Items = append(out.Items, single(t, allowed[t]))
+	}
+	// Radarr and Sonarr list the worst quality first, so the profile's order
+	// (best first) is written backwards.
+	for i := len(p.QualityOrder) - 1; i >= 0; i-- {
+		it := p.QualityOrder[i]
+		if !it.IsGroup() {
+			if app == arrSonarr && it.Tiers[0] == quality.TierPreRelease {
+				continue
+			}
+			out.Items = append(out.Items, single(it.Tiers[0], true))
+			continue
+		}
+		id := arrGroupIDBase + len(p.QualityOrder) - i
+		group := arrProfileItem{ID: id, Name: it.Name, Items: []any{}, Allowed: true}
+		for j := len(it.Tiers) - 1; j >= 0; j-- {
+			if app == arrSonarr && it.Tiers[j] == quality.TierPreRelease {
+				continue
+			}
+			group.Items = append(group.Items, single(it.Tiers[j], true))
+		}
+		out.Items = append(out.Items, group)
+		if ci := p.ItemOf(p.Cutoff); ci == i {
+			out.Cutoff = id
+		}
 	}
 	for _, f := range p.Formats {
 		out.FormatItems = append(out.FormatItems, map[string]any{"format": f.Format.ID, "name": f.Format.Name, "score": f.Score})

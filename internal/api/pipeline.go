@@ -231,7 +231,10 @@ func (s *Server) runPipeline(queueID, movieID int64, movieTitle string, movieYea
 // failure handling.
 func (s *Server) prepareDownload(ctx context.Context, queueID int64, downloadURL string, protocol indexers.Protocol) (string, error) {
 	incompleteDir := s.workDirFor(queueID)
-	if protocol == indexers.ProtocolTorrent && s.downloadClientOn() {
+	// Usenet releases go to an external downloader (SABnzbd, NZBGet) when the
+	// person chose that.
+	usenetViaClient := protocol != indexers.ProtocolTorrent && s.usenetClientOn()
+	if (protocol == indexers.ProtocolTorrent && s.downloadClientOn()) || usenetViaClient {
 		// An external client's folder only holds links to its files: it stays in
 		// the downloads folder, never in the temporary download folder.
 		if _, started := s.existingWorkDir(queueID); !started {
@@ -280,6 +283,9 @@ func (s *Server) prepareDownload(ctx context.Context, queueID int64, downloadURL
 			downloadErr = s.downloadTorrent(ctx, queueID, downloadURL, incompleteDir)
 			release()
 		}
+	case usenetViaClient:
+		viaClient = true
+		downloadErr = s.downloadViaUsenetClient(ctx, queueID, downloadURL, incompleteDir)
 	default:
 		if release, err := s.usenetSlots.acquire(ctx, s.builtinUsenetLimit); err != nil {
 			downloadErr = err
@@ -297,7 +303,7 @@ func (s *Server) prepareDownload(ctx context.Context, queueID int64, downloadURL
 		}
 		return "", fmt.Errorf("the download failed: %w", downloadErr)
 	}
-	if !reused && protocol != indexers.ProtocolTorrent {
+	if !reused && protocol != indexers.ProtocolTorrent && !viaClient {
 		markDownloaded(incompleteDir, missing)
 	}
 
@@ -338,36 +344,8 @@ func (s *Server) prepareDownload(ctx context.Context, queueID int64, downloadURL
 // enabled Usenet server, primary first. It returns how many articles no
 // server had: those are left for PAR2 repair rather than failing outright.
 func (s *Server) downloadUsenet(ctx context.Context, queueID int64, nzbURL, incompleteDir string) (int, error) {
-	if isMagnetURI(nzbURL) {
-		return 0, errors.New("this is a torrent (a magnet link), but its indexer is set up as a Usenet indexer. Open Settings > Indexers & Search, remove it and add it again on the Torrent tab")
-	}
-	nzbBytes, err := s.fetchRelease(ctx, nzbURL)
+	nzb, _, err := s.fetchCheckedNZB(ctx, queueID, nzbURL)
 	if err != nil {
-		return 0, fmt.Errorf("couldn't get the NZB file: %w", err)
-	}
-	if looksLikeTorrentFile(nzbBytes) {
-		return 0, errors.New("this is a .torrent file, but its indexer is set up as a Usenet indexer. Open Settings > Indexers & Search, remove it and add it again on the Torrent tab")
-	}
-	// An indexer at its daily limit, or showing a login or maintenance page,
-	// sends something that is not an NZB: that says nothing about the release,
-	// so it is not blocklisted.
-	if err := notAnNZB(nzbBytes, nzbURL); err != nil {
-		return 0, err
-	}
-	nzb, err := download.ParseNZB(nzbBytes)
-	if err != nil {
-		return 0, badRelease(fmt.Errorf("couldn't read the NZB file: %w", err))
-	}
-	// Before a single article is fetched: no programs or scripts in the file
-	// list, and not the same NZB as an earlier download of this title.
-	if err := s.checkNZBSafe(nzb); err != nil {
-		return 0, err
-	}
-	fingerprint := nzb.Fingerprint()
-	if err := s.QueueRepo.SetNZBHash(queueID, fingerprint); err != nil {
-		slog.Warn("api: save the NZB fingerprint", "queueId", queueID, "err", err)
-	}
-	if err := s.checkDuplicate(queueID, fingerprint); err != nil {
 		return 0, err
 	}
 
@@ -707,10 +685,14 @@ func (s *Server) vpnRequiredForTorrents() bool {
 // movie import. See conflictPolicy for the shared logic.
 func (s *Server) importConflictPolicy(movieID int64, incomingTier quality.Tier) (organizer.ConflictPolicy, func() bool) {
 	upgrades := false
+	profile := quality.Profile{}
 	if m, err := s.MovieRepo.Get(movieID); err == nil {
 		upgrades = !m.NoUpgrade
+		if ps, err := s.loadProfiles(); err == nil {
+			profile = s.profileForMovie(ps, m)
+		}
 	}
-	return s.conflictPolicy(incomingTier, upgrades, func() (quality.Tier, bool) {
+	return s.conflictPolicy(incomingTier, upgrades, profile, func() (quality.Tier, bool) {
 		current, err := s.MovieRepo.Get(movieID)
 		if err != nil {
 			return "", false
@@ -730,7 +712,7 @@ func (s *Server) importConflictPolicy(movieID int64, incomingTier quality.Tier) 
 // its file alone). With the default "skip" policy such a title still takes a
 // better release in place of its file: otherwise "Look for better versions"
 // would download the better file and then refuse to import it.
-func (s *Server) conflictPolicy(incomingTier quality.Tier, upgrades bool, currentTier func() (quality.Tier, bool)) (organizer.ConflictPolicy, func() bool) {
+func (s *Server) conflictPolicy(incomingTier quality.Tier, upgrades bool, profile quality.Profile, currentTier func() (quality.Tier, bool)) (organizer.ConflictPolicy, func() bool) {
 	v, _ := s.Settings.Get(settings.KeyImportConflictPolicy)
 	ifBetter := func() (organizer.ConflictPolicy, func() bool) {
 		isBetter := func() bool {
@@ -738,7 +720,7 @@ func (s *Server) conflictPolicy(incomingTier quality.Tier, upgrades bool, curren
 			if !ok {
 				return false
 			}
-			return quality.Rank(incomingTier) > quality.Rank(current)
+			return profile.TierRank(incomingTier) > profile.TierRank(current)
 		}
 		return organizer.ConflictOverwriteIfBetter, isBetter
 	}

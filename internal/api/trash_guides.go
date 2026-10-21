@@ -439,7 +439,7 @@ func (s *Server) handleTrashImportProfile(w http.ResponseWriter, r *http.Request
 		return
 	}
 	res := formatImportResult{Formats: []customFormatPayload{}}
-	p := quality.Profile{Name: name, Allowed: allowed, Cutoff: cutoff, UpgradeAllowed: tp.UpgradeAllowed,
+	p := quality.Profile{Name: name, Allowed: allowed, Cutoff: cutoff, QualityOrder: tp.QualityOrder(), UpgradeAllowed: tp.UpgradeAllowed,
 		MinFormatScore: tp.MinFormatScore, CutoffFormatScore: max(tp.CutoffFormatScore, 0), FormatScores: map[int64]int{}, SkipBadReleases: true}
 	for _, id := range tp.FormatTrashIDs() {
 		f, ok := all[id]

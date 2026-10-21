@@ -106,6 +106,7 @@ The keys the app stores in its settings table. You normally change these from th
 | `library.tv_path` | falls back to the TV_DIR env default when unset |
 | `library.unmonitor_downloaded` | "1" stops monitoring a movie once it is downloaded; unset or "0" keeps it monitored |
 | `library.unmonitor_finished_shows` | "1" stops monitoring a show once it has ended and every monitored episode is in; unset or "0" keeps it monitored |
+| `mcp.enabled` | "1" lets AI assistants connect to the MCP address (POST /mcp) with an administrator's API key; unset or "0" keeps it off. Only a signed-in browser session can switch it on, not an API key |
 | `mediaservers.client_id` | set by the app, not user-editable |
 | `metadata.simkl_client_id` | encrypted; the Client ID of a Simkl app (own, or the one a release ships with) |
 | `metadata.simkl_token` | encrypted; the access token of the connected Simkl account |
@@ -181,6 +182,23 @@ The keys the app stores in its settings table. You normally change these from th
 | `updates.last_checked_at` | when the last check ran (RFC 3339; set by the app, not user-editable) |
 | `updates.latest` | the newest release the last check found (JSON; set by the app, not user-editable) |
 | `updates.notified_version` | the version the "new version" message was last sent for (set by the app, not user-editable) |
+| `usenetclient.api_key` | encrypted; SABnzbd's API key |
+| `usenetclient.category` | the category NZBs are added with; unset = "mediarium" (when no kind has a category of its own either) |
+| `usenetclient.category_books` | category for books; unset = the main category |
+| `usenetclient.category_movies` | category for movies; unset = the main category |
+| `usenetclient.category_music` | category for music; unset = the main category |
+| `usenetclient.category_tv` | category for TV shows; unset = the main category |
+| `usenetclient.kind` | "" (off), "sabnzbd" or "nzbget" |
+| `usenetclient.local_path` | path mapping: the same folder as Mediarium sees it |
+| `usenetclient.password` | encrypted; NZBGet's password (ControlPassword) |
+| `usenetclient.priority` | "low", "normal" (default), "high" or "force" |
+| `usenetclient.remote_path` | path mapping: a folder as the client reports it, e.g. /downloads/complete |
+| `usenetclient.remove_after_import` | "1" removes the job and its files from the client once imported; unset or "0" leaves them there |
+| `usenetclient.remove_on_stop` | "0" leaves a stopped or removed download's job in the client; unset or "1" removes it too (only an unfinished job Mediarium added) |
+| `usenetclient.send_url` | "1" lets the client fetch the NZB from the indexer itself; unset or "0" uploads the file |
+| `usenetclient.url` | the client's web address, e.g. http://192.168.1.10:8080 |
+| `usenetclient.use` | "1" sends Usenet releases to it; unset or "0" keeps the built-in downloader |
+| `usenetclient.username` | NZBGet's login (ControlUsername) |
 | `vpn.require_for_torrents` |  |
 | `vpn.route_indexers` | "1" sends searches, RSS, release downloads, IRC announces and debrid through the VPN, and they wait while it isn't up. Home-network addresses still connect directly |
 | `watched.status` | the last read and cleanup (JSON; set by the app, not user-editable) |

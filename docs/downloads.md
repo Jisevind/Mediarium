@@ -99,6 +99,8 @@ If the provider says "too many connections" (usually because another program, li
 
 When the provider keeps refusing connections, the dashboard's **Needs your attention** list also says so ("news.example.com allows fewer connections than you set", with a button to the test), for twelve hours after the last refusal.
 
+Using SABnzbd or NZBGet instead? See [SABnzbd and NZBGet](#sabnzbd-and-nzbget).
+
 Connections close when a download finishes, fails or is cancelled, and when you remove or switch off a server or change its address or login. Lowering the number of connections takes effect at once, even for a download that's running.
 
 ## What is checked when you save
@@ -198,6 +200,44 @@ A download the client saved at `/downloads/Movie.2024.1080p` is then looked for 
 - **Seeding limits are sent to the client.** When Mediarium adds a torrent it also gives that torrent its seeding limits: the global ones (`torrent.seed_ratio_limit`, `torrent.seed_time_limit_h`) or, for a torrent from an indexer with [seeding rules](#seeding-rules-for-one-indexer), that indexer's. The client then enforces them itself. In qBittorrent they are the torrent's own share limits (ratio and seeding time in minutes), which you can see under the torrent's right-click menu, **Limit share ratio...**. Mediarium sends them in the add call and again with `setShareLimits` on the torrent's hash, so qBittorrent 4 and 5 both take them. A rule with only hours sends "no ratio limit" next to the time, so the time limit is enforced whatever ratio limit qBittorrent has itself. A kind that is `0` is sent as "no limit"; with both at `0` Mediarium sends nothing and the client keeps its own defaults. Transmission only gets the ratio, because it has no total seeding time (its idle limit is something different). RDT-Client, Decypharr and other programs that copy the qBittorrent API may ignore the limits; that never fails the download.
 - **What happens when the limit is reached is the client's choice.** In qBittorrent that is a global setting, and Mediarium doesn't change it: to have qBittorrent remove the torrent (or pause it, or stop it) at the limit, set it in qBittorrent under Options > BitTorrent > Seeding Limits, **then** (pause, stop or remove torrent). This is separate from **Remove from the client after import**, which removes the torrent as soon as it is in your library, whatever its limits are. Limits are set when the torrent is added; changing a rule later doesn't change torrents already in the client.
 - The VPN settings for the built-in torrent client don't apply: the client handles its own traffic.
+
+## SABnzbd and NZBGet
+
+Mediarium downloads from Usenet by itself and that stays the default. If you already run SABnzbd or NZBGet, you can have Mediarium hand Usenet releases to it instead. The downloader fetches, repairs and unpacks into its own folder, and when it is done Mediarium imports the files straight from that folder. It never moves or renames the downloader's files. They are only deleted when you stop or remove a download before it finished, or when you switch on removal after import (see below).
+
+**Set up:** Settings > Downloading > Usenet > **Use SABnzbd or NZBGet** (the last card on the page). Pick the downloader, then fill in:
+
+- **Address:** where you open its web page, for example `http://192.168.1.10:8080` for SABnzbd or `http://192.168.1.10:6789` for NZBGet. In Docker, use the container name if both are on the same network (`http://sabnzbd:8080`).
+- **API key** (SABnzbd): in SABnzbd under Config > General. It is stored encrypted and never shown again.
+- **User name** and **Password** (NZBGet): the `ControlUsername` and `ControlPassword` from NZBGet's settings (Security). Stored encrypted.
+- **Category:** NZBs are added in this category (`mediarium` if you never set anything). It has to exist in the downloader already: in SABnzbd under Config > Categories, in NZBGet under Settings > Categories. That is also where its download folder is set. As with torrent clients, you can clear it when you fill in a category for some kinds: a kind without one then gets no category.
+- **Category for movies, TV shows, music and books:** optional, to keep each kind in its own category and folder.
+- **Priority:** low, normal, high or force, sent with every release.
+- **Send Usenet releases to SABnzbd/NZBGet:** the switch that makes it the downloader. It is off until you turn it on, so you can save and test everything first. Off, or with no downloader chosen, the built-in downloader is used. Turning it on does not change what is already downloading.
+- **Let it fetch the NZB file itself:** off by default. Mediarium then gets the NZB from the indexer, checks it (no programs or scripts in it, not the same NZB as an earlier download of the title, the other checks under [Checks on releases](#checks-on-releases)) and sends the file. On, only the link is sent, so the indexer's address, which holds your key, ends up in the downloader and Mediarium can't look at the file first. A release that only Mediarium can open (an indexer that needs its sign-in, or an NZB you uploaded) is always sent as a file.
+
+Press **Test**. It says which part is wrong: that nothing answers at the address, that the API key or the login was refused, that the address is something else than SABnzbd or NZBGet, or that a category doesn't exist in the downloader (it names the category). On success it shows the downloader's version. Then **Save**.
+
+The Usenet provider is then the downloader's business: Mediarium doesn't need a news server of its own while the switch is on, and the "No Usenet provider added" warning goes away.
+
+### Path mapping
+
+The downloader reports where it saved a finished download as it sees it. If it runs in another container or on another computer, that path can be different inside Mediarium. Fill in both fields, exactly as for a [torrent client](#path-mapping): **The downloader's folder** (for example `/downloads/complete`) and **The same folder in Mediarium** (for example `/data/usenet/complete`). Leave both empty when the paths are the same. Mounting one parent folder (for example `/data`) into both containers, with the same path inside each, needs no mapping and lets imports use hardlinks instead of copies. When Mediarium can't see a finished download, it fails with a message that points here.
+
+### How a download goes
+
+- The NZB is sent to the downloader with the category of its kind and your priority. Mediarium keeps the job's id in the download's own folder (`incomplete/queue-N`), so a restart or a retry picks the job up again instead of sending it twice.
+- Mediarium asks every few seconds how it is doing. The progress bar follows the downloader's. Waiting, downloading, paused, "checking and unpacking" (repair and unpack) and done are shown the same way as for torrents, on the Queue tab and under Activity > Download clients.
+- When the job is done, the download's own folder gets a link to each file in the downloader's folder, and the import goes on as for any download. Files are imported with a hardlink when possible, otherwise copied. Mediarium does not repair or unpack in the downloader's folder: the downloader already did.
+- **If the downloader gives up** on a release (SABnzbd's history says Failed, NZBGet's says FAILURE or WARNING such as too many articles missing, a repair or unpack that failed, or a password), that is the release's fault: it goes on the [blocklist](#when-a-download-fails), the job is removed from the downloader with what it had, and with automation on the next-best release is tried, exactly as for a failure of the built-in downloader.
+- The downloader's own trouble (a full disk, a folder it can't write to, NZBGet failing to move the files) is not held against the release. It is not blocklisted, the job stays in the downloader for you to look at, and the download fails with a message saying so. The same goes for a job deleted by hand in the downloader.
+- **Pause** in Mediarium pauses the job in the downloader, and **Resume** starts it again. A download left paused in the downloader by hand keeps waiting there.
+- **When I stop or remove a download, remove it from the downloader too** is on by default (`usenetclient.remove_on_stop`). Stopping, removing a download, removing its movie or show, or **Blocklist & search again** also removes the job from the downloader, with what it downloaded. It only touches a job that Mediarium sent and that hasn't finished. A finished job stays, and a download that was already imported is never touched.
+- **Remove from the downloader after import** is off by default, so nothing is ever deleted there. Switch it on to have the job removed once it is in your library. SABnzbd deletes the finished files with it. NZBGet's API can only take the job out of its history, so its files stay in its folder unless NZBGet is set to clean up by itself.
+
+Not supported: the downloader's own post-processing scripts are left to it, Mediarium doesn't change the downloader's settings, and the speed limit of Mediarium only applies to the built-in downloader. I could only test SABnzbd and NZBGet against copies of their web APIs, not the real programs, so please say how it goes.
+
+Scripts (administrators): `GET` and `PUT /api/usenet-client` (the secrets are `apiKey` and `password`, write only), `POST /api/usenet-client/test`, `GET /api/usenet-client/jobs?scope=mine|all`, `POST /api/usenet-client/jobs/{id}/pause|resume|remove|remove-files`.
 
 ## Seeding
 

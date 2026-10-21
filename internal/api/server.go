@@ -49,6 +49,7 @@ type Server struct {
 	resumeStop  context.CancelFunc // ends the resume of interrupted downloads (resume_interrupted.go)
 	streamPause streamPauseState   // pause while someone is watching (stream_pause.go)
 	libStats    libraryStatsCache  // the Statistics page's answer, kept for a few minutes (stats_library.go)
+	mediaInfo   mediaInfoState     // what the video files hold, read from their headers (media_info.go)
 	appFrames   atomic.Value       // []string: the origins of add-ons shown in a frame, kept in memory so the security headers never wait for the database (app_links.go)
 	cfg         config.Config
 	db          *sql.DB // for backups (VACUUM INTO); repos hold their own handles
@@ -181,6 +182,8 @@ type Server struct {
 
 	moveJob moveJob      // moving the files of titles to another library folder (move_files.go)
 	metaJob metaFilesJob // writing NFO and artwork files for the whole library (metadata_files.go)
+
+	mcp mcpState // AI assistants connecting over MCP (mcp.go)
 
 	upd updateRuntime // the new-version notice, pushed and downloaded updates, and the self-restart marker (update_*.go, watchdog.go)
 }
@@ -398,12 +401,17 @@ func (s *Server) Routes() http.Handler {
 	// Calendar apps read the feed without signing in; the secret address is the key.
 	public.HandleFunc("GET /api/calendar/feed/{file}", s.handleCalendarFeed)
 
-	public.Handle("/api/", s.signedIn(s.protectedRoutes()))
+	// The MCP address for AI assistants signs in with an API key of its own (mcp.go).
+	routes := s.protectedRoutes()
+	s.mcp.table = routes
+	public.HandleFunc("/api/mcp", s.handleMCP)
+	public.Handle("/api/", s.signedIn(routes))
 
 	root := http.NewServeMux()
 	root.Handle("/api/", s.busyGuard(noStore(metricsBearerOnly(public))))
 	// Prometheus' default path. It is the same protected page as /api/metrics.
 	root.Handle("GET /metrics", s.busyGuard(noStore(metricsAlias(public))))
+	root.Handle("/mcp", s.busyGuard(noStore(http.HandlerFunc(s.handleMCP))))
 	// Radarr, Sonarr and Lidarr-style endpoints for other apps (arr.go).
 	s.arrRoutes(root)
 	// E-readers: the OPDS catalogue and Kobo sync sign in their own way (ereader_auth.go).
@@ -523,6 +531,7 @@ func (s *Server) protectedRoutes() *routeTable {
 	manage.HandleFunc("PUT /api/series/{id}/folder", s.handleSetSeriesFolder)
 	member.HandleFunc("GET /api/library/folders", s.handleLibraryFolders)
 	member.HandleFunc("GET /api/library/counts", s.handleLibraryCounts)
+	member.HandleFunc("GET /api/library/file-details", s.handleMediaInfoStatus)
 
 	// Shows: the same.
 	member.HandleFunc("GET /api/series", revalidated(s.handleListSeries))
@@ -681,6 +690,11 @@ func (s *Server) protectedRoutes() *routeTable {
 	admin.HandleFunc("POST /api/download-client/torrents/{hash}/{action}", s.handleClientTorrentAction)
 	admin.HandleFunc("PUT /api/download-client", s.handlePutDownloadClient)
 	admin.HandleFunc("POST /api/download-client/test", s.handleTestDownloadClient)
+	admin.HandleFunc("GET /api/usenet-client", s.handleGetUsenetClient)
+	admin.HandleFunc("PUT /api/usenet-client", s.handlePutUsenetClient)
+	admin.HandleFunc("POST /api/usenet-client/test", s.handleTestUsenetClient)
+	admin.HandleFunc("GET /api/usenet-client/jobs", s.handleUsenetJobs)
+	admin.HandleFunc("POST /api/usenet-client/jobs/{id}/{action}", s.handleUsenetJobAction)
 	admin.HandleFunc("POST /api/indexer-definitions/custom", s.handleAddCustomDefinition)
 	admin.HandleFunc("DELETE /api/indexer-definitions/custom/{id}", s.handleRemoveCustomDefinition)
 	admin.HandleFunc("POST /api/indexers/test", s.handleTestIndexerConfig)
@@ -753,6 +767,8 @@ func (s *Server) protectedRoutes() *routeTable {
 	admin.HandleFunc("POST /api/music/profiles", s.handleCreateMusicProfile)
 	admin.HandleFunc("PUT /api/music/profiles/{id}", s.handleUpdateMusicProfile)
 	admin.HandleFunc("DELETE /api/music/profiles/{id}", s.handleDeleteMusicProfile)
+	admin.HandleFunc("POST /api/music/albums/{id}/rescan", s.handleRescanAlbum)
+	admin.HandleFunc("DELETE /api/music/albums/{id}/files", s.handleDeleteAlbumFile)
 	admin.HandleFunc("POST /api/music/import/scan", s.handleMusicImportScan)
 	admin.HandleFunc("GET /api/music/import/scan", s.handleMusicImportLatest)
 	admin.HandleFunc("GET /api/music/import/scan/{id}", s.handleMusicImportResults)
@@ -899,6 +915,8 @@ func (s *Server) protectedRoutes() *routeTable {
 	admin.HandleFunc("POST /api/system/update/install", s.handleInstallUpdate)
 	admin.HandleFunc("GET /api/system/options", s.handleGetOptions)
 	admin.HandleFunc("PUT /api/system/options", s.handlePutOptions)
+	admin.HandleFunc("GET /api/system/mcp", s.handleGetMCP)
+	admin.HandleFunc("PUT /api/system/mcp", s.handlePutMCP)
 	admin.HandleFunc("GET /api/auth/sign-in", s.handleGetSignIn)
 	admin.HandleFunc("PUT /api/auth/sign-in", s.handlePutSignIn)
 	admin.HandleFunc("GET /api/auth/oidc", s.handleGetOIDC)

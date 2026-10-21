@@ -62,6 +62,8 @@ func (s *Server) StartAutomation() *automation.Scheduler {
 		automation.Job{Name: "weekly-summary", Interval: digestCheck, Run: s.digestJob},                     // does nothing until a day is chosen
 		automation.Job{Name: "import-details", Interval: importDetailsInterval, Run: s.heavy(s.importDetailsJob)},
 		automation.Job{Name: "trash-formats", Interval: time.Hour, Run: s.heavy(s.trashFormatsJob)}, // does nothing until switched on; reads the guides once a day
+		// media-info reads the video, audio and subtitle tracks of the library's files, a few minutes at a time.
+		automation.Job{Name: "media-info", Interval: mediaInfoInterval, Run: s.heavy(s.mediaInfoJob)},
 		automation.Job{Name: "episode-quality", Interval: 24 * time.Hour, Run: s.heavy(func(context.Context) { s.backfillEpisodeQuality() })},
 		automation.Job{Name: "import-added-dates", Interval: 24 * time.Hour, Run: s.heavy(func(context.Context) { s.backfillImportedAddedDates() })},
 		automation.Job{Name: "watched", Interval: watchedJobTick, Run: s.heavy(s.watchedJob)},                     // does nothing until switched on

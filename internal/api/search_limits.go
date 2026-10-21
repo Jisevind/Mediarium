@@ -126,17 +126,6 @@ func (s *Server) tvSizeRejections(ctx context.Context, series library.Series, pr
 
 // ---- delay profile ----
 
-// highestRank is the rank of the best quality a profile allows.
-func highestRank(p quality.Profile) int {
-	top := 0
-	for _, t := range p.Allowed {
-		if r := quality.Rank(t); r > top {
-			top = r
-		}
-	}
-	return top
-}
-
 // holdBack takes out of results the releases an automatic search must leave
 // alone for now because of the delay profile, and remembers them so the title
 // is searched again when the wait is over. relevant says which releases are
@@ -170,7 +159,7 @@ func (s *Server) holdBack(remember bool, it delay.Item, profile quality.Profile,
 		rel := delay.Release{
 			Protocol: string(res.Protocol),
 			Posted:   res.PublishDate,
-			Highest:  quality.Rank(quality.Classify(res.Parsed())) >= highestRank(by),
+			Highest:  by.TierRank(quality.Classify(res.Parsed())) >= by.HighestRank(),
 		}
 		if res.PublishDate.IsZero() {
 			rel.FirstSeen = s.delays.FirstSeen(it, res.Title)

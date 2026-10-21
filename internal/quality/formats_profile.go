@@ -146,7 +146,7 @@ func (p Profile) IsUpgradeOverRel(currentTier Tier, currentRelease, candidateTit
 	if !p.Accepts(candidate) || !p.WantsFormatUpgrade(currentRelease) {
 		return false
 	}
-	if Rank(Classify(candidate)) < Rank(currentTier) {
+	if p.TierRank(Classify(candidate)) < p.TierRank(currentTier) {
 		return false
 	}
 	current, _ := p.FormatScore(currentRelease)

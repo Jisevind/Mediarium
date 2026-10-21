@@ -6,6 +6,7 @@ import { noteBusy, noteFine, startRead } from './busyState'
 import { outsideService, slowServiceMessage } from './outsideService'
 import { signalFor } from './requestSignal'
 import { st, t } from './i18n.ts'
+import type { AlbumRescanReport } from './albumRescan'
 import type { Diagnostics } from './supportReport'
 import type { ProfileScoreChange } from './formatChanges'
 import type { ProblemCounts, ProblemList } from './problemsView'
@@ -882,6 +883,57 @@ export interface DownloadClientSettings {
   linkRoot: string
 }
 export type DownloadClientInput = Omit<DownloadClientSettings, 'hasPassword'> & { password: string }
+
+// An external Usenet downloader Usenet releases can go to (Settings > Downloading > Usenet).
+export type UsenetClientKind = '' | 'sabnzbd' | 'nzbget'
+export type UsenetClientPriority = 'low' | 'normal' | 'high' | 'force'
+export interface UsenetClientSettings {
+  kind: UsenetClientKind
+  use: boolean
+  url: string
+  hasApiKey: boolean
+  username: string
+  hasPassword: boolean
+  category: string
+  categoryMovies: string
+  categoryTv: string
+  categoryMusic: string
+  categoryBooks: string
+  priority: UsenetClientPriority
+  sendUrl: boolean
+  remotePath: string
+  localPath: string
+  removeAfterImport: boolean
+  removeOnStop: boolean
+}
+export type UsenetClientInput = Omit<UsenetClientSettings, 'hasApiKey' | 'hasPassword'> & { apiKey: string; password: string }
+// One download in SABnzbd or NZBGet, as the Activity page shows it.
+export interface UsenetClientJob {
+  id: string
+  name: string
+  stage: 'downloading' | 'queued' | 'paused' | 'processing' | 'done' | 'problem'
+  stageText: string
+  progress: number
+  sizeBytes: number
+  downSpeed: number
+  etaSeconds: number
+  category?: string
+  mine: boolean
+  queueId?: number
+  canPause: boolean
+  canResume: boolean
+  addedAt?: string
+  failMessage?: string
+}
+export interface UsenetClientJobsAnswer {
+  configured: boolean
+  active: boolean
+  kind?: string
+  label?: string
+  category?: string
+  error?: string
+  jobs: UsenetClientJob[]
+}
 // Sent on window when the place torrent releases go to changes (the debrid
 // card or the download client card), so the other card shows it was turned off.
 export const TORRENT_ROUTE_EVENT = 'mediarium:torrent-route'
@@ -942,7 +994,7 @@ export interface UsenetServerInput {
 }
 
 export interface DownloadsStatus {
-  usenet: { servers: number; enabledServers: number; ready: boolean }
+  usenet: { servers: number; enabledServers: number; ready: boolean; external?: 'sabnzbd' | 'nzbget'; externalLabel?: string }
   torrent: {
     state?: 'disabled' | 'blocked' | 'ready'
     via?: 'builtin' | 'client' | 'debrid' // where torrents go
@@ -1035,6 +1087,12 @@ export interface SearchResult {
   // The custom-format score in the title's profile and the formats matched
   // (only when the profile scores formats).
   formatScore?: number
+  // The whole score the pick compares: the custom formats, the preferred terms
+  // and fixScore added up. The Score column shows it. Only when the profile
+  // scores something.
+  score?: number
+  // The bonus of a PROPER or REPACK when the profile skips bad releases.
+  fixScore?: number
   // The matched formats with the score the profile gives each, the profile's
   // minimum score and the score it stops upgrading at (0 when not set), and
   // everything that makes an automatic search skip the release, by kind.
@@ -1065,10 +1123,20 @@ export interface PreferredTerm {
   score: number
 }
 
+// One rank of a profile's own quality order: a quality, or a named group of them.
+export interface QualityItem {
+  name?: string
+  tiers: string[]
+}
+
 export interface QualityProfileInput {
   name: string
   allowed: string[]
   cutoff: string
+  // The profile's own order of qualities and groups, best first. [] is the
+  // built-in order; left out on a save, the saved order is kept. When it is
+  // set it decides which qualities are allowed.
+  qualityOrder?: QualityItem[]
   upgradeAllowed: boolean
   mustContain: string[]
   mustNotContain: string[]
@@ -1345,6 +1413,53 @@ export interface Series {
   showStatus?: 'ended' | 'continuing' | 'upcoming' // where the show stands; left out until it has been refreshed once
   originCountry?: string[] // where it comes from ("US", "GB"); empty until the show is refreshed
   nameTag?: string // tells it from another show of the same name in the library ("US", "UK" or the year)
+  media?: MediaSummary // what the downloaded episodes' files hold, once they have been read
+}
+
+// What a video file holds, read from its headers (see fileInfo.ts).
+export interface FileVideo {
+  codec: string // "H.264", "HEVC", "AV1"...
+  width?: number
+  height?: number
+  bitDepth?: number
+  hdr?: string // "SDR", "HDR10", "HDR10+", "Dolby Vision", "HLG"
+  dvProfile?: number
+  fps?: number
+}
+export interface FileAudio {
+  codec: string // "AAC", "AC-3", "TrueHD"...
+  channels?: number
+  lang?: string // "en"
+  title?: string
+  default?: boolean
+  forced?: boolean
+  atmos?: boolean
+}
+export interface FileSubtitle {
+  codec: string
+  lang?: string
+  title?: string
+  default?: boolean
+  forced?: boolean
+}
+export interface FileInfo {
+  container: string
+  duration?: number // seconds
+  video?: FileVideo
+  audio?: FileAudio[]
+  subtitles?: FileSubtitle[]
+  resolution?: string // "2160p"
+  scannedAt?: string
+}
+// The part of a title's files the Library filters on: the different values
+// across its files (a show has many).
+export interface MediaSummary {
+  videoCodecs?: string[]
+  hdr?: string[]
+  resolutions?: string[]
+  audioCodecs?: string[]
+  audioLangs?: string[]
+  subLangs?: string[]
 }
 
 export interface Episode {
@@ -1359,6 +1474,7 @@ export interface Episode {
   filePath?: string
   monitored: boolean
   sizeBytes?: number // the file on disk (downloaded episodes)
+  fileInfo?: FileInfo // what the file holds, once it has been read
 }
 
 // A second copy of a movie or show, kept in another quality in the copies folder.
@@ -1449,6 +1565,7 @@ export interface Movie {
   detailsNote?: string
   releaseDate?: string // "2024-03-01", for sorting
   sizeBytes?: number // the file on disk
+  media?: MediaSummary // what the file holds, once it has been read
 }
 
 export interface QueueItem {
@@ -1961,6 +2078,7 @@ export interface MovieDetail extends TitleDetails {
   quality?: string
   filePath?: string
   folderPath?: string // the full folder of its files, as Mediarium sees it
+  fileInfo?: FileInfo // what the file holds, once it has been read
   // The series of films this one is part of, when it is.
   collection?: CollectionRef
   releaseDates?: MovieReleaseDates
@@ -3059,6 +3177,11 @@ export interface SystemOptions {
   autoRestartWhenStuck: boolean
 }
 
+export interface McpSettings {
+  enabled: boolean
+  path: string
+}
+
 export interface SystemControl {
   kind: 'docker' | 'systemd' | 'launchd' | 'custom' | 'none'
   canRestart: boolean
@@ -3279,6 +3402,8 @@ export const api = {
   listActiveQueue: () => request<QueueItem[]>('/queue?active=1', { revalidate: true }),
   retryQueueItem: (id: number) => post<{ queueId: number }>(`/queue/${id}/retry`),
   clientTorrents: (scope: 'mine' | 'all') => get<ClientTorrentsAnswer>(`/download-client/torrents?scope=${scope}`),
+  usenetClientJobs: (scope: 'mine' | 'all') => get<UsenetClientJobsAnswer>(`/usenet-client/jobs?scope=${scope}`),
+  usenetClientJobAction: (id: string, action: 'pause' | 'resume' | 'remove' | 'remove-files') => post<{ done: string }>(`/usenet-client/jobs/${encodeURIComponent(id)}/${action}`),
   clientTorrentAction: (hash: string, action: 'pause' | 'resume' | 'recheck' | 'remove' | 'remove-files') => post<{ done: string }>(`/download-client/torrents/${encodeURIComponent(hash)}/${action}`),
   debridTorrents: () => get<DebridTorrentsAnswer>('/debrid/torrents'),
   debridRemove: (id: string) => post<{ done: string }>(`/debrid/torrents/${encodeURIComponent(id)}/remove`),
@@ -3299,6 +3424,8 @@ export const api = {
   getWantedPage: (kind: 'missing' | 'cutoff', query: WantedPageQuery = {}) => request<WantedPage>(wantedPagePath(kind, query), { revalidate: true }),
   getWantedShow: (kind: 'missing' | 'cutoff', seriesId: number) => request<WantedItem[]>(`/wanted?kind=${kind}&series=${seriesId}`, { revalidate: true }),
   libraryCounts: () => get<{ movies: number; shows: number }>('/library/counts'),
+  // How many of the library's files have had their video and audio tracks read.
+  fileDetailsStatus: () => get<{ done: number; total: number }>('/library/file-details'),
   searchNowMovie: (id: number) => post<{ grabbed: number; message: string }>(`/movies/${id}/search-now`),
   replaceMovieSmaller: (id: number) => post<{ grabbed: number; message: string }>(`/movies/${id}/replace-smaller`),
   searchNowSeries: (id: number, scope: { season?: number; episode?: number } = {}) =>
@@ -3446,6 +3573,8 @@ export const api = {
     post<{ queueId: number }>(`/music/albums/${id}/grab`, data),
   searchNowAlbum: (id: number) => post<{ grabbed: number; message: string }>(`/music/albums/${id}/search-now`),
   albumFiles: (id: number) => get<{ folder: string; files: TitleFile[] }>(`/music/albums/${id}/files`),
+  rescanAlbum: (id: number) => post<AlbumRescanReport>(`/music/albums/${id}/rescan`),
+  deleteAlbumFile: (id: number, path: string) => del<AlbumRescanReport>(`/music/albums/${id}/files?path=${encodeURIComponent(path)}`),
   albumStreamUrl: (id: number, path: string) => withBase(`/api/files/stream?album=${id}&path=${encodeURIComponent(path)}`),
   albumEvents: (id: number) => get<TitleEvent[]>(`/music/albums/${id}/events`),
   musicWanted: (kind: 'missing' | 'cutoff') => request<MusicWanted[]>(`/music/wanted?kind=${kind}`, { revalidate: true }),
@@ -3514,6 +3643,9 @@ export const api = {
   saveDebrid: (service: string, apiKey: string, cached?: { preferCached: boolean; cachedLowerScore: boolean }) => put<DebridSettings>('/debrid', { service, apiKey, ...cached }),
   testDebrid: (service: string, apiKey: string) => post<{ ok: boolean; account?: DebridAccount; error?: string }>('/debrid/test', { service, apiKey }),
   downloadClient: () => get<DownloadClientSettings>('/download-client'),
+  usenetClient: () => get<UsenetClientSettings>('/usenet-client'),
+  saveUsenetClient: (data: UsenetClientInput) => put<UsenetClientSettings>('/usenet-client', data),
+  testUsenetClient: (data: UsenetClientInput) => post<{ ok: boolean; version?: string; error?: string }>('/usenet-client/test', data),
   saveDownloadClient: (data: DownloadClientInput) => put<DownloadClientSettings>('/download-client', data),
   testDownloadClient: (data: DownloadClientInput) => post<{ ok: boolean; version?: string; error?: string }>('/download-client/test', data),
   plexWatchlist: () => get<PlexWatchlistStatus>('/plex-watchlist'),
@@ -3557,6 +3689,8 @@ export const api = {
   removeUpdate: (restart = false) => del<{ removed: string; image: string; runningPushed: boolean; restarting: boolean; restartNeeded: boolean }>(`/system/update${restart ? '?restart=true' : ''}`),
   systemOptions: () => get<SystemOptions>('/system/options'),
   putSystemOptions: (o: Partial<SystemOptions>) => put<SystemOptions>('/system/options', o),
+  mcpSettings: () => get<McpSettings>('/system/mcp'),
+  putMcpSettings: (enabled: boolean) => put<McpSettings>('/system/mcp', { enabled }),
   getProxySignIn: () => get<ProxySignIn>('/auth/proxy-signin'),
   getScripts: () => get<ScriptsState>('/scripts'),
   putScripts: (body: { script: string; timeoutSec: number }) => put<ScriptsState>('/scripts', body),

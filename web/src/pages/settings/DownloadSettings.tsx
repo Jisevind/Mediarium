@@ -1,6 +1,7 @@
 import DebridCard from '../../components/DebridCard'
 import DownloadChecksCard, { UsenetRetentionCard } from '../../components/DownloadChecksCard'
 import DownloadClientCard from '../../components/DownloadClientCard'
+import UsenetClientCard from '../../components/UsenetClientCard'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, type DownloadsStatus, type Settings, type UsenetServer } from '../../api'
@@ -157,13 +158,20 @@ export function UsenetSettings() {
           <div className="col-stack">
           <section className="card">
             <h2>
-              <TipLabel help="downloads#usenet-connections">{t('Downloader')}</TipLabel> <span className="badge downloaded">{t('built in')}</span>{' '}
+              <TipLabel help="downloads#usenet-connections">{t('Downloader')}</TipLabel>{' '}
+              {status?.usenet.external ? (
+                <span className="badge downloaded">{status.usenet.externalLabel}</span>
+              ) : (
+                <span className="badge downloaded">{t('built in')}</span>
+              )}{' '}
               {status && <span className={`badge ${status.usenet.ready ? 'downloaded' : 'missing'}`}>{status.usenet.ready ? t('ready') : t('needs your provider')}</span>}
             </h2>
             <p style={{ color: 'var(--text-dim)' }}>
-              {status && !status.usenet.ready
-                ? t("Built in, so there's no SABnzbd or NZBGet to set up. It only needs your Usenet provider's login, which you add in the next card.")
-                : t("Built in, so there's no SABnzbd or NZBGet to set up. It only needs your Usenet provider's login.")}
+              {status?.usenet.external
+                ? t('Usenet releases go to {name} right now. The built-in downloader is only used again when you switch that off in the last card on this page.', { name: status.usenet.externalLabel ?? '' })
+                : status && !status.usenet.ready
+                  ? t("Built in, so there's no SABnzbd or NZBGet to set up. It only needs your Usenet provider's login, which you add in the next card.")
+                  : t("Built in, so there's no SABnzbd or NZBGet to set up. It only needs your Usenet provider's login.")}
             </p>
           </section>
           <UsenetRetentionCard />
@@ -171,6 +179,7 @@ export function UsenetSettings() {
           <UsenetServersSection onChange={loadStatus} />
         </div>
       </fieldset>
+      <UsenetClientCard onChanged={loadStatus} />
     </div>
   )
 }

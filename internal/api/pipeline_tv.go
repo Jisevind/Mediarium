@@ -230,6 +230,10 @@ func (s *Server) runTVPipeline(queueID int64, series library.Series, season int,
 
 	mapper := s.releaseMapper(series) // anime and daily file names
 	imported, skipped := 0, 0
+	importProfile := quality.Profile{} // ranks the new file against the old one ("overwrite if better")
+	if ps, err := s.loadProfiles(); err == nil {
+		importProfile = s.profileForSeries(ps, series)
+	}
 	copiedNote := "" // set when files had to be copied over from the temporary download folder
 	// Files the library has down for other titles, and the places this run
 	// has already filled: two episodes of one pack never overwrite each other,
@@ -275,7 +279,7 @@ func (s *Server) runTVPipeline(queueID int64, series library.Series, season int,
 			skipped++
 			continue
 		}
-		policy, isBetter := s.conflictPolicy(tier, !series.NoUpgrade, func() (quality.Tier, bool) {
+		policy, isBetter := s.conflictPolicy(tier, !series.NoUpgrade, importProfile, func() (quality.Tier, bool) {
 			return existingTier(eps[0].Quality, eps[0].ReleaseTitle, eps[0].FilePath)
 		})
 		replaceEarlier := replacesOldFiles(policy, isBetter)

@@ -288,12 +288,12 @@ type arrEpisodeFile struct {
 	Quality             arrQualityModel `json:"quality"`
 	CustomFormats       []any           `json:"customFormats"`
 	CustomFormatScore   int             `json:"customFormatScore"`
-	MediaInfo           map[string]any  `json:"mediaInfo"`
+	MediaInfo           any             `json:"mediaInfo"`
 	QualityCutoffNotMet bool            `json:"qualityCutoffNotMet"`
 }
 
 // toArrEpisodeFile is the file of a downloaded episode (nil when it has none).
-func toArrEpisodeFile(ep library.Episode) *arrEpisodeFile {
+func (s *Server) toArrEpisodeFile(ep library.Episode) *arrEpisodeFile {
 	if ep.Status != library.StatusDownloaded || ep.FilePath == "" {
 		return nil
 	}
@@ -305,6 +305,9 @@ func toArrEpisodeFile(ep library.Episode) *arrEpisodeFile {
 	if fi, err := os.Stat(ep.FilePath); err == nil {
 		f.Size = fi.Size()
 		f.DateAdded = fi.ModTime().UTC().Format("2006-01-02T15:04:05Z")
+	}
+	if mi := s.arrMediaInfoFor(ep.FilePath); mi != nil {
+		f.MediaInfo = mi
 	}
 	if ep.ReleaseTitle != "" {
 		f.SceneName = ep.ReleaseTitle
@@ -333,14 +336,14 @@ func (s *Server) arrEpisodeFiles(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		for _, ep := range eps {
-			if f := toArrEpisodeFile(ep); f != nil && (len(want) == 0 || want[f.ID]) {
+			if f := s.toArrEpisodeFile(ep); f != nil && (len(want) == 0 || want[f.ID]) {
 				out = append(out, f)
 			}
 		}
 	} else {
 		for id := range want {
 			if ep, err := s.MovieRepo.GetEpisodeByID(id); err == nil {
-				if f := toArrEpisodeFile(ep); f != nil {
+				if f := s.toArrEpisodeFile(ep); f != nil {
 					out = append(out, f)
 				}
 			}
@@ -360,7 +363,7 @@ func (s *Server) arrGetEpisodeFile(w http.ResponseWriter, r *http.Request) {
 		arrNotFound(w)
 		return
 	}
-	f := toArrEpisodeFile(ep)
+	f := s.toArrEpisodeFile(ep)
 	if f == nil {
 		arrNotFound(w)
 		return
