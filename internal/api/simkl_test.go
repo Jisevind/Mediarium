@@ -32,6 +32,7 @@ type fakeSimkl struct {
 	entered  atomic.Bool
 	listCode atomic.Int32
 	pinCode  atomic.Int32 // status of the sign-in code calls; 0 means normal
+	setCode  atomic.Int32 // status of the account call (users/settings); 0 means normal
 	calls    atomic.Int32
 
 	// An OAuth 2.0 app signs in with the device flow; the PIN address refuses it.
@@ -128,7 +129,18 @@ func newFakeSimkl(t *testing.T) *fakeSimkl {
 			_, _ = w.Write([]byte(`{"result":"KO","message":"Authorization pending"}`))
 		}
 	})
+	mux.HandleFunc("GET /sync/activities", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+f.goodToken() || r.Header.Get("simkl-api-key") != simklTestClient {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_, _ = w.Write([]byte(`{"all":"2026-10-22T10:00:00Z"}`))
+	})
 	mux.HandleFunc("POST /users/settings", func(w http.ResponseWriter, r *http.Request) {
+		if code := int(f.setCode.Load()); code != 0 {
+			w.WriteHeader(code)
+			return
+		}
 		if r.Header.Get("Authorization") != "Bearer "+f.goodToken() {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
@@ -552,4 +564,17 @@ func toJSON(t *testing.T, v any) string {
 		t.Fatal(err)
 	}
 	return string(b)
+}
+
+// Some accounts get the account call refused although their lists sync fine:
+// the connection test then proves the sign-in with the activity call instead
+// of telling the person their client ID is wrong.
+func TestSimklTestConnectionWhenTheAccountCallIsRefused(t *testing.T) {
+	_, base, admin, f := simklServer(t)
+	connectSimkl(t, base, admin, f)
+	f.setCode.Store(http.StatusForbidden)
+	res := postJSON[map[string]any](t, admin, base+"/api/settings/simkl/test", nil, http.StatusOK)
+	if res["ok"] != true || strings.Contains(res["message"].(string), "rejected the client ID") {
+		t.Fatalf("account call refused but the sign-in works: %v", res)
+	}
 }

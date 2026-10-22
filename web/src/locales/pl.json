@@ -5677,7 +5677,7 @@
   "The update": "Aktualizacja",
   "The update could not be installed": "Nie udało się zainstalować aktualizacji",
   "The update didn't work.": "Aktualizacja się nie udała.",
-  "The update from the TRaSH Guides changed custom formats or profile scores. Nothing is sent when nothing changed, unless you tick the box under it. A check that failed is always sent": "Aktualizacja z TRaSH Guides zmieniła własne formaty lub punktację profili. Jeśli nic się nie zmieniło, nic nie jest wysyłane, chyba że zaznaczysz pole poniżej. Nieudane sprawdzenie jest wysyłane zawsze",
+  "The update from the TRaSH Guides changed custom formats or profile scores. Tick the box under it to also hear when a check found nothing to change. A check that failed is always sent": "Aktualizacja z TRaSH Guides zmieniła własne formaty lub punktację profili. Zaznacz pole pod spodem, żeby dostawać też wiadomość, gdy sprawdzenie nie znalazło nic do zmiany. Nieudane sprawdzenie jest zawsze wysyłane",
   "The upgrade-until score must be 0 or more.": "Wynik, do którego szukamy lepszych wersji, musi wynosić 0 lub więcej.",
   "The upload couldn't be read. Try again.": "Nie udało się odczytać wysyłanego pliku. Spróbuj ponownie.",
   "The upload limit is 0 (no limit) to 10000000 KB/s.": "Limit wysyłania to od 0 (brak limitu) do 10000000 KB/s.",

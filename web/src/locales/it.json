@@ -5605,7 +5605,7 @@
   "The update": "L'aggiornamento",
   "The update could not be installed": "Non è stato possibile installare l'aggiornamento",
   "The update didn't work.": "L'aggiornamento non è riuscito.",
-  "The update from the TRaSH Guides changed custom formats or profile scores. Nothing is sent when nothing changed, unless you tick the box under it. A check that failed is always sent": "L’aggiornamento dalle TRaSH Guides ha cambiato formati personalizzati o punteggi dei profili. Se non è cambiato nulla non viene inviato niente, a meno che tu non spunti la casella qui sotto. Un controllo fallito viene sempre inviato",
+  "The update from the TRaSH Guides changed custom formats or profile scores. Tick the box under it to also hear when a check found nothing to change. A check that failed is always sent": "L'aggiornamento delle TRaSH Guides ha cambiato formati personalizzati o punteggi dei profili. Spunta la casella sotto per essere avvisato anche quando un controllo non ha trovato nulla da cambiare. Un controllo fallito viene sempre inviato",
   "The upgrade-until score must be 0 or more.": "Il punteggio fino al quale migliorare deve essere 0 o più.",
   "The upload couldn't be read. Try again.": "Non sono riuscito a leggere il caricamento. Riprova.",
   "The upload limit is 0 (no limit) to 10000000 KB/s.": "Il limite di upload va da 0 (nessun limite) a 10000000 KB/s.",

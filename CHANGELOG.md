@@ -8,6 +8,15 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.6.1] - 2026-10-22
+
+In short: Simkl's Test connection works for accounts whose account call is refused, and a notification hint reads clearer.
+
+### Fixed
+
+- The Simkl *Test connection* button no longer says "Simkl rejected the client ID" for an account that is connected and whose lists sync fine. When Simkl refuses the account-name call, it checks the sign-in with the same call the list sync uses. Reported by nexus4004 on GitHub, #115.
+- The hint under the *TRaSH Guides sync applied* notification no longer says nothing is sent when nothing changed (the box below it does the opposite). Pointed out by Bayharbourbutcher1 on GitHub, #109.
+
 ## [3.6.0] - 2026-10-22
 
 In short: Simkl sign-in works with new Simkl apps, you can cancel a running download right from the release list, and the statistics no longer disappear when you clear finished downloads.

@@ -350,6 +350,17 @@ func (c *Client) CheckPIN(ctx context.Context, userCode string) (string, error) 
 	return "", ErrPINExpired
 }
 
+// CheckToken proves the saved sign-in works by asking Simkl for the account's
+// activity times, the call the list sync starts with. It is the fallback for
+// UserName, which some accounts get refused even though the lists sync fine.
+func (c *Client) CheckToken(ctx context.Context, token string) error {
+	if token == "" {
+		return ErrNotConnected
+	}
+	_, err := c.request(ctx, http.MethodGet, "/sync/activities", nil, token)
+	return err
+}
+
 // UserName asks Simkl who the saved sign-in belongs to (the account's name),
 // which proves the Client ID and the sign-in work together.
 func (c *Client) UserName(ctx context.Context, token string) (string, error) {

@@ -229,6 +229,11 @@ func (s *Server) handleTestSimkl(w http.ResponseWriter, r *http.Request) {
 	name := ""
 	if err == nil {
 		name, err = s.Simkl().UserName(ctx, token)
+		if errors.Is(err, simkl.ErrInvalidClientID) {
+			// The account call can be refused for an account whose lists sync
+			// fine, so ask for the activity times, which is what a sync does.
+			err = s.Simkl().CheckToken(ctx, token)
+		}
 	}
 	var rl *simkl.RateLimitError
 	var se *simkl.StatusError
