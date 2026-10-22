@@ -124,7 +124,8 @@ Tick **Download client down** and **Download client back** on a notification to 
 Tick **TRaSH Guides sync applied** to hear when the update of your TRaSH custom formats changed something (see [Keeping the TRaSH formats up to date](quality-profiles.md#keeping-the-trash-formats-up-to-date)). It covers the automatic daily or weekly update and the **Update from TRaSH** button.
 
 - You get one message per update that changed at least one format, for example: `2 custom formats updated from the TRaSH Guides.` with the rows **Custom formats** (the first five names, then `and 3 more`), **Profile scores** (`4 scores changed in 2 profiles`, only when a score moved) and **Started by** (the automatic update, or the button).
-- Nothing is sent when the guides had nothing new, or when GitHub could not be reached (the card and Activity say so).
+- When the guides had nothing new, nothing is sent, unless you tick **Also tell me when nothing changed** under the event (it shows up once the event is ticked, and it applies to every notification that listens for the event). Then you get `TRaSH Guides checked: nothing needed updating.` after each check.
+- When a check fails (GitHub could not be reached, for example), you always get `TRaSH Guides check failed: <reason>.`, with or without that box.
 - The size limits from the TRaSH Guides are not applied automatically, so they never appear here.
 - It is a normal everyday message: quiet hours hold it back until they end.
 - A webhook gets the usual `event` (`trashsync`), `title`, `message` and `details`, and `customFormats` with the names of the formats that changed (up to ten). The custom body placeholder `{{customFormats}}` has them too.

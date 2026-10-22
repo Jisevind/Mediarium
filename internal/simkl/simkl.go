@@ -4,15 +4,20 @@
 // Unlike a public Trakt list, a Simkl list belongs to an account, so reading
 // it needs two things: the Client ID of a Simkl app (free, made on
 // simkl.com/settings/developer) and an access token that the person gives by
-// entering a short code at simkl.com/pin (the device flow, no password ever
-// reaches Mediarium). No client secret is needed for that flow.
+// entering a short code on Simkl's site (no password ever reaches Mediarium).
 //
-// The calls follow Simkl's API documentation (simkl.docs.apiary.io); see
-// docs/lists.md for what could and could not be tested against the real
-// service.
+// Simkl has two ways to sign in, and which one works depends on the app. Apps
+// made now are OAuth 2.0 apps and use the device authorization flow
+// (POST /oauth2/device, then POST /oauth2/token, RFC 8628). Older apps use
+// the PIN flow (GET /oauth/pin). StartSignIn tries the first and falls back to
+// the second only when Simkl says the app is an older one.
+//
+// The calls follow Simkl's API documentation and RFC 8628; see docs/lists.md
+// for what could and could not be tested against the real service.
 package simkl
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -23,6 +28,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/rdborg/mediarium/internal/netguard"
@@ -58,6 +64,8 @@ var (
 	ErrUnauthorized = errors.New("Simkl no longer accepts the saved sign-in. Connect your account again")
 	// ErrPINExpired means the code was not entered in time, or Simkl does not know it.
 	ErrPINExpired = errors.New("That Simkl code has expired")
+	// ErrAccessDenied means the person said no on Simkl's page.
+	ErrAccessDenied = errors.New("The sign-in was declined on Simkl")
 )
 
 // StatusError is an answer Simkl gave that is not a success and not one of the
@@ -146,6 +154,9 @@ type Client struct {
 	clientID   string
 	baseURL    string
 	httpClient *http.Client
+
+	mu    sync.Mutex
+	flows map[string]string // Client ID -> the sign-in flow Simkl accepted for it
 }
 
 // New constructs a client. clientID may be empty; calls return ErrNoClientID
@@ -192,8 +203,40 @@ func (c *Client) do(ctx context.Context, path string, q url.Values, token string
 // simkl-api-key header and as client_id, and says which app is calling with
 // app-name and app-version, as Simkl's documentation asks.
 func (c *Client) request(ctx context.Context, method, path string, q url.Values, token string) ([]byte, error) {
+	status, header, body, err := c.send(ctx, method, path, q, token, nil)
+	if err != nil {
+		return nil, err
+	}
+	return mapStatus(status, header, body, token)
+}
+
+// mapStatus turns the answer to one call into its body or a clear error.
+func mapStatus(status int, header http.Header, body []byte, token string) ([]byte, error) {
+	switch {
+	case status == http.StatusOK:
+		return body, nil
+	case status == http.StatusUnauthorized:
+		if token != "" {
+			return nil, ErrUnauthorized
+		}
+		return nil, ErrInvalidClientID
+	case status == http.StatusForbidden, status == http.StatusPreconditionFailed:
+		return nil, ErrInvalidClientID
+	case status == http.StatusTooManyRequests:
+		secs, _ := strconv.Atoi(strings.TrimSpace(header.Get("Retry-After")))
+		return nil, &RateLimitError{RetryAfter: time.Duration(secs) * time.Second}
+	}
+	if len(body) > 4<<10 {
+		body = body[:4<<10]
+	}
+	return nil, &StatusError{Status: status, Message: errorText(body)}
+}
+
+// send makes one call and returns whatever Simkl answered, whatever the
+// status (at most maxAPIResponse bytes of body). A payload is sent as JSON.
+func (c *Client) send(ctx context.Context, method, path string, q url.Values, token string, payload map[string]any) (int, http.Header, []byte, error) {
 	if c.clientID == "" {
-		return nil, ErrNoClientID
+		return 0, nil, nil, ErrNoClientID
 	}
 	full := url.Values{}
 	for k, v := range q {
@@ -203,9 +246,17 @@ func (c *Client) request(ctx context.Context, method, path string, q url.Values,
 	full.Set("app-name", "mediarium")
 	full.Set("app-version", AppVersion)
 	target := c.baseURL + path + "?" + full.Encode()
-	req, err := http.NewRequestWithContext(ctx, method, target, nil)
+	var rdr io.Reader
+	if payload != nil {
+		raw, err := json.Marshal(payload)
+		if err != nil {
+			return 0, nil, nil, fmt.Errorf("build simkl request: %w", err)
+		}
+		rdr = bytes.NewReader(raw)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, target, rdr)
 	if err != nil {
-		return nil, fmt.Errorf("build simkl request: %w", netguard.CleanError(err))
+		return 0, nil, nil, fmt.Errorf("build simkl request: %w", netguard.CleanError(err))
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("simkl-api-key", c.clientID)
@@ -216,46 +267,28 @@ func (c *Client) request(ctx context.Context, method, path string, q url.Values,
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		// net/http puts the whole address, query included, in its errors.
-		return nil, fmt.Errorf("simkl request: %w", netguard.CleanError(err))
+		return 0, nil, nil, fmt.Errorf("simkl request: %w", netguard.CleanError(err))
 	}
 	defer resp.Body.Close()
-	switch {
-	case resp.StatusCode == http.StatusOK:
-	case resp.StatusCode == http.StatusUnauthorized:
-		if token != "" {
-			return nil, ErrUnauthorized
-		}
-		return nil, ErrInvalidClientID
-	case resp.StatusCode == http.StatusForbidden, resp.StatusCode == http.StatusPreconditionFailed:
-		return nil, ErrInvalidClientID
-	case resp.StatusCode == http.StatusTooManyRequests:
-		secs, _ := strconv.Atoi(strings.TrimSpace(resp.Header.Get("Retry-After")))
-		return nil, &RateLimitError{RetryAfter: time.Duration(secs) * time.Second}
-	default:
-		explain, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
-		return nil, &StatusError{Status: resp.StatusCode, Message: errorText(explain)}
-	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxAPIResponse+1))
 	if err != nil {
-		return nil, fmt.Errorf("read simkl answer: %w", netguard.CleanError(err))
+		return 0, nil, nil, fmt.Errorf("read simkl answer: %w", netguard.CleanError(err))
 	}
 	if len(body) > maxAPIResponse {
-		return nil, errors.New("Simkl's answer is too big to read")
+		return 0, nil, nil, errors.New("Simkl's answer is too big to read")
 	}
-	return body, nil
+	return resp.StatusCode, resp.Header, body, nil
 }
 
-// PIN is a code the person enters at simkl.com/pin.
-type PIN struct {
-	UserCode        string
-	VerificationURL string
-	ExpiresIn       time.Duration
-	Interval        time.Duration
-}
+// PIN is a sign-in started with the older PIN flow (a code entered at
+// simkl.com/pin).
+type PIN = SignIn
 
 var codeRe = regexp.MustCompile(`^[A-Za-z0-9]{3,32}$`)
 
-// StartPIN asks Simkl for a new code. It also proves the Client ID works.
+// StartPIN asks Simkl for a new code with the older PIN flow, which only apps
+// made before OAuth 2.0 apps existed can use. It also proves the Client ID
+// works.
 func (c *Client) StartPIN(ctx context.Context) (PIN, error) {
 	body, err := c.do(ctx, "/oauth/pin", url.Values{"redirect": {RedirectURI}}, "")
 	if err != nil {
@@ -275,7 +308,7 @@ func (c *Client) StartPIN(ctx context.Context) (PIN, error) {
 		// Simkl answers 200 with result KO for a Client ID it does not know.
 		return PIN{}, ErrInvalidClientID
 	}
-	p := PIN{UserCode: r.UserCode, VerificationURL: "https://simkl.com/pin", ExpiresIn: time.Duration(r.ExpiresIn) * time.Second, Interval: time.Duration(r.Interval) * time.Second}
+	p := PIN{Flow: FlowPIN, UserCode: r.UserCode, VerificationURL: "https://simkl.com/pin", ExpiresIn: time.Duration(r.ExpiresIn) * time.Second, Interval: time.Duration(r.Interval) * time.Second}
 	// Only ever point people at Simkl itself, whatever the answer says.
 	if u, err := url.Parse(r.VerificationURL); err == nil && u.Scheme == "https" && (u.Hostname() == "simkl.com" || u.Hostname() == "www.simkl.com") {
 		p.VerificationURL = strings.TrimRight(r.VerificationURL, "/")

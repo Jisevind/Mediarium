@@ -8,6 +8,23 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.6.0] - 2026-10-22
+
+In short: Simkl sign-in works with new Simkl apps, you can cancel a running download right from the release list, and the statistics no longer disappear when you clear finished downloads.
+
+### Added
+
+- Radarr and Sonarr apps such as nzb360 can now browse folders: Mediarium answers `/filesystem` (with `includeFiles`), `/filesystem/type` and `/filesystem/mediafiles` for your library folders and the downloads folder, `/ping`, `/log/file`, removing several queue entries at once (`DELETE /queue/bulk`) and `POST /queue/grab/{id}`. Anything outside those folders is left out. Thanks to Bayharbourbutcher1 on GitHub, #94.
+- New option *Also tell me when nothing changed* under the *TRaSH Guides sync applied* notification: you then also get "TRaSH Guides checked: nothing needed updating", and a check that failed always sends "TRaSH Guides check failed: ...". Thanks to Bayharbourbutcher1 on GitHub, #109.
+- When a release in the interactive list is refused because that movie or episode is already downloading, the message now shows the running download (progress and size) and a *Cancel it and grab this one* button, with a question first. It stops that download, deletes its partial files and grabs the release you picked in one step. Thanks to nexus4004 on GitHub, #116.
+- The Simkl card shows the sign-in code in big letters with a Copy button, an "Open Simkl and enter this code" button, a countdown, and "Connected as <name>" when it is done. If you decline or the code runs out it says so and offers "Start again".
+- If Simkl gives a refresh token, Mediarium keeps it (encrypted) and renews the sign-in when it runs out, so lists keep working.
+
+### Fixed
+
+- Connecting a Simkl account with an app made today ("This client_id is an OAuth 2.0 app: use POST /oauth2/device instead of /oauth/pin"). Mediarium now signs in with Simkl's OAuth 2.0 device code sign-in and falls back to the older PIN sign-in by itself for older apps. Thanks to Bayharbourbutcher1 and nexus4004 on GitHub, #115.
+- The download numbers on the Statistics page and the dashboard (totals, the months, the Usenet share) are now counted as downloads happen and no longer disappear when you clear finished downloads from Activity or the history runs out. They are filled once from what the history held. New *Reset statistics* button on the Statistics page (administrators, with a question). Thanks to SanketBaraiya on GitHub, #117.
+
 ## [3.5.0] - 2026-10-22
 
 In short: shows that ended are marked as ended, the show page tells what is monitored and how much space it uses, Simkl sign-in is fixed, and the assistant search is more robust.

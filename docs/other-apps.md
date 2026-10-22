@@ -65,6 +65,8 @@ Tdarr and similar apps change a file after it was imported (a new codec, sometim
 | Download queue, queue counts, wanted and missing, calendar | A season pack is one entry per episode, as Sonarr shows it. Removing an entry stops the download. |
 | Cutoff unmet (monitored movies and episodes whose file is below what the profile is after), custom formats, saved filters | The custom formats are listed by name only, without their conditions. Saved filters are always empty. |
 | Root folders, disk space, quality profiles, tags | |
+| Folder browsing (`/filesystem`, also the type of a path and the video files in a folder) | Lists your library folders and the downloads folder and what is inside them, folders only unless the app asks for files. Anything outside those folders, and a link that leads out of them, is left out. |
+| Removing several queue entries at once, health check (`/ping`), log file list | The log file list is always empty. |
 
 Not available: manual imports and renaming (an empty list is answered), deleted or renamed file lines in history, the app's own settings pages (the lists and pages an app loads at start, such as notifications, import lists, remote path mappings and display settings, are answered with empty or fixed values), releases pushed from other tools (always turned down), and changing quality profiles from the app. Anything an app asks that has no meaning in Mediarium (such as a "refresh downloads" command) is accepted and does nothing.
 

@@ -118,7 +118,10 @@ type Server struct {
 
 	simklMu   sync.RWMutex
 	simkl     *simkl.Client
-	simklPins *mediaservers.Pending[string] // Simkl sign-in codes handed out and not yet entered (simkl_connect.go)
+	simklPins *mediaservers.Pending[simkl.SignIn] // Simkl sign-in codes handed out and not yet entered (simkl_connect.go)
+	// simklRefreshMu keeps two lists from refreshing the Simkl sign-in at once
+	// (Simkl may hand out a new refresh token each time).
+	simklRefreshMu sync.Mutex
 
 	proxyTestAddr string // where a proxy test connects to (tests point it elsewhere)
 
@@ -245,7 +248,7 @@ func New(db *sql.DB, cfg config.Config, box *crypto.Box, defaultTMDBAPIKey, vers
 		wizdom:            subtitles.NewWizdom(),
 		trakt:             trakt.New(traktClientID),
 		simkl:             simkl.New(simklClientID),
-		simklPins:         &mediaservers.Pending[string]{TTL: simklPinTTL},
+		simklPins:         &mediaservers.Pending[simkl.SignIn]{TTL: simklPinTTL},
 		// "A handful of attempts per IP/window" — 5 tries per 15
 		// minutes blunts brute-force without punishing a genuine typo.
 		LoginLimiter: auth.NewLoginLimiter(5, 15*time.Minute),
@@ -913,6 +916,7 @@ func (s *Server) protectedRoutes() *routeTable {
 	admin.HandleFunc("GET /api/system/backup", s.handleBackup)
 	admin.HandleFunc("POST /api/system/restore", s.handleRestore)
 	admin.HandleFunc("GET /api/system/stats", s.handleSystemStats)
+	admin.HandleFunc("POST /api/stats/reset", s.handleResetStats)
 	admin.HandleFunc("GET /api/system/diagnostics", s.handleDiagnostics)
 	admin.HandleFunc("GET /api/usage-stats", s.handleGetStats)
 	admin.HandleFunc("PUT /api/usage-stats", s.handlePutStats)

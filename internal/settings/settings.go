@@ -140,6 +140,8 @@ const (
 	KeyTraktClientID  = "metadata.trakt_client_id" // encrypted
 	KeySimklClientID  = "metadata.simkl_client_id" // encrypted; the Client ID of a Simkl app (own, or the one a release ships with)
 	KeySimklToken     = "metadata.simkl_token"     // encrypted; the access token of the connected Simkl account
+	KeySimklRefresh   = "metadata.simkl_refresh"   // encrypted; the refresh token Simkl gave with the access token, when it gave one
+	KeySimklExpires   = "metadata.simkl_expires"   // when the access token runs out (Unix seconds), when Simkl said; unset for a token that does not expire
 	KeyHardcoverToken = "books.hardcover_token"    // encrypted; a personal Hardcover API token for better book series and release dates. Unset = Open Library only
 
 	// Illegal filename character handling ("configurable
@@ -216,6 +218,7 @@ const (
 	KeyPrecheck             = "downloads.precheck"             // "1" asks the news servers whether a sample of an NZB's articles exist before downloading it, and gives up at once on a release the PAR2 files could not repair; unset or "0" leaves it off
 	KeyDigestDay            = "notify.digest_day"              // the day of the weekly summary, "0" (Sunday) to "6"; unset = no summary
 	KeyDigestHour           = "notify.digest_hour"             // the hour it is sent (server time), "0" to "23"; unset = 9
+	KeyTrashSyncAlways      = "notify.trashsync_always"        // "1" also sends a message when a check of the TRaSH Guides changed nothing (to the targets that listen for that event); unset or "0" sends only when something changed. A check that failed is always sent
 	KeyDigestSent           = "notify.digest_sent"             // when the last one was sent, RFC 3339 (kept by Mediarium, not a setting to edit)
 	KeyNotifyQuietHours     = "notify.quiet_hours"             // hours when everyday messages wait, "23-7" (server time); unset = none. Problems are always sent at once
 	KeyBackupAuto           = "backup.auto"                    // "0" turns the nightly backup into /config/backups off; anything else (including unset) leaves it on

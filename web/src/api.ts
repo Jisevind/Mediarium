@@ -14,6 +14,7 @@ import { BASE_PATH, rebasePictures, withBase } from './base'
 import { noteEndReason, noteSessionEnded, sessionEnded } from './sessionEnd'
 import { wantedPagePath } from './wantedPage'
 import { namingPreviewPath } from './namingPreview'
+import type { BlockingDownload } from './grabBlocked.ts'
 
 const BASE = withBase('/api')
 
@@ -22,10 +23,13 @@ export class ApiError extends Error {
   // True when Mediarium said it is busy, or did not answer in time. The page
   // can then tell the person it is slow instead of showing an error.
   busy: boolean
-  constructor(status: number, message: string, busy = false) {
+  // A grab refused because another download is in the way: which one.
+  blocking?: BlockingDownload
+  constructor(status: number, message: string, busy = false, blocking?: BlockingDownload) {
     super(message)
     this.status = status
     this.busy = busy
+    this.blocking = blocking
   }
 }
 
@@ -98,7 +102,7 @@ async function send<T>(path: string, init?: ReadOptions): Promise<T> {
   }
   noteEndReason(res.status, text)
   if (sessionEnded(path, res.status, text)) noteSessionEnded()
-  let data: { error?: string; busy?: boolean } | null = null
+  let data: { error?: string; busy?: boolean; blocking?: BlockingDownload } | null = null
   try {
     data = text ? JSON.parse(text) : null
   } catch {
@@ -111,7 +115,7 @@ async function send<T>(path: string, init?: ReadOptions): Promise<T> {
     throw new ApiError(503, st(data.error) || SLOW_MESSAGE, true)
   }
   if (!res.ok) {
-    throw new ApiError(res.status, st(data?.error) || t('Something went wrong on the server (error {status}).', { status: String(res.status) }))
+    throw new ApiError(res.status, st(data?.error) || t('Something went wrong on the server (error {status}).', { status: String(res.status) }), false, data?.blocking)
   }
   noteFine()
   // Covers Mediarium serves itself come as "/api/...": under a URL base they
@@ -207,6 +211,8 @@ export interface LibraryStats {
   quality: { label: string; count: number; bytes?: number }[]
   months: { month: string; completed: number; failed: number; bytes: number }[]
   usenetShare: number
+  // Every download counted since the statistics began or were last reset; clearing the history does not change them.
+  totals: { grabs: number; completed: number; failed: number; bytes: number }
   historyKeptDays: number
   watched?: WatchStats // only while reading what's been watched is on
 }
@@ -706,6 +712,7 @@ export interface Settings {
   // Look up scene and anime numbering for anime on its own (on by default)
   numberingLookup?: boolean
   subtitleAutoDownload?: boolean
+  notifyTrashSyncAlways?: boolean // also send the TRaSH Guides message when a check changed nothing
   subtitleUpgrade?: boolean // later swap a subtitle for one made for the exact file (with automatic downloading)
   // The master switch for subtitles; off until switched on.
   subtitlesEnabled?: boolean
@@ -3403,7 +3410,7 @@ export const api = {
   seriesDiskUsage: (id: number) => get<DiskUsage>(`/series/${id}/disk-usage`),
   artistDiskUsage: (id: number) => get<DiskUsage>(`/music/artists/${id}/disk-usage`),
   deleteMovie: (id: number, deleteFiles: boolean) => del<null>(`/movies/${id}?deleteFiles=${deleteFiles}`),
-  grab: (movieId: number, data: { releaseTitle: string; downloadUrl: string; sizeBytes: number; protocol?: 'usenet' | 'torrent' }) =>
+  grab: (movieId: number, data: { releaseTitle: string; downloadUrl: string; sizeBytes: number; protocol?: 'usenet' | 'torrent'; replaceQueueId?: number }) =>
     post<{ queueId: number }>(`/movies/${movieId}/grab`, data),
   searchGrab: (data: { releaseTitle: string; downloadUrl: string; sizeBytes: number; protocol?: 'usenet' | 'torrent' }) =>
     post<{ movieId: number; queueId: number }>('/search/grab', data),
@@ -3543,6 +3550,7 @@ export const api = {
   addExclusion: (e: { kind: 'movie' | 'tv'; tmdbId: number; title: string; year?: number }) => post<null>('/exclusions', e),
   removeExclusion: (kind: string, tmdbId: number) => del<null>(`/exclusions/${kind}/${tmdbId}`),
   libraryStats: () => get<LibraryStats>('/stats/library'),
+  resetStats: () => post<{ reset: boolean }>('/stats/reset'),
   renamePreview: () => get<RenameItem[]>('/rename'),
   rename: (items: { kind: string; id: number }[]) => post<{ renamed: number; failed: string[] }>('/rename', { items }),
   listTrash: () => get<TrashList>('/trash'),
@@ -3591,8 +3599,8 @@ export const api = {
     put<{ added: number; message?: string }>(`/book-series/${source}/${encodeURIComponent(key)}/follow`, body),
   unfollowSeries: (source: string, key: string) => del<null>(`/book-series/${source}/${encodeURIComponent(key)}/follow`),
   simklStatus: () => get<SimklStatus>('/settings/simkl'),
-  simklStartPin: () => post<{ code: string; url: string; expiresIn: number; interval: number }>('/settings/simkl/pin', {}),
-  simklPinStatus: (code: string) => get<{ done: boolean; status?: SimklStatus }>(`/settings/simkl/pin/${encodeURIComponent(code)}`),
+  simklStartPin: () => post<{ code: string; url: string; fullUrl?: string; flow: 'device' | 'pin'; expiresIn: number; interval: number }>('/settings/simkl/pin', {}),
+  simklPinStatus: (code: string) => get<{ done: boolean; status?: SimklStatus; name?: string; interval?: number }>(`/settings/simkl/pin/${encodeURIComponent(code)}`),
   simklDisconnect: () => del<null>('/settings/simkl'),
   simklTest: () => post<{ ok: boolean; message: string }>('/settings/simkl/test', {}),
   getHardcover: () => get<{ set: boolean; username?: string }>('/settings/hardcover'),
@@ -3685,7 +3693,7 @@ export const api = {
   addTitleCopy: (kind: 'movie' | 'series', id: number, profileId: number) => post<TitleCopy>(`/${kind === 'movie' ? 'movies' : 'series'}/${id}/copies`, { profileId }),
   seriesSearch: (id: number, season: number, episode?: number) =>
     get<SearchAnswer<SearchResult>>(`/series/${id}/search?detail=1&season=${season}${episode ? `&episode=${episode}` : ''}`),
-  grabSeries: (id: number, data: { releaseTitle: string; downloadUrl: string; sizeBytes: number; protocol?: 'usenet' | 'torrent'; season?: number; episode?: number }) =>
+  grabSeries: (id: number, data: { releaseTitle: string; downloadUrl: string; sizeBytes: number; protocol?: 'usenet' | 'torrent'; season?: number; episode?: number; replaceQueueId?: number }) =>
     post<{ queueId: number }>(`/series/${id}/grab`, data),
 
   discoverTrending: () => get<DiscoverMovie[]>('/discover/trending'),

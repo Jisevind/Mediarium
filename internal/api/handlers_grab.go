@@ -22,6 +22,9 @@ type grabRequest struct {
 	DownloadURL  string `json:"downloadUrl"`
 	SizeBytes    int64  `json:"sizeBytes"`
 	Protocol     string `json:"protocol,omitempty"` // "usenet" (default) or "torrent"
+	// ReplaceQueueID names the download that is in the way: it is cancelled
+	// and this release grabbed in its place (see replaceBlocking).
+	ReplaceQueueID int64 `json:"replaceQueueId,omitempty"`
 }
 
 func (r grabRequest) protocol() indexers.Protocol {
@@ -63,6 +66,14 @@ func (s *Server) handleGrab(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if req.ReplaceQueueID > 0 {
+		replaceMu.Lock()
+		defer replaceMu.Unlock()
+		if err := s.replaceBlocking(req.ReplaceQueueID, func() error { return s.checkMovieNotDownloading(movie.ID) }); err != nil {
+			writeGrabError(w, err, http.StatusInternalServerError)
+			return
+		}
+	}
 	queueID, err := s.grabRelease(movie, req.ReleaseTitle, req.DownloadURL, req.SizeBytes, req.protocol())
 	if err != nil {
 		writeGrabError(w, err, http.StatusInternalServerError)

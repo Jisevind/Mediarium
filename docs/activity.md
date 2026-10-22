@@ -230,6 +230,7 @@ A movie, or an episode, never has two downloads running at once:
 
 - Automatic searches skip a movie or episode that's already waiting in line, downloading, being post-processed or paused.
 - A grab by hand (from a title's release list, the search page, or **Retry**) is refused with `409` and the message `Already downloading: <release>. Cancel it first to pick another.` For a paused download the message says to resume it or stop it first.
+- When a movie's or show's release list refuses a grab for that reason, the message shows the download in the way (its progress and size) and a **Cancel it and grab this one** button. After a question (*Cancel the running download and grab this release instead?*) it stops that download, deletes its partly downloaded files, takes it off the list and grabs the release you picked, in one step. The request for it is the usual grab (`POST /api/movies/{id}/grab` or `POST /api/series/{id}/grab`) with `replaceQueueId` set to the download's id. The `409` answer carries that download as `blocking` (`id`, `title`, `progress`, `sizeBytes`, `paused`). Only the download that is really in the way is cancelled: any other id is refused with the same `409`, and nothing is cancelled. If nothing is in the way any more, the grab simply goes ahead.
 - A season pack covers every episode of its season. While a pack is downloading, you can't grab a single episode of that season or another pack of the same season.
 
 ## Retry without downloading again

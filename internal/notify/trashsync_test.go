@@ -62,6 +62,36 @@ func TestComposeTrashSync(t *testing.T) {
 	}
 }
 
+func TestComposeTrashSyncNothingAndFailed(t *testing.T) {
+	links := Links{}
+	tests := []struct {
+		name string
+		ev   Event
+		want []string
+	}{
+		{"nothing changed by the job", ComposeTrashSyncNothing(40, true, links, time.Now()),
+			[]string{"TRaSH Guides checked: nothing needed updating.", "Already up to date: 40 custom formats", "Started by: The automatic update"}},
+		{"nothing changed by the button, none counted", ComposeTrashSyncNothing(0, false, links, time.Now()),
+			[]string{"TRaSH Guides checked: nothing needed updating.", "Started by: Update from TRaSH"}},
+		{"failed", ComposeTrashSyncFailed("Couldn't reach the TRaSH Guides.", false, links, time.Now()),
+			[]string{"TRaSH Guides check failed: couldn't reach the TRaSH Guides.", "Started by: Update from TRaSH"}},
+		{"failed without a reason", ComposeTrashSyncFailed("", true, links, time.Now()),
+			[]string{"TRaSH Guides check failed."}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.ev.Type != EventTrashSync {
+				t.Errorf("event %q", tc.ev.Type)
+			}
+			for _, w := range tc.want {
+				if !strings.Contains(tc.ev.Message, w) {
+					t.Errorf("message lacks %q:\n%s", w, tc.ev.Message)
+				}
+			}
+		})
+	}
+}
+
 func TestTrashSyncIsOptIn(t *testing.T) {
 	if !OptIn(EventTrashSync) {
 		t.Fatal("the TRaSH sync event must be off unless chosen")

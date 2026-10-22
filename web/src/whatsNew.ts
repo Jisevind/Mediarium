@@ -10,6 +10,13 @@ export interface ReleaseNotes {
 
 export const WHATS_NEW: ReleaseNotes[] = [
   {
+    version: '3.6.0',
+    items: [
+      t("Simkl sign-in works again with the apps Simkl creates now, with a code you enter on Simkl's site."),
+      t("Cancel a running download and grab another release in one step, and the statistics stay when you clear finished downloads."),
+    ],
+  },
+  {
     version: '3.5.0',
     items: [
       t("Shows that have ended now show as ended, and the show page says what is being monitored and how much space it uses."),

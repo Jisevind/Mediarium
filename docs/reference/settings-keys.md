@@ -109,6 +109,8 @@ The keys the app stores in its settings table. You normally change these from th
 | `mcp.enabled` | "1" lets AI assistants connect to the MCP address (POST /mcp) with an administrator's API key; unset or "0" keeps it off. Only a signed-in browser session can switch it on, not an API key |
 | `mediaservers.client_id` | set by the app, not user-editable |
 | `metadata.simkl_client_id` | encrypted; the Client ID of a Simkl app (own, or the one a release ships with) |
+| `metadata.simkl_expires` | when the access token runs out (Unix seconds), when Simkl said; unset for a token that does not expire |
+| `metadata.simkl_refresh` | encrypted; the refresh token Simkl gave with the access token, when it gave one |
 | `metadata.simkl_token` | encrypted; the access token of the connected Simkl account |
 | `metadata.tmdb_api_key` | encrypted |
 | `metadata.trakt_client_id` | encrypted |
@@ -129,6 +131,7 @@ The keys the app stores in its settings table. You normally change these from th
 | `notify.digest_sent` | when the last one was sent, RFC 3339 (kept by Mediarium, not a setting to edit) |
 | `notify.on_problems` | "1" sends a notification (to the targets that listen for Health) when a new error is added to the problem log; unset or "0" sends none |
 | `notify.quiet_hours` | hours when everyday messages wait, "23-7" (server time); unset = none. Problems are always sent at once |
+| `notify.trashsync_always` | "1" also sends a message when a check of the TRaSH Guides changed nothing (to the targets that listen for that event); unset or "0" sends only when something changed. A check that failed is always sent |
 | `notify.vapid_key` | this server's key for push notifications (encrypted; made on first start) |
 | `numbering.lookup` | "0" stops Mediarium looking up scene and anime numbering (TheXEM, the anime lists, AniList) for anime on its own; on by default. The Refresh mapping button on a show's page still works |
 | `onboarding.done` | "1" once the first-run wizard completes |

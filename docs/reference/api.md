@@ -710,6 +710,7 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | GET | `/api/stats/history` | any account |  |
 | GET | `/api/stats/indexers` | admin | gives each indexer's searches, failures, releases found and grabs over the last 30 days. |
 | GET | `/api/stats/library` | any account |  |
+| POST | `/api/stats/reset` | admin | answers POST /api/stats/reset: the download totals on the Statistics page and the dashboard start again from zero. |
 
 ## subtitles
 
@@ -888,4 +889,4 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | PUT | `/api/watched/settings` | admin | PUT /api/watched/settings {"sync": true, "cleanup": {...}} |
 | POST | `/api/watched/sync` | admin | POST /api/watched/sync: read what's been watched now. |
 
-538 routes.
+539 routes.

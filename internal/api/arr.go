@@ -101,6 +101,12 @@ func (s *Server) arrHandler(app arrApp) http.Handler {
 	h("GET", "/queue/status", s.arrQueueStatus(app))
 	h("GET", "/queue/details", s.arrQueueDetails(app))
 	h("DELETE", "/queue/{id}", s.arrDeleteQueueItem(app))
+	h("DELETE", "/queue/bulk", s.arrBulkDeleteQueue)
+	h("POST", "/queue/grab/{id}", s.arrGrabQueueItem)
+	h("GET", "/filesystem", s.arrFilesystem)
+	h("GET", "/filesystem/type", s.arrFilesystemType)
+	h("GET", "/filesystem/mediafiles", s.arrFilesystemMediaFiles)
+	h("GET", "/log/file", arrEmptyList)
 	h("GET", "/wanted/missing", s.arrWantedMissing(app))
 	h("GET", "/calendar", s.arrCalendar(app))
 	h("GET", "/indexer", s.arrIndexers)
@@ -193,6 +199,11 @@ func (s *Server) arrHandler(app arrApp) http.Handler {
 		}
 		path := strings.ToLower(strings.TrimPrefix(r.URL.Path, "/"+string(app)))
 		path = strings.TrimRight(path, "/")
+		if path == "/ping" || path == app.apiPrefix()+"/ping" {
+			// The health check some apps make before anything else.
+			writeJSON(w, http.StatusOK, map[string]string{"status": "OK"})
+			return
+		}
 		if path == "/api" || path == "" {
 			// Homarr's connection test, and what the real apps answer there.
 			writeJSON(w, http.StatusOK, map[string]any{"current": strings.TrimPrefix(app.apiPrefix(), "/api/"), "deprecated": []string{}})

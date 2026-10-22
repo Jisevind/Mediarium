@@ -604,6 +604,12 @@ ol.steps strong { color: var(--text); font-weight: 600; }
 .event-pick { align-items: flex-start; }
 .event-pick span { display: grid; gap: 1px; }
 .event-pick small { color: var(--text-dim); }
+.stats-totals { margin: 12px 0 0; overflow-wrap: anywhere; }
+.grab-blocked { display: grid; gap: 6px; margin: 8px 0 12px; }
+.grab-blocked p { margin: 0; }
+.grab-blocked-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.event-cell { display: grid; gap: 6px; align-content: start; }
+.event-sub { margin-left: 26px; }
 .target-list { display: grid; gap: 10px; }
 .target-row { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); }
 .target-row .tile-ico { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: var(--c-library); background: color-mix(in srgb, var(--c-library) 14%, transparent); }

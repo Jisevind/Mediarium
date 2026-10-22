@@ -19,8 +19,9 @@ import (
 
 // A check of the TRaSH Guides that changed something sends one message to the
 // targets that ticked the event, whether the job or the button made it; a
-// check that changed nothing, or failed, sends none; a target that did not
-// choose the event hears nothing.
+// check that changed nothing sends none unless "also tell me when nothing
+// changed" is on; one that failed always sends; a target that did not choose
+// the event hears nothing.
 func TestTrashSyncNotification(t *testing.T) {
 	dir := t.TempDir()
 	db, err := OpenTestDB(filepath.Join(dir, "app.db"))
@@ -65,17 +66,28 @@ func TestTrashSyncNotification(t *testing.T) {
 		res       trashUpdateResult
 		err       error
 		daily     bool
+		always    bool
 		wantSent  bool
+		wantTitle string
 		wantInMsg []string
 	}{
-		{"nothing changed", trashUpdateResult{Checked: 40}, nil, true, false, nil},
-		{"the check failed", trashUpdateResult{}, errors.New("no network"), true, false, nil},
-		{"the job updated formats", changes(2), nil, true, true, []string{"2 custom formats updated", "Format 1, Format 2", "4 scores changed in 2 profiles", "The automatic update"}},
-		{"the button updated more than five", changes(8), nil, false, true, []string{"8 custom formats updated", "Format 5 and 3 more", "Update from TRaSH"}},
-		{"one format", changes(1), nil, false, true, []string{"1 custom format updated"}},
+		{"nothing changed", trashUpdateResult{Checked: 40}, nil, true, false, false, "", nil},
+		{"nothing changed, told anyway", trashUpdateResult{Checked: 40}, nil, true, true, true, "TRaSH Guides checked", []string{"TRaSH Guides checked: nothing needed updating", "40 custom formats", "The automatic update"}},
+		{"the check failed", trashUpdateResult{}, errors.New("no network"), true, false, true, "TRaSH Guides check failed", []string{"TRaSH Guides check failed: no network", "The automatic update"}},
+		{"the check failed, told anyway", trashUpdateResult{}, errors.New("No network."), false, true, true, "TRaSH Guides check failed", []string{"TRaSH Guides check failed: no network.", "Update from TRaSH"}},
+		{"the job updated formats", changes(2), nil, true, false, true, "TRaSH Guides sync applied", []string{"2 custom formats updated", "Format 1, Format 2", "4 scores changed in 2 profiles", "The automatic update"}},
+		{"the button updated more than five", changes(8), nil, false, true, true, "TRaSH Guides sync applied", []string{"8 custom formats updated", "Format 5 and 3 more", "Update from TRaSH"}},
+		{"one format", changes(1), nil, false, false, true, "TRaSH Guides sync applied", []string{"1 custom format updated"}},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			always := "0"
+			if tc.always {
+				always = "1"
+			}
+			if err := s.Settings.Set(settings.KeyTrashSyncAlways, always, false); err != nil {
+				t.Fatal(err)
+			}
 			s.recordTrashCheck(tc.res, tc.err, tc.daily)
 			s.bg.Wait()
 			if !tc.wantSent {
@@ -88,7 +100,7 @@ func TestTrashSyncNotification(t *testing.T) {
 				t.Fatalf("got %d messages, want 1", len(got))
 			}
 			m := <-got
-			if m["event"] != "trashsync" || m["title"] != "TRaSH Guides sync applied" {
+			if m["event"] != "trashsync" || m["title"] != tc.wantTitle {
 				t.Errorf("event %v title %v", m["event"], m["title"])
 			}
 			text, _ := m["message"].(string)
@@ -97,7 +109,7 @@ func TestTrashSyncNotification(t *testing.T) {
 					t.Errorf("message lacks %q:\n%s", want, text)
 				}
 			}
-			if names, _ := m["customFormats"].([]any); len(names) == 0 {
+			if names, _ := m["customFormats"].([]any); tc.wantTitle == "TRaSH Guides sync applied" && len(names) == 0 {
 				t.Errorf("the webhook has no customFormats: %v", m)
 			}
 		})

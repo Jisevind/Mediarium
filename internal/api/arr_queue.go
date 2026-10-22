@@ -1,7 +1,9 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"sort"
 	"strings"
@@ -255,37 +257,91 @@ func (s *Server) arrQueueStatus(app arrApp) http.HandlerFunc {
 	}
 }
 
-// arrDeleteQueueItem stops a download (when it's running) and takes it off
-// the list. Its files stay unless removeFromClient asks otherwise.
+// arrRemoveQueueItem stops a download (when it's running) and takes it off
+// the list. found is false when no such item is there.
+func (s *Server) arrRemoveQueueItem(id int64) (found bool, err error) {
+	item, err := s.QueueRepo.Get(id)
+	if err != nil && id >= 1000 {
+		item, err = s.QueueRepo.Get(id / 1000) // one episode of a season pack
+	}
+	if err != nil {
+		return false, nil
+	}
+	if isActiveStatus(item.Status) || item.Status == queue.StatusPaused {
+		if err := s.stopItem(item, false); err != nil {
+			return true, err
+		}
+	}
+	ref, inClient := s.clientRefFor(item)
+	if err := s.QueueRepo.Delete(item.ID); err != nil {
+		return true, err
+	}
+	s.removeFromClient(ref, inClient, false)
+	s.queueItemEvent(item, "removed", queue.LevelInfo, "Removed from the download list: "+item.ReleaseTitle)
+	return true, nil
+}
+
+// arrDeleteQueueItem takes one item off the list. Its files stay unless
+// removeFromClient asks otherwise.
 func (s *Server) arrDeleteQueueItem(app arrApp) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, ok := arrPathID(w, r)
 		if !ok {
 			return
 		}
-		item, err := s.QueueRepo.Get(id)
-		if err != nil && id >= 1000 {
-			item, err = s.QueueRepo.Get(id / 1000) // one episode of a season pack
-		}
-		if err != nil {
+		found, err := s.arrRemoveQueueItem(id)
+		if !found {
 			arrNotFound(w)
 			return
 		}
-		if isActiveStatus(item.Status) || item.Status == queue.StatusPaused {
-			if err := s.stopItem(item, false); err != nil {
-				writeError(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-		}
-		ref, inClient := s.clientRefFor(item)
-		if err := s.QueueRepo.Delete(item.ID); err != nil {
+		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		s.removeFromClient(ref, inClient, false)
-		s.queueItemEvent(item, "removed", queue.LevelInfo, "Removed from the download list: "+item.ReleaseTitle)
 		writeJSON(w, http.StatusOK, map[string]any{})
 	}
+}
+
+// arrBulkDeleteQueue answers DELETE /queue/bulk: several items at once, the
+// ids in the body.
+func (s *Server) arrBulkDeleteQueue(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		IDs []int64 `json:"ids"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil || len(body.IDs) == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "ids are needed"})
+		return
+	}
+	for _, id := range body.IDs {
+		if id <= 0 {
+			continue
+		}
+		if _, err := s.arrRemoveQueueItem(id); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{})
+}
+
+// arrGrabQueueItem answers POST /queue/grab/{id}: the item is already on the
+// list and being handled here, so there is nothing more to start.
+func (s *Server) arrGrabQueueItem(w http.ResponseWriter, r *http.Request) {
+	id, ok := arrPathID(w, r)
+	if !ok {
+		return
+	}
+	if _, err := s.QueueRepo.Get(id); err != nil {
+		if id < 1000 {
+			arrNotFound(w)
+			return
+		}
+		if _, err := s.QueueRepo.Get(id / 1000); err != nil {
+			arrNotFound(w)
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{})
 }
 
 // --- wanted and calendar ---

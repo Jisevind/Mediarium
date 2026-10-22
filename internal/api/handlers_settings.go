@@ -102,6 +102,8 @@ type settingsPayload struct {
 	SubtitleProfiles     map[string]subtitles.Profile `json:"subtitleProfiles,omitempty"`
 	SubtitleAutoDownload *bool                        `json:"subtitleAutoDownload,omitempty"`
 	SubtitleUpgrade      *bool                        `json:"subtitleUpgrade,omitempty"`
+	// NotifyTrashSyncAlways also sends the TRaSH Guides message when nothing changed.
+	NotifyTrashSyncAlways *bool `json:"notifyTrashSyncAlways,omitempty"`
 	// SubtitlesEnabled is the master switch. While it is off nothing searches
 	// for or downloads subtitles and the app stops mentioning them.
 	SubtitlesEnabled *bool `json:"subtitlesEnabled,omitempty"`
@@ -358,6 +360,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	legalAt, _ := s.Settings.Get(settings.KeyLegalAcknowledgedAt)
 	subtitleAuto := s.autoSubtitleSetting()
 	subtitleUpgrade := s.subtitleUpgradeSetting()
+	trashSyncAlways := s.settingOn(settings.KeyTrashSyncAlways, false)
 	numberingLookup := s.numberingLookupOn()
 	countEmbedded := s.countEmbeddedSubtitles()
 	subtitleWizdom := s.wizdomOn()
@@ -450,6 +453,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		SubtitleProfiles:         s.subtitleProfiles(),
 		SubtitleAutoDownload:     &subtitleAuto,
 		SubtitleUpgrade:          &subtitleUpgrade,
+		NotifyTrashSyncAlways:    &trashSyncAlways,
 		SubtitlesEnabled:         &subtitlesOn,
 		HasOpenSubtitlesAPIKey:   s.Subtitles().HasAPIKey(),
 		HasSubDLAPIKey:           s.SubDL().HasAPIKey(),
@@ -786,6 +790,16 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 			value = "0"
 		}
 		if err := tx.Set(settings.KeySubtitleAutoDownload, value, false); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if req.NotifyTrashSyncAlways != nil {
+		value := "0"
+		if *req.NotifyTrashSyncAlways {
+			value = "1"
+		}
+		if err := tx.Set(settings.KeyTrashSyncAlways, value, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}

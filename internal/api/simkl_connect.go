@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/rdborg/mediarium/internal/settings"
@@ -13,14 +14,16 @@ import (
 )
 
 // Connecting a Simkl account (Settings > Info, lists and subtitles > Import
-// lists). The person gets a short code, enters it at simkl.com/pin, and
+// lists). The person gets a short code, enters it on Simkl's site, and
 // Mediarium collects the access token. No password reaches Mediarium. The
 // token is kept encrypted in the settings and never sent to the browser; only
-// the code and whether an account is connected are.
+// the code and whether an account is connected are. Which sign-in Simkl
+// offers (the OAuth 2.0 device flow or the older PIN flow) is decided by the
+// app, and internal/simkl works that out.
 
-// simklPinTTL is how long Mediarium keeps waiting for a code to be entered
-// (Simkl's own codes last about as long).
-const simklPinTTL = 15 * time.Minute
+// simklPinTTL is the longest Mediarium keeps waiting for a code to be entered
+// (the code's own life, which Simkl sets, is shorter or about as long).
+const simklPinTTL = time.Hour
 
 // errSimklTokenUnreadable means the saved sign-in can't be decrypted (the
 // secret.key is not the one the database was saved with).
@@ -55,7 +58,7 @@ func (s *Server) handleGetSimkl(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleStartSimklPin(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
-	pin, err := s.Simkl().StartPIN(ctx)
+	sign, err := s.Simkl().StartSignIn(ctx)
 	switch {
 	case errors.Is(err, simkl.ErrNoClientID):
 		writeError(w, http.StatusPreconditionFailed, "Add your Simkl client ID first.")
@@ -72,52 +75,135 @@ func (s *Server) handleStartSimklPin(w http.ResponseWriter, r *http.Request) {
 		writeUpstreamError(w, "start the Simkl sign-in", err)
 		return
 	}
-	s.simklPins.Put(pin.UserCode, pin.UserCode)
+	s.simklPins.Put(sign.UserCode, sign)
+	slog.Info("simkl sign-in started", "flow", sign.Flow)
 	writeJSON(w, http.StatusOK, map[string]any{
-		"code":      pin.UserCode,
-		"url":       pin.VerificationURL,
-		"expiresIn": int(simklPinTTL.Seconds()),
-		"interval":  int(pin.Interval.Seconds()),
+		"code":      sign.UserCode,
+		"url":       sign.VerificationURL,
+		"fullUrl":   sign.CompleteURL,
+		"flow":      sign.Flow,
+		"expiresIn": int(min(sign.ExpiresIn, simklPinTTL).Seconds()),
+		"interval":  int(sign.Interval.Seconds()),
 	})
 }
 
 // GET /api/settings/simkl/pin/{code}: has the code been entered yet?
 func (s *Server) handlePollSimklPin(w http.ResponseWriter, r *http.Request) {
 	code := r.PathValue("code")
-	if _, ok := s.simklPins.Get(code); !ok {
+	sign, ok := s.simklPins.Get(code)
+	if !ok {
 		writeError(w, http.StatusGone, "That Simkl code has expired. Start again.")
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
-	token, err := s.Simkl().CheckPIN(ctx, code)
-	var rl *simkl.RateLimitError
+	poll, err := s.Simkl().CheckSignIn(ctx, sign)
 	switch {
 	case errors.Is(err, simkl.ErrPINExpired):
 		s.simklPins.Delete(code)
 		writeError(w, http.StatusGone, "That Simkl code has expired. Start again.")
 		return
-	case errors.As(err, &rl):
-		writeJSON(w, http.StatusOK, map[string]any{"done": false}) // too fast: the page just asks again later
+	case errors.Is(err, simkl.ErrAccessDenied):
+		s.simklPins.Delete(code)
+		writeError(w, http.StatusGone, "The sign-in was declined on Simkl. Start again if that was a mistake.")
 		return
 	case err != nil:
+		var rl *simkl.RateLimitError
+		if errors.As(err, &rl) {
+			poll = simkl.Poll{SlowDown: true} // too fast: the page just asks again later
+			break
+		}
 		if writeSimklStatusError(w, "check the Simkl sign-in", err) {
 			return
 		}
 		writeUpstreamError(w, "check the Simkl sign-in", err)
 		return
-	case token == "":
-		writeJSON(w, http.StatusOK, map[string]any{"done": false})
+	}
+	if poll.Token == nil {
+		if poll.SlowDown {
+			sign.Interval = simkl.Wait(sign.Interval, true)
+			s.simklPins.Put(code, sign)
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"done": false, "interval": int(sign.Interval.Seconds())})
 		return
 	}
 	s.simklPins.Delete(code)
-	if err := s.Settings.Set(settings.KeySimklToken, token, true); err != nil {
+	if err := s.saveSimklToken(*poll.Token); err != nil {
 		slog.Error("simkl: save the sign-in", "err", err)
 		writeError(w, http.StatusInternalServerError, "The Simkl sign-in couldn't be saved.")
 		return
 	}
-	slog.Info("simkl account connected")
-	writeJSON(w, http.StatusOK, map[string]any{"done": true, "status": s.simklState()})
+	slog.Info("simkl account connected", "flow", sign.Flow)
+	// Asking who signed in proves the Client ID and the sign-in work together;
+	// if it fails the account is still connected, only the name is left out.
+	name, nerr := s.Simkl().UserName(ctx, poll.Token.Access)
+	if nerr != nil {
+		slog.Warn("simkl: asking the account's name after signing in failed", "err", nerr)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"done": true, "name": name, "status": s.simklState()})
+}
+
+// saveSimklToken keeps a finished sign-in: the access token and the refresh
+// token encrypted, and when the access token runs out when Simkl said.
+func (s *Server) saveSimklToken(t simkl.Token) error {
+	if err := s.Settings.Set(settings.KeySimklToken, t.Access, true); err != nil {
+		return fmt.Errorf("save the Simkl sign-in: %w", err)
+	}
+	if err := s.Settings.Set(settings.KeySimklRefresh, t.Refresh, true); err != nil {
+		return fmt.Errorf("save the Simkl refresh token: %w", err)
+	}
+	expires := ""
+	if !t.ExpiresAt.IsZero() {
+		expires = strconv.FormatInt(t.ExpiresAt.Unix(), 10)
+	}
+	if err := s.Settings.Set(settings.KeySimklExpires, expires, false); err != nil {
+		return fmt.Errorf("save when the Simkl sign-in runs out: %w", err)
+	}
+	return nil
+}
+
+// simklAccessToken returns the saved access token, trading the refresh token
+// for a new one first when Simkl said the saved one has run out (or is about
+// to). It returns "" with no error when no account is connected.
+func (s *Server) simklAccessToken(ctx context.Context) (string, error) {
+	read := func() (token string, expires int64, err error) {
+		token, err = s.Settings.Get(settings.KeySimklToken)
+		if err != nil {
+			slog.Warn("simkl: the saved sign-in can't be read", "err", err)
+			return "", 0, errSimklTokenUnreadable
+		}
+		raw, _ := s.Settings.Get(settings.KeySimklExpires)
+		expires, _ = strconv.ParseInt(raw, 10, 64)
+		return token, expires, nil
+	}
+	token, expires, err := read()
+	if err != nil || token == "" || expires == 0 || time.Now().Unix() < expires-60 {
+		return token, err
+	}
+	s.simklRefreshMu.Lock()
+	defer s.simklRefreshMu.Unlock()
+	// Another list may have refreshed it while this one waited.
+	if token, expires, err = read(); err != nil || token == "" || expires == 0 || time.Now().Unix() < expires-60 {
+		return token, err
+	}
+	refresh, rerr := s.Settings.Get(settings.KeySimklRefresh)
+	if rerr != nil {
+		slog.Warn("simkl: the saved refresh token can't be read", "err", rerr)
+		return "", errSimklTokenUnreadable
+	}
+	if refresh == "" {
+		return token, nil // nothing to refresh with; Simkl will say if the token is no good
+	}
+	fresh, ferr := s.Simkl().Refresh(ctx, refresh)
+	if ferr != nil {
+		slog.Warn("simkl: refreshing the sign-in failed", "err", ferr)
+		return "", ferr
+	}
+	if err := s.saveSimklToken(fresh); err != nil {
+		return "", err
+	}
+	slog.Info("simkl sign-in refreshed")
+	return fresh.Access, nil
 }
 
 // writeSimklStatusError shows Simkl's own answer (its status and the reason it
@@ -139,12 +225,11 @@ func (s *Server) handleTestSimkl(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
 	defer cancel()
 	reply := func(ok bool, msg string) { writeJSON(w, http.StatusOK, map[string]any{"ok": ok, "message": msg}) }
-	token, terr := s.Settings.Get(settings.KeySimklToken)
-	if terr != nil {
-		reply(false, "The saved Simkl sign-in can't be read. Connect your Simkl account again.")
-		return
+	token, err := s.simklAccessToken(ctx)
+	name := ""
+	if err == nil {
+		name, err = s.Simkl().UserName(ctx, token)
 	}
-	name, err := s.Simkl().UserName(ctx, token)
 	var rl *simkl.RateLimitError
 	var se *simkl.StatusError
 	switch {
@@ -152,6 +237,8 @@ func (s *Server) handleTestSimkl(w http.ResponseWriter, r *http.Request) {
 		reply(true, fmt.Sprintf("Connected to Simkl as %s.", name))
 	case err == nil:
 		reply(true, "Simkl accepted the sign-in.")
+	case errors.Is(err, errSimklTokenUnreadable):
+		reply(false, "The saved Simkl sign-in can't be read. Connect your Simkl account again.")
 	case errors.Is(err, simkl.ErrNoClientID):
 		reply(false, "Add your Simkl client ID first.")
 	case errors.Is(err, simkl.ErrNotConnected):
@@ -174,7 +261,7 @@ func (s *Server) handleTestSimkl(w http.ResponseWriter, r *http.Request) {
 // added to the library stay; the Simkl lists in Mediarium wait until an
 // account is connected again.
 func (s *Server) handleDisconnectSimkl(w http.ResponseWriter, r *http.Request) {
-	if err := s.Settings.Set(settings.KeySimklToken, "", true); err != nil {
+	if err := s.saveSimklToken(simkl.Token{}); err != nil {
 		slog.Error("simkl: forget the sign-in", "err", err)
 		writeError(w, http.StatusInternalServerError, "The Simkl account couldn't be disconnected.")
 		return

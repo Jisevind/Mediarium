@@ -101,7 +101,7 @@ export const SIMKL_COPY: ServiceCopy = {
       redirect: <strong>Redirect URI</strong>,
       uri: <code>urn:ietf:wg:oauth:2.0:oob</code>,
     }),
-    tx('Copy the {clientId} (not the secret) and paste it below.', { clientId: <strong>Client ID</strong> }),
+    tx('Copy the {clientId} and paste it below. Mediarium signs in with a code, so it only needs the Client ID, not the secret.', { clientId: <strong>Client ID</strong> }),
   ],
   fieldLabel: t('Simkl client ID'),
   placeholder: t('Client ID'),

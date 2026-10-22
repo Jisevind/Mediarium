@@ -19,7 +19,6 @@ import (
 	"github.com/rdborg/mediarium/internal/library"
 	"github.com/rdborg/mediarium/internal/metadata"
 	"github.com/rdborg/mediarium/internal/plainerror"
-	"github.com/rdborg/mediarium/internal/settings"
 	"github.com/rdborg/mediarium/internal/simkl"
 	"github.com/rdborg/mediarium/internal/trakt"
 )
@@ -250,10 +249,9 @@ func (s *Server) fetchListItems(ctx context.Context, l importList) ([]importlist
 		if !sc.HasClientID() {
 			return nil, simkl.ErrNoClientID
 		}
-		token, terr := s.Settings.Get(settings.KeySimklToken)
+		token, terr := s.simklAccessToken(ctx)
 		if terr != nil {
-			slog.Warn("simkl: the saved sign-in can't be read", "err", terr)
-			return nil, errSimklTokenUnreadable
+			return nil, terr
 		}
 		status := cfg.Status
 		if status == "" {

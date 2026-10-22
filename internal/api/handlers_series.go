@@ -571,6 +571,16 @@ func (s *Server) handleGrabSeries(w http.ResponseWriter, r *http.Request) {
 	if !s.checkGrabURL(w, r, &req.DownloadURL) {
 		return
 	}
+	if req.ReplaceQueueID > 0 {
+		replaceMu.Lock()
+		defer replaceMu.Unlock()
+		if err := s.replaceBlocking(req.ReplaceQueueID, func() error {
+			return s.checkEpisodesNotDownloading(sr.ID, req.Season, req.Episode, req.ReleaseTitle)
+		}); err != nil {
+			writeGrabError(w, err, http.StatusBadRequest)
+			return
+		}
+	}
 	queueID, err := s.grabTVRelease(sr, req.Season, req.Episode, req.ReleaseTitle, req.DownloadURL, req.SizeBytes, req.protocol())
 	if err != nil {
 		writeGrabError(w, err, http.StatusBadRequest)

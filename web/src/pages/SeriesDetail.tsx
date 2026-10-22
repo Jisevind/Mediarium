@@ -17,6 +17,8 @@ import LocateDialog from '../components/LocateDialog'
 import TitleEvents from '../components/TitleEvents'
 import { useToast } from '../components/Toast'
 import ReleaseTable from '../components/ReleaseTable'
+import GrabBlocked from '../components/GrabBlocked'
+import { blockingOf, type BlockingDownload } from '../grabBlocked'
 import CopiesCard from '../components/CopiesCard'
 import TitleRequestActions from '../components/TitleRequestActions'
 import FilesPanel from '../components/FilesPanel'
@@ -159,9 +161,14 @@ function SeriesPage() {
     }
   }
 
-  async function grab(r: SearchResult) {
+  // A grab that was refused because another download is in the way, with the
+  // release that was picked, so it can be repeated once that one is cancelled.
+  const [blocked, setBlocked] = useState<{ release: SearchResult; blocking: BlockingDownload; message: string } | null>(null)
+
+  async function grab(r: SearchResult, replaceQueueId?: number) {
     setGrabbing(r.downloadUrl)
     setError('')
+    setBlocked(null)
     try {
       await api.grabSeries(seriesId, {
         releaseTitle: r.title,
@@ -170,11 +177,14 @@ function SeriesPage() {
         protocol: r.protocol,
         season: target?.season,
         episode: target?.episode,
+        replaceQueueId,
       })
       setMessage(t('Started downloading "{title}". Follow it in Activity.', { title: r.title }))
       setTimeout(load, 500)
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      const blocking = blockingOf(e)
+      if (blocking) setBlocked({ release: r, blocking, message: e instanceof Error ? e.message : String(e) })
+      else setError(e instanceof Error ? e.message : String(e))
     } finally {
       setGrabbing(null)
     }
@@ -419,8 +429,17 @@ function SeriesPage() {
               {t('Close')}
             </button>
           )}
+          {blocked && (
+            <GrabBlocked
+              message={blocked.message}
+              blocking={blocked.blocking}
+              busy={grabbing !== null}
+              onReplace={() => void grab(blocked.release, blocked.blocking.id)}
+              onDismiss={() => setBlocked(null)}
+            />
+          )}
           {results !== null && results.length > 0 && (
-            <ReleaseTable results={results} grabbing={grabbing} onGrab={grab} showPackBadge onClose={() => setTarget(null)} />
+            <ReleaseTable results={results} grabbing={grabbing} onGrab={(r) => void grab(r)} showPackBadge onClose={() => setTarget(null)} />
           )}
         </section>
       )}

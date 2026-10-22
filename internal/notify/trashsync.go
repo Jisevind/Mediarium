@@ -41,6 +41,45 @@ func ComposeTrashSync(formats []string, updated, scores, profiles int, automatic
 	return ev, true
 }
 
+// trashSyncStartedBy is the detail row saying what started the check.
+func trashSyncStartedBy(automatic bool) Detail {
+	if automatic {
+		return Detail{"Started by", "The automatic update"}
+	}
+	return Detail{"Started by", "Update from TRaSH"}
+}
+
+// ComposeTrashSyncNothing is the message for a check of the TRaSH Guides that
+// changed nothing: upToDate is how many formats it looked at. It is sent only
+// when the person asked to hear about checks that changed nothing.
+func ComposeTrashSyncNothing(upToDate int, automatic bool, links Links, at time.Time) Event {
+	ev := ComposeText(EventTrashSync, "TRaSH Guides checked", "TRaSH Guides checked: nothing needed updating.", links, at)
+	ev.LinkURL = links.to("/settings/quality")
+	if upToDate > 0 {
+		ev.Details = append(ev.Details, Detail{"Already up to date", count(upToDate, "custom format", "custom formats")})
+	}
+	ev.Details = append(ev.Details, trashSyncStartedBy(automatic))
+	ev.Message = plainBody(ev)
+	ev.SettingsURL = links.to("/settings/notifications")
+	return ev
+}
+
+// ComposeTrashSyncFailed is the message for a check of the TRaSH Guides that
+// could not be done. It is always sent to the targets that listen for the
+// event.
+func ComposeTrashSyncFailed(reason string, automatic bool, links Links, at time.Time) Event {
+	msg := "TRaSH Guides check failed"
+	if r := plainReason(reason); r != "" {
+		msg += ": " + r
+	}
+	ev := ComposeText(EventTrashSync, "TRaSH Guides check failed", msg+".", links, at)
+	ev.LinkURL = links.to("/settings/quality")
+	ev.Details = append(ev.Details, trashSyncStartedBy(automatic))
+	ev.Message = plainBody(ev)
+	ev.SettingsURL = links.to("/settings/notifications")
+	return ev
+}
+
 // namesWithMore lists up to trashSyncNamesShown names, then "and N more" for
 // the rest of total.
 func namesWithMore(names []string, total int) string {
