@@ -6,12 +6,15 @@ import InfoTip from '../components/InfoTip'
 import PosterCard from '../components/PosterCard'
 import ProfilePicker from '../components/ProfilePicker'
 import ReleaseTable from '../components/ReleaseTable'
+import GrabBlocked from '../components/GrabBlocked'
+import { blockingOf, type BlockingDownload } from '../grabBlocked'
 import TitleTags from '../components/Tags'
 import WatchedLine from '../components/WatchedLine'
 import CollectionCard from '../components/CollectionCard'
 import CopiesCard from '../components/CopiesCard'
 import TitleRequestActions from '../components/TitleRequestActions'
 import FilesPanel from '../components/FilesPanel'
+import FileChips from '../components/FileChips'
 import SubtitlesOffNote from '../components/SubtitlesOffNote'
 import SubtitlesPanel from '../components/SubtitlesPanel'
 import Switch from '../components/Switch'
@@ -65,6 +68,8 @@ function MoviePage() {
   const [adding, setAdding] = useState(false)
   const [locating, setLocating] = useState(false)
   const [monitored, setMonitored] = useState<boolean | null>(null)
+  // What the movie's file takes on disk (0 when there is none).
+  const [diskBytes, setDiskBytes] = useState(0)
   const [results, setResults] = useState<SearchResult[] | null>(null)
   // The releases list is drawn above the files and settings: bring it into view when a search answers.
   const releasesRef = useRef<HTMLElement>(null)
@@ -131,9 +136,12 @@ function MoviePage() {
     if (!libraryId) return
     api
       .getMovie(libraryId)
-      .then((m) => setMonitored(m.monitored ?? true))
+      .then((m) => {
+        setMonitored(m.monitored ?? true)
+        setDiskBytes(m.sizeBytes ?? 0)
+      })
       .catch(() => undefined)
-  }, [libraryId])
+  }, [libraryId, movie?.filePath])
 
   async function toggleMonitored(v: boolean) {
     if (!libraryId) return
@@ -203,15 +211,22 @@ function MoviePage() {
     }
   }
 
-  async function grab(r: SearchResult) {
+  // A grab that was refused because another download is in the way, with the
+  // release that was picked, so it can be repeated once that one is cancelled.
+  const [blocked, setBlocked] = useState<{ release: SearchResult; blocking: BlockingDownload; message: string } | null>(null)
+
+  async function grab(r: SearchResult, replaceQueueId?: number) {
     if (!libraryId) return
     setGrabbing(r.downloadUrl)
+    setBlocked(null)
     try {
-      await api.grab(libraryId, { releaseTitle: r.title, downloadUrl: r.downloadUrl, sizeBytes: r.sizeBytes, protocol: r.protocol })
+      await api.grab(libraryId, { releaseTitle: r.title, downloadUrl: r.downloadUrl, sizeBytes: r.sizeBytes, protocol: r.protocol, replaceQueueId })
       toast.success(t('Started downloading "{title}". Follow it in Activity.', { title: r.title }))
       setTimeout(reload, 500)
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e))
+      const blocking = blockingOf(e)
+      if (blocking) setBlocked({ release: r, blocking, message: e instanceof Error ? e.message : String(e) })
+      else toast.error(e instanceof Error ? e.message : String(e))
     } finally {
       setGrabbing(null)
     }
@@ -264,6 +279,7 @@ function MoviePage() {
             ...(writers.length ? [{ label: writers.length > 1 ? t('Writers') : t('Writer'), value: <PeopleLinks people={writers} /> }] : []),
             ...releaseFacts(movie.releaseDates, movie.releaseDate),
             ...(movie.releaseStatus ? [{ label: t('Status'), value: movie.releaseStatus }] : []),
+            ...(inLibrary && movie.filePath && diskBytes > 0 ? [{ label: t('Size on disk'), value: formatBytes(diskBytes) }] : []),
           ],
           links: titleLinks('movie', movie.tmdbId, movie.imdbId, movie.homepage),
         }}
@@ -340,6 +356,7 @@ function MoviePage() {
             {movie.filePath && <code className="filepath">{movie.filePath}</code>}
           </div>
         )}
+        {inLibrary && movie.status === 'downloaded' && <FileChips info={movie.fileInfo} />}
         {inLibrary && admin && movie.folderPath && (
           <FolderLine path={movie.folderPath} kind="movie">
             {movie.libraryId && (
@@ -375,7 +392,16 @@ function MoviePage() {
               {t('Close')}
             </button>
           )}
-          {results.length > 0 && <ReleaseTable results={results} grabbing={grabbing} onGrab={grab} onClose={() => setResults(null)} />}
+          {blocked && (
+            <GrabBlocked
+              message={blocked.message}
+              blocking={blocked.blocking}
+              busy={grabbing !== null}
+              onReplace={() => void grab(blocked.release, blocked.blocking.id)}
+              onDismiss={() => setBlocked(null)}
+            />
+          )}
+          {results.length > 0 && <ReleaseTable results={results} grabbing={grabbing} onGrab={(r) => void grab(r)} onClose={() => setResults(null)} />}
         </section>
       )}
 

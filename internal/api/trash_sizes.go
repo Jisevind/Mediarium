@@ -12,17 +12,19 @@ import (
 // saved here; the page fills the table with the answer and the person saves.
 
 // trashSizeLists are the size files the TRaSH Guides publish, by the name the
-// page asks for.
+// page asks for. Radarr's lists belong to the movie size table and Sonarr's to
+// the show table (kind says which).
 var trashSizeLists = map[string]struct {
 	app  quality.FormatApp
 	file string
+	kind string
 }{
-	"radarr-movie":         {quality.AppRadarr, "movie.json"},
-	"radarr-anime":         {quality.AppRadarr, "anime.json"},
-	"radarr-sqp-streaming": {quality.AppRadarr, "sqp-streaming.json"},
-	"radarr-sqp-uhd":       {quality.AppRadarr, "sqp-uhd.json"},
-	"sonarr-series":        {quality.AppSonarr, "series.json"},
-	"sonarr-anime":         {quality.AppSonarr, "anime.json"},
+	"radarr-movie":         {quality.AppRadarr, "movie.json", "movie"},
+	"radarr-anime":         {quality.AppRadarr, "anime.json", "movie"},
+	"radarr-sqp-streaming": {quality.AppRadarr, "sqp-streaming.json", "movie"},
+	"radarr-sqp-uhd":       {quality.AppRadarr, "sqp-uhd.json", "movie"},
+	"sonarr-series":        {quality.AppSonarr, "series.json", "tv"},
+	"sonarr-anime":         {quality.AppSonarr, "anime.json", "tv"},
 }
 
 type trashSizeRow struct {
@@ -33,6 +35,7 @@ type trashSizeRow struct {
 
 type trashSizePayload struct {
 	List string         `json:"list"`
+	Kind string         `json:"kind"` // the size table it is for: "movie" or "tv"
 	Rows []trashSizeRow `json:"rows"`
 	// Skipped names the TRaSH qualities that have no row in Mediarium.
 	Skipped []string `json:"skipped"`
@@ -61,7 +64,7 @@ func (s *Server) handleTrashSizes(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadGateway, sentence(err.Error()))
 		return
 	}
-	out := trashSizePayload{List: list, Rows: []trashSizeRow{}, Skipped: parsed.Skipped}
+	out := trashSizePayload{List: list, Kind: src.kind, Rows: []trashSizeRow{}, Skipped: parsed.Skipped}
 	if out.Skipped == nil {
 		out.Skipped = []string{}
 	}

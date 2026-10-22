@@ -22,6 +22,9 @@ type searchAnswer[T any] struct {
 	Sources    int                `json:"sources"` // indexers that were asked
 	Unanswered []unansweredSource `json:"unanswered"`
 	Warnings   []string           `json:"warnings"` // for example an indexer asked past its daily limit
+	// Skipped names the indexers that were not asked because they don't list
+	// this kind of release (a movie site, for a book).
+	Skipped []string `json:"skipped,omitempty"`
 }
 
 // unansweredFrom lists the indexers that failed, in the order asked. An indexer
@@ -68,6 +71,12 @@ func limitWarnings(outcomes []indexers.Outcome) []string {
 // writeSearch sends the release list: the bare list, or with ?detail=1 the
 // list with what the indexers said. sources is how many were asked.
 func writeSearch[T any](w http.ResponseWriter, r *http.Request, results []T, sources int, outcomes []indexers.Outcome) {
+	writeSearchSkipping(w, r, results, sources, outcomes, nil)
+}
+
+// writeSearchSkipping is writeSearch that also names the indexers that were
+// left out because they can't do this kind of search.
+func writeSearchSkipping[T any](w http.ResponseWriter, r *http.Request, results []T, sources int, outcomes []indexers.Outcome, skipped []string) {
 	if results == nil {
 		results = []T{}
 	}
@@ -75,5 +84,5 @@ func writeSearch[T any](w http.ResponseWriter, r *http.Request, results []T, sou
 		writeJSON(w, http.StatusOK, results)
 		return
 	}
-	writeJSON(w, http.StatusOK, searchAnswer[T]{Results: results, Sources: sources, Unanswered: unansweredFrom(outcomes), Warnings: limitWarnings(outcomes)})
+	writeJSON(w, http.StatusOK, searchAnswer[T]{Results: results, Sources: sources, Unanswered: unansweredFrom(outcomes), Warnings: limitWarnings(outcomes), Skipped: skipped})
 }

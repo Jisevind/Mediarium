@@ -161,6 +161,9 @@ func (s *Server) handleClientTorrents(w http.ResponseWriter, r *http.Request) {
 	// The client's own filter takes one category, so Mediarium's torrents (the
 	// main category and those of the kinds) are picked out of the whole list.
 	list, err := c.List(ctx, "")
+	if r.Context().Err() == nil {
+		s.noteClientCheck(watchTorrentClient, out.Label, err)
+	}
 	if err != nil {
 		out.Error = clientErrorText(out.Label, s.downloadClientError(out.Label, err))
 		writeJSON(w, http.StatusOK, out)

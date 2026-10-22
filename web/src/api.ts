@@ -6,12 +6,15 @@ import { noteBusy, noteFine, startRead } from './busyState'
 import { outsideService, slowServiceMessage } from './outsideService'
 import { signalFor } from './requestSignal'
 import { st, t } from './i18n.ts'
+import type { AlbumRescanReport } from './albumRescan'
 import type { Diagnostics } from './supportReport'
+import type { ProfileScoreChange } from './formatChanges'
 import type { ProblemCounts, ProblemList } from './problemsView'
 import { BASE_PATH, rebasePictures, withBase } from './base'
 import { noteEndReason, noteSessionEnded, sessionEnded } from './sessionEnd'
 import { wantedPagePath } from './wantedPage'
 import { namingPreviewPath } from './namingPreview'
+import type { BlockingDownload } from './grabBlocked.ts'
 
 const BASE = withBase('/api')
 
@@ -20,10 +23,13 @@ export class ApiError extends Error {
   // True when Mediarium said it is busy, or did not answer in time. The page
   // can then tell the person it is slow instead of showing an error.
   busy: boolean
-  constructor(status: number, message: string, busy = false) {
+  // A grab refused because another download is in the way: which one.
+  blocking?: BlockingDownload
+  constructor(status: number, message: string, busy = false, blocking?: BlockingDownload) {
     super(message)
     this.status = status
     this.busy = busy
+    this.blocking = blocking
   }
 }
 
@@ -96,7 +102,7 @@ async function send<T>(path: string, init?: ReadOptions): Promise<T> {
   }
   noteEndReason(res.status, text)
   if (sessionEnded(path, res.status, text)) noteSessionEnded()
-  let data: { error?: string; busy?: boolean } | null = null
+  let data: { error?: string; busy?: boolean; blocking?: BlockingDownload } | null = null
   try {
     data = text ? JSON.parse(text) : null
   } catch {
@@ -109,7 +115,7 @@ async function send<T>(path: string, init?: ReadOptions): Promise<T> {
     throw new ApiError(503, st(data.error) || SLOW_MESSAGE, true)
   }
   if (!res.ok) {
-    throw new ApiError(res.status, st(data?.error) || t('Something went wrong on the server (error {status}).', { status: String(res.status) }))
+    throw new ApiError(res.status, st(data?.error) || t('Something went wrong on the server (error {status}).', { status: String(res.status) }), false, data?.blocking)
   }
   noteFine()
   // Covers Mediarium serves itself come as "/api/...": under a URL base they
@@ -158,7 +164,7 @@ export interface ManualDownloadResult {
   sizeBytes: number
 }
 
-// A video file in the downloads folder that can be imported by hand.
+// A video file in a folder that can be imported by hand.
 export interface ManualFile {
   path: string
   size: number
@@ -168,6 +174,28 @@ export interface ManualFile {
   season?: number
   episode?: number
   quality?: string
+  incomplete?: boolean
+}
+
+// What a look in a folder for files to import by hand found.
+export interface ManualList {
+  folder: string
+  downloadsFolder: string
+  files: ManualFile[]
+  more?: boolean
+  hiddenIncomplete?: number
+}
+
+// How a file comes in by hand: a hardlink (a copy on another drive, like every
+// import), a copy of its own, or a move (the original is removed).
+export type ManualMode = 'link' | 'copy' | 'move'
+
+// The folders inside a folder, for choosing where to look.
+export interface ManualFolders {
+  path: string
+  parent?: string
+  folders: { name: string; path: string }[]
+  shortcuts?: { name: string; path: string }[]
 }
 
 export interface LibraryStats {
@@ -183,6 +211,8 @@ export interface LibraryStats {
   quality: { label: string; count: number; bytes?: number }[]
   months: { month: string; completed: number; failed: number; bytes: number }[]
   usenetShare: number
+  // Every download counted since the statistics began or were last reset; clearing the history does not change them.
+  totals: { grabs: number; completed: number; failed: number; bytes: number }
   historyKeptDays: number
   watched?: WatchStats // only while reading what's been watched is on
 }
@@ -582,6 +612,8 @@ export interface NotifyTestStep {
 export interface NamingTokens {
   tokens: { token: string; kind: 'movie' | 'tv' | 'both'; group: string }[]
   schemes: { id: string; name: string; movie: string; episode: string }[]
+  // Ready-made folder formats for a new movie and a new show.
+  folderSchemes?: { id: string; name: string; movie: string; series: string }[]
 }
 
 // Another program that runs next to Mediarium, with a link to it (Settings > Add-ons).
@@ -635,6 +667,9 @@ export interface Settings {
   namingPreset: string
   movieNameFormat: string
   episodeNameFormat?: string
+  // The folder formats for a new movie and a new show (Custom style); '' = the usual "Title (Year)".
+  movieFolderFormat?: string
+  seriesFolderFormat?: string
   // Imported videos keep the file name they came with (folders are named as usual).
   keepOriginalNames?: boolean
   hasTmdbApiKey: boolean
@@ -683,6 +718,7 @@ export interface Settings {
   unmonitorDownloaded?: boolean // stop monitoring a movie once it is downloaded (off by default)
   unmonitorFinished?: boolean // stop monitoring a show once it has ended and every episode is in (off by default)
   seasonPacks?: boolean // look for a season pack once a season has ended (off by default)
+  tvmazeAirTimes?: boolean // look up the time episodes air on TVmaze (on by default; off = TVmaze is never contacted)
   hasOpenSubtitlesAccount?: boolean
   openSubtitlesAccountName?: string
   tmdbKeyBuiltIn?: boolean
@@ -699,6 +735,7 @@ export interface Settings {
   // Look up scene and anime numbering for anime on its own (on by default)
   numberingLookup?: boolean
   subtitleAutoDownload?: boolean
+  notifyTrashSyncAlways?: boolean // also send the TRaSH Guides message when a check changed nothing
   subtitleUpgrade?: boolean // later swap a subtitle for one made for the exact file (with automatic downloading)
   // The master switch for subtitles; off until switched on.
   subtitlesEnabled?: boolean
@@ -707,6 +744,8 @@ export interface Settings {
   requireVpnForTorrents?: boolean
   // Send indexer traffic through the VPN; off until switched on.
   routeIndexersThroughVpn?: boolean
+  // The person said their torrent client is already behind a VPN: no "Torrenting without a VPN" notice.
+  vpnNoticeAcknowledged?: boolean
   importConflictPolicy?: string
   torrentEnabled?: boolean
   flareSolverrUrl?: string
@@ -735,7 +774,7 @@ export interface Settings {
   publicUrl?: string // the address Mediarium is opened at; links in notification messages use it
   huntIntervalHours?: number // hours between searches for missing items and better versions, 1 to 168
   releaseCheckMinutes?: number // minutes between checks of each indexer's newest releases, 5 to 1440
-  downloadsAtOnce?: number // how many downloads run at the same time, 1 to 5 (the rest wait in line)
+  downloadsAtOnce?: number // how many downloads run at the same time, 1 to 500 (the rest wait in line)
   usenetRetentionDays?: number // Usenet posts older than this many days are not taken; 0 = no limit
   rejectExecutables?: boolean // refuse releases that hold programs or scripts; on unless switched off
   skipDuplicates?: boolean // do not download the same release twice; off unless switched on
@@ -828,6 +867,8 @@ export interface SizeRow {
 // The sizes the TRaSH Guides recommend, mapped onto the size table (max 0 = no limit).
 export interface TrashSizes {
   list: string
+  // The size table the list is for.
+  kind?: 'movie' | 'tv'
   rows: { quality: string; min: number; max: number }[]
   skipped: string[]
 }
@@ -896,6 +937,57 @@ export interface DownloadClientSettings {
   linkRoot: string
 }
 export type DownloadClientInput = Omit<DownloadClientSettings, 'hasPassword'> & { password: string }
+
+// An external Usenet downloader Usenet releases can go to (Settings > Downloading > Usenet).
+export type UsenetClientKind = '' | 'sabnzbd' | 'nzbget'
+export type UsenetClientPriority = 'low' | 'normal' | 'high' | 'force'
+export interface UsenetClientSettings {
+  kind: UsenetClientKind
+  use: boolean
+  url: string
+  hasApiKey: boolean
+  username: string
+  hasPassword: boolean
+  category: string
+  categoryMovies: string
+  categoryTv: string
+  categoryMusic: string
+  categoryBooks: string
+  priority: UsenetClientPriority
+  sendUrl: boolean
+  remotePath: string
+  localPath: string
+  removeAfterImport: boolean
+  removeOnStop: boolean
+}
+export type UsenetClientInput = Omit<UsenetClientSettings, 'hasApiKey' | 'hasPassword'> & { apiKey: string; password: string }
+// One download in SABnzbd or NZBGet, as the Activity page shows it.
+export interface UsenetClientJob {
+  id: string
+  name: string
+  stage: 'downloading' | 'queued' | 'paused' | 'processing' | 'done' | 'problem'
+  stageText: string
+  progress: number
+  sizeBytes: number
+  downSpeed: number
+  etaSeconds: number
+  category?: string
+  mine: boolean
+  queueId?: number
+  canPause: boolean
+  canResume: boolean
+  addedAt?: string
+  failMessage?: string
+}
+export interface UsenetClientJobsAnswer {
+  configured: boolean
+  active: boolean
+  kind?: string
+  label?: string
+  category?: string
+  error?: string
+  jobs: UsenetClientJob[]
+}
 // Sent on window when the place torrent releases go to changes (the debrid
 // card or the download client card), so the other card shows it was turned off.
 export const TORRENT_ROUTE_EVENT = 'mediarium:torrent-route'
@@ -956,7 +1048,7 @@ export interface UsenetServerInput {
 }
 
 export interface DownloadsStatus {
-  usenet: { servers: number; enabledServers: number; ready: boolean }
+  usenet: { servers: number; enabledServers: number; ready: boolean; external?: 'sabnzbd' | 'nzbget'; externalLabel?: string }
   torrent: {
     state?: 'disabled' | 'blocked' | 'ready'
     via?: 'builtin' | 'client' | 'debrid' // where torrents go
@@ -1049,6 +1141,12 @@ export interface SearchResult {
   // The custom-format score in the title's profile and the formats matched
   // (only when the profile scores formats).
   formatScore?: number
+  // The whole score the pick compares: the custom formats, the preferred terms
+  // and fixScore added up. The Score column shows it. Only when the profile
+  // scores something.
+  score?: number
+  // The bonus of a PROPER or REPACK when the profile skips bad releases.
+  fixScore?: number
   // The matched formats with the score the profile gives each, the profile's
   // minimum score and the score it stops upgrading at (0 when not set), and
   // everything that makes an automatic search skip the release, by kind.
@@ -1079,10 +1177,20 @@ export interface PreferredTerm {
   score: number
 }
 
+// One rank of a profile's own quality order: a quality, or a named group of them.
+export interface QualityItem {
+  name?: string
+  tiers: string[]
+}
+
 export interface QualityProfileInput {
   name: string
   allowed: string[]
   cutoff: string
+  // The profile's own order of qualities and groups, best first. [] is the
+  // built-in order; left out on a save, the saved order is kept. When it is
+  // set it decides which qualities are allowed.
+  qualityOrder?: QualityItem[]
   upgradeAllowed: boolean
   mustContain: string[]
   mustNotContain: string[]
@@ -1160,12 +1268,15 @@ export interface FormatImportResult {
   updated: number
   formats: CustomFormat[]
   missing?: string[]
+  // What happened to the scores in the chosen profile (when one was chosen).
+  profile?: ProfileScoreChange
 }
 
 export interface FormatAssignResult {
   profiles: number
   scored: number
   unscored: string[]
+  changes: ProfileScoreChange[]
 }
 
 export interface TrashFormatChange {
@@ -1353,9 +1464,56 @@ export interface Series {
   seriesType?: SeriesType // how releases number the episodes
   firstAirDate?: string // "2022-02-18", for sorting
   sizeBytes?: number // the downloaded episodes on disk
-  showStatus?: 'ended' | 'continuing' | 'upcoming' // where the show stands; left out until it has been refreshed once
+  showStatus?: 'ended' | 'canceled' | 'continuing' | 'upcoming' // where the show stands; left out until it has been refreshed once
   originCountry?: string[] // where it comes from ("US", "GB"); empty until the show is refreshed
   nameTag?: string // tells it from another show of the same name in the library ("US", "UK" or the year)
+  media?: MediaSummary // what the downloaded episodes' files hold, once they have been read
+}
+
+// What a video file holds, read from its headers (see fileInfo.ts).
+export interface FileVideo {
+  codec: string // "H.264", "HEVC", "AV1"...
+  width?: number
+  height?: number
+  bitDepth?: number
+  hdr?: string // "SDR", "HDR10", "HDR10+", "Dolby Vision", "HLG"
+  dvProfile?: number
+  fps?: number
+}
+export interface FileAudio {
+  codec: string // "AAC", "AC-3", "TrueHD"...
+  channels?: number
+  lang?: string // "en"
+  title?: string
+  default?: boolean
+  forced?: boolean
+  atmos?: boolean
+}
+export interface FileSubtitle {
+  codec: string
+  lang?: string
+  title?: string
+  default?: boolean
+  forced?: boolean
+}
+export interface FileInfo {
+  container: string
+  duration?: number // seconds
+  video?: FileVideo
+  audio?: FileAudio[]
+  subtitles?: FileSubtitle[]
+  resolution?: string // "2160p"
+  scannedAt?: string
+}
+// The part of a title's files the Library filters on: the different values
+// across its files (a show has many).
+export interface MediaSummary {
+  videoCodecs?: string[]
+  hdr?: string[]
+  resolutions?: string[]
+  audioCodecs?: string[]
+  audioLangs?: string[]
+  subLangs?: string[]
 }
 
 export interface Episode {
@@ -1365,11 +1523,13 @@ export interface Episode {
   title?: string
   overview?: string
   airDate?: string
+  airAt?: string // the exact air time (RFC 3339, UTC) once TVmaze has one
   status: MediaStatus
   quality?: string
   filePath?: string
   monitored: boolean
   sizeBytes?: number // the file on disk (downloaded episodes)
+  fileInfo?: FileInfo // what the file holds, once it has been read
 }
 
 // A second copy of a movie or show, kept in another quality in the copies folder.
@@ -1460,6 +1620,7 @@ export interface Movie {
   detailsNote?: string
   releaseDate?: string // "2024-03-01", for sorting
   sizeBytes?: number // the file on disk
+  media?: MediaSummary // what the file holds, once it has been read
 }
 
 export interface QueueItem {
@@ -1972,6 +2133,7 @@ export interface MovieDetail extends TitleDetails {
   quality?: string
   filePath?: string
   folderPath?: string // the full folder of its files, as Mediarium sees it
+  fileInfo?: FileInfo // what the file holds, once it has been read
   // The series of films this one is part of, when it is.
   collection?: CollectionRef
   releaseDates?: MovieReleaseDates
@@ -2248,6 +2410,8 @@ export interface HealthItem {
   title: string
   impact: string
   action?: { label: string; path: string }
+  // A button that hides the item for good (the VPN notice), with its label.
+  dismiss?: string
 }
 
 export interface DiskUsage {
@@ -2335,6 +2499,7 @@ export interface CalendarEntry {
   title: string
   subtitle?: string
   releaseDate: string
+  airAt?: string // an episode's exact air time (RFC 3339, UTC) once TVmaze has one; the page shows it in the viewer's time zone
   release?: 'cinema' | 'digital' // a movie with both dates on different days shows twice: which date this is
   status: 'missing' | 'downloading' | 'downloaded'
   posterUrl?: string // the poster or cover, when there is one
@@ -2610,6 +2775,8 @@ export interface SearchAnswer<T> {
   unanswered: { name: string; message: string }[]
   // For example an indexer that was asked after its daily limit was used up.
   warnings?: string[]
+  // Indexers that were not asked because they don't list this kind of release.
+  skipped?: string[]
 }
 
 export interface MusicRelease extends SearchResult {
@@ -2873,6 +3040,7 @@ export interface SignInMethods {
   ldap: boolean // the form also takes directory accounts
   passkeys: boolean
   passkeyHost?: string // passkeys only work on pages opened at this host
+  autoSignIn?: 'oidc' // the sign-in page sends visitors to this method by itself
 }
 
 // Settings > Account & Access > All accounts: the general sign-in switches.
@@ -2886,6 +3054,8 @@ export interface SignInSettings {
   externalOn: boolean
   canTurnOffLocal: boolean
   sessionMethod: string
+  autoSignIn: '' | 'oidc' // visitors are sent to this method by themselves
+  autoSignInChoices: { id: 'oidc'; name: string }[] // the ones that can be picked now
 }
 
 // Single sign-on with an OpenID Connect provider.
@@ -3067,6 +3237,42 @@ export interface SystemOptions {
   autoRestartWhenStuck: boolean
 }
 
+export interface McpSettings {
+  enabled: boolean
+  path: string
+}
+
+// An app connected to MCP with OAuth (Settings > Other apps).
+export interface McpApp {
+  id: number
+  clientName: string
+  account: string
+  scope: string
+  createdAt: string
+  lastUsedAt: string
+}
+
+// A client an administrator registered by hand, for apps that ask for a client ID and secret.
+export interface McpClient {
+  clientId: string
+  name: string
+  redirectUris: string[]
+  createdAt: string
+}
+
+export interface McpClientMade extends McpClient {
+  clientSecret: string
+}
+
+// What the consent page shows about an app that wants to connect.
+export interface OAuthRequest {
+  clientName: string
+  redirectHost: string
+  scopes: string[]
+  account: string
+  canApprove: boolean
+}
+
 export interface SystemControl {
   kind: 'docker' | 'systemd' | 'launchd' | 'custom' | 'none'
   canRestart: boolean
@@ -3128,7 +3334,7 @@ export const api = {
   createAPIKey: (name: string, readOnly = false) => post<APIKey>('/auth/api-keys', { name, readOnly }),
   signInMethods: () => get<SignInMethods>('/auth/methods'),
   getSignIn: () => get<SignInSettings>('/auth/sign-in'),
-  putSignIn: (data: { localSignIn?: boolean; passkeys?: boolean }) => put<SignInSettings>('/auth/sign-in', data),
+  putSignIn: (data: { localSignIn?: boolean; passkeys?: boolean; autoSignIn?: '' | 'oidc' }) => put<SignInSettings>('/auth/sign-in', data),
   getOidc: () => get<OidcSettings>('/auth/oidc'),
   putOidc: (data: Partial<OidcSettings>) => put<OidcSettings>('/auth/oidc', data),
   testOidc: (data: Partial<OidcSettings>) => post<OidcTestResult>('/auth/oidc/test', data),
@@ -3230,7 +3436,7 @@ export const api = {
   seriesDiskUsage: (id: number) => get<DiskUsage>(`/series/${id}/disk-usage`),
   artistDiskUsage: (id: number) => get<DiskUsage>(`/music/artists/${id}/disk-usage`),
   deleteMovie: (id: number, deleteFiles: boolean) => del<null>(`/movies/${id}?deleteFiles=${deleteFiles}`),
-  grab: (movieId: number, data: { releaseTitle: string; downloadUrl: string; sizeBytes: number; protocol?: 'usenet' | 'torrent' }) =>
+  grab: (movieId: number, data: { releaseTitle: string; downloadUrl: string; sizeBytes: number; protocol?: 'usenet' | 'torrent'; replaceQueueId?: number }) =>
     post<{ queueId: number }>(`/movies/${movieId}/grab`, data),
   searchGrab: (data: { releaseTitle: string; downloadUrl: string; sizeBytes: number; protocol?: 'usenet' | 'torrent' }) =>
     post<{ movieId: number; queueId: number }>('/search/grab', data),
@@ -3268,15 +3474,15 @@ export const api = {
   renameCustomFormat: (id: number, name: string) => put<CustomFormat>(`/custom-formats/${id}`, { name }),
   deleteCustomFormat: (id: number) => del<null>(`/custom-formats/${id}`),
   testCustomFormats: (title: string, profileId?: number) => post<FormatTestResult>('/custom-formats/test', { title, profileId: profileId ?? 0 }),
-  assignCustomFormats: (formatIds: number[], profileIds: number[], mode: { trash: true } | { score: number }) =>
-    post<FormatAssignResult>('/custom-formats/assign', { formatIds, profileIds, mode: 'trash' in mode ? 'trash' : 'score', score: 'score' in mode ? mode.score : 0 }),
+  assignCustomFormats: (formatIds: number[], profileIds: number[], mode: { trash: true } | { score: number }, replaceScores = false) =>
+    post<FormatAssignResult>('/custom-formats/assign', { formatIds, profileIds, mode: 'trash' in mode ? 'trash' : 'score', score: 'score' in mode ? mode.score : 0, replaceScores }),
   trashDefaultScores: (formatIds: number[]) => post<{ scores: FormatScore[] }>('/custom-formats/default-scores', { formatIds }),
   trashUpdatePreview: () => get<TrashUpdateResult>('/custom-formats/trash-update'),
   trashUpdate: () => post<TrashUpdateResult>('/custom-formats/trash-update', {}),
   trashUpdateStatus: () => get<TrashUpdateStatus>('/custom-formats/trash-update/status'),
   trashGuides: (app: 'radarr' | 'sonarr') => get<{ formats: TrashFormat[]; profiles: TrashProfile[] }>(`/trash-guides/${app}`),
-  importTrashFormats: (app: 'radarr' | 'sonarr', trashIds: string[], profileId?: number) =>
-    post<FormatImportResult>(`/trash-guides/${app}/formats`, { trashIds, profileId: profileId ?? 0 }),
+  importTrashFormats: (app: 'radarr' | 'sonarr', trashIds: string[], profileId?: number, replaceScores = false) =>
+    post<FormatImportResult>(`/trash-guides/${app}/formats`, { trashIds, profileId: profileId ?? 0, replaceScores }),
   importTrashProfile: (app: 'radarr' | 'sonarr', trashId: string) =>
     post<{ profile: QualityProfile; formats: FormatImportResult }>(`/trash-guides/${app}/profiles`, { trashId }),
   // searching: the file is below the new profile, so a better release is being looked for now
@@ -3288,6 +3494,8 @@ export const api = {
   listActiveQueue: () => request<QueueItem[]>('/queue?active=1', { revalidate: true }),
   retryQueueItem: (id: number) => post<{ queueId: number }>(`/queue/${id}/retry`),
   clientTorrents: (scope: 'mine' | 'all') => get<ClientTorrentsAnswer>(`/download-client/torrents?scope=${scope}`),
+  usenetClientJobs: (scope: 'mine' | 'all') => get<UsenetClientJobsAnswer>(`/usenet-client/jobs?scope=${scope}`),
+  usenetClientJobAction: (id: string, action: 'pause' | 'resume' | 'remove' | 'remove-files') => post<{ done: string }>(`/usenet-client/jobs/${encodeURIComponent(id)}/${action}`),
   clientTorrentAction: (hash: string, action: 'pause' | 'resume' | 'recheck' | 'remove' | 'remove-files') => post<{ done: string }>(`/download-client/torrents/${encodeURIComponent(hash)}/${action}`),
   debridTorrents: () => get<DebridTorrentsAnswer>('/debrid/torrents'),
   debridRemove: (id: string) => post<{ done: string }>(`/debrid/torrents/${encodeURIComponent(id)}/remove`),
@@ -3308,6 +3516,8 @@ export const api = {
   getWantedPage: (kind: 'missing' | 'cutoff', query: WantedPageQuery = {}) => request<WantedPage>(wantedPagePath(kind, query), { revalidate: true }),
   getWantedShow: (kind: 'missing' | 'cutoff', seriesId: number) => request<WantedItem[]>(`/wanted?kind=${kind}&series=${seriesId}`, { revalidate: true }),
   libraryCounts: () => get<{ movies: number; shows: number }>('/library/counts'),
+  // How many of the library's files have had their video and audio tracks read.
+  fileDetailsStatus: () => get<{ done: number; total: number }>('/library/file-details'),
   searchNowMovie: (id: number) => post<{ grabbed: number; message: string }>(`/movies/${id}/search-now`),
   replaceMovieSmaller: (id: number) => post<{ grabbed: number; message: string }>(`/movies/${id}/replace-smaller`),
   searchNowSeries: (id: number, scope: { season?: number; episode?: number } = {}) =>
@@ -3343,9 +3553,12 @@ export const api = {
   delayProfile: () => get<DelayProfile>('/search/delay'),
   putDelayProfile: (p: DelayProfile) => put<DelayProfile>('/search/delay', p),
   searchWaiting: () => get<WaitingRelease[]>('/search/waiting'),
-  sizeLimits: () => get<SizeTable>('/quality/size-limits'),
-  putSizeLimits: (table: SizeTable) => put<SizeTable>('/quality/size-limits', table),
-  resetSizeLimits: () => post<SizeTable>('/quality/size-limits/reset'),
+  // Movies and TV each have a size table; kind picks one.
+  sizeLimits: (kind: 'movie' | 'tv' = 'movie') => get<SizeTable>(`/quality/size-limits?kind=${kind}`),
+  putSizeLimits: (table: SizeTable, kind: 'movie' | 'tv' = 'movie') => put<SizeTable>(`/quality/size-limits?kind=${kind}`, table),
+  resetSizeLimits: (kind: 'movie' | 'tv' = 'movie') => post<SizeTable>(`/quality/size-limits/reset?kind=${kind}`),
+  minSizeCheck: () => get<{ enabled: boolean }>('/quality/min-size-check'),
+  putMinSizeCheck: (enabled: boolean) => put<{ enabled: boolean }>('/quality/min-size-check', { enabled }),
   trashSizes: (list: string) => get<TrashSizes>(`/quality/size-limits/trash/${encodeURIComponent(list)}`),
   calendarFeed: () => get<{ on: boolean; path?: string }>('/calendar/feed'),
   newCalendarFeed: () => post<{ on: boolean; path?: string }>('/calendar/feed'),
@@ -3354,12 +3567,16 @@ export const api = {
   // The form carries movieId, or seriesId with season and episode (episode 0 = the whole season), and one of
   // file or url; name is optional. The empty headers let the browser set the multipart boundary.
   manualDownload: (form: FormData) => request<ManualDownloadResult>('/downloads/manual', { method: 'POST', body: form, headers: {} }),
-  manualImportList: () => get<{ folder: string; files: ManualFile[]; more?: boolean }>('/manual-import'),
-  manualImport: (body: { path: string; movieId?: number; seriesId?: number; season?: number; episode?: number }) => post<{ path: string }>('/manual-import', body),
+  manualImportList: (folder = '', incomplete = false) =>
+    get<ManualList>(`/manual-import?folder=${encodeURIComponent(folder)}${incomplete ? '&incomplete=1' : ''}`),
+  manualImportFolders: (path = '') => get<ManualFolders>(`/manual-import/folders?path=${encodeURIComponent(path)}`),
+  manualImport: (body: { folder?: string; path: string; mode?: ManualMode; incomplete?: boolean; movieId?: number; seriesId?: number; season?: number; episode?: number }) =>
+    post<{ path: string; sourceKept?: boolean }>('/manual-import', body),
   listExclusions: () => get<{ kind: 'movie' | 'tv'; tmdbId: number; title: string; year?: number }[]>('/exclusions'),
   addExclusion: (e: { kind: 'movie' | 'tv'; tmdbId: number; title: string; year?: number }) => post<null>('/exclusions', e),
   removeExclusion: (kind: string, tmdbId: number) => del<null>(`/exclusions/${kind}/${tmdbId}`),
   libraryStats: () => get<LibraryStats>('/stats/library'),
+  resetStats: () => post<{ reset: boolean }>('/stats/reset'),
   renamePreview: () => get<RenameItem[]>('/rename'),
   rename: (items: { kind: string; id: number }[]) => post<{ renamed: number; failed: string[] }>('/rename', { items }),
   listTrash: () => get<TrashList>('/trash'),
@@ -3408,9 +3625,10 @@ export const api = {
     put<{ added: number; message?: string }>(`/book-series/${source}/${encodeURIComponent(key)}/follow`, body),
   unfollowSeries: (source: string, key: string) => del<null>(`/book-series/${source}/${encodeURIComponent(key)}/follow`),
   simklStatus: () => get<SimklStatus>('/settings/simkl'),
-  simklStartPin: () => post<{ code: string; url: string; expiresIn: number; interval: number }>('/settings/simkl/pin', {}),
-  simklPinStatus: (code: string) => get<{ done: boolean; status?: SimklStatus }>(`/settings/simkl/pin/${encodeURIComponent(code)}`),
+  simklStartPin: () => post<{ code: string; url: string; fullUrl?: string; flow: 'device' | 'pin'; expiresIn: number; interval: number }>('/settings/simkl/pin', {}),
+  simklPinStatus: (code: string) => get<{ done: boolean; status?: SimklStatus; name?: string; interval?: number }>(`/settings/simkl/pin/${encodeURIComponent(code)}`),
   simklDisconnect: () => del<null>('/settings/simkl'),
+  simklTest: () => post<{ ok: boolean; message: string }>('/settings/simkl/test', {}),
   getHardcover: () => get<{ set: boolean; username?: string }>('/settings/hardcover'),
   putHardcover: (token: string) => put<{ set: boolean; username?: string }>('/settings/hardcover', { token }),
   // tracks=false answers with the album alone (fast); the tracklist is a second request.
@@ -3436,7 +3654,7 @@ export const api = {
   bookCoverEditions: (id: number) => get<{ editions: { coverId: number; url: string }[]; current: number }>(`/books/${id}/cover/editions`),
   pickBookCover: (id: number, coverId: number) => put<Book>(`/books/${id}/cover/edition`, { coverId }),
   removeBookCover: (id: number) => del<Book>(`/books/${id}/cover`),
-  bookReleases: (id: number, format: BookFormat) => get<SearchResult[]>(`/books/${id}/releases?format=${format}`),
+  bookReleases: (id: number, format: BookFormat) => get<SearchAnswer<SearchResult>>(`/books/${id}/releases?format=${format}&detail=1`),
   grabBook: (id: number, data: { format: BookFormat; releaseTitle: string; downloadUrl: string; sizeBytes: number; protocol?: 'usenet' | 'torrent' }) =>
     post<{ queueId: number }>(`/books/${id}/grab`, data),
   searchNowBook: (id: number, format: BookFormat) => post<{ grabbed: number; message: string }>(`/books/${id}/search?format=${format}`),
@@ -3452,6 +3670,8 @@ export const api = {
     post<{ queueId: number }>(`/music/albums/${id}/grab`, data),
   searchNowAlbum: (id: number) => post<{ grabbed: number; message: string }>(`/music/albums/${id}/search-now`),
   albumFiles: (id: number) => get<{ folder: string; files: TitleFile[] }>(`/music/albums/${id}/files`),
+  rescanAlbum: (id: number) => post<AlbumRescanReport>(`/music/albums/${id}/rescan`),
+  deleteAlbumFile: (id: number, path: string) => del<AlbumRescanReport>(`/music/albums/${id}/files?path=${encodeURIComponent(path)}`),
   albumStreamUrl: (id: number, path: string) => withBase(`/api/files/stream?album=${id}&path=${encodeURIComponent(path)}`),
   albumEvents: (id: number) => get<TitleEvent[]>(`/music/albums/${id}/events`),
   musicWanted: (kind: 'missing' | 'cutoff') => request<MusicWanted[]>(`/music/wanted?kind=${kind}`, { revalidate: true }),
@@ -3499,7 +3719,7 @@ export const api = {
   addTitleCopy: (kind: 'movie' | 'series', id: number, profileId: number) => post<TitleCopy>(`/${kind === 'movie' ? 'movies' : 'series'}/${id}/copies`, { profileId }),
   seriesSearch: (id: number, season: number, episode?: number) =>
     get<SearchAnswer<SearchResult>>(`/series/${id}/search?detail=1&season=${season}${episode ? `&episode=${episode}` : ''}`),
-  grabSeries: (id: number, data: { releaseTitle: string; downloadUrl: string; sizeBytes: number; protocol?: 'usenet' | 'torrent'; season?: number; episode?: number }) =>
+  grabSeries: (id: number, data: { releaseTitle: string; downloadUrl: string; sizeBytes: number; protocol?: 'usenet' | 'torrent'; season?: number; episode?: number; replaceQueueId?: number }) =>
     post<{ queueId: number }>(`/series/${id}/grab`, data),
 
   discoverTrending: () => get<DiscoverMovie[]>('/discover/trending'),
@@ -3520,6 +3740,9 @@ export const api = {
   saveDebrid: (service: string, apiKey: string, cached?: { preferCached: boolean; cachedLowerScore: boolean }) => put<DebridSettings>('/debrid', { service, apiKey, ...cached }),
   testDebrid: (service: string, apiKey: string) => post<{ ok: boolean; account?: DebridAccount; error?: string }>('/debrid/test', { service, apiKey }),
   downloadClient: () => get<DownloadClientSettings>('/download-client'),
+  usenetClient: () => get<UsenetClientSettings>('/usenet-client'),
+  saveUsenetClient: (data: UsenetClientInput) => put<UsenetClientSettings>('/usenet-client', data),
+  testUsenetClient: (data: UsenetClientInput) => post<{ ok: boolean; version?: string; error?: string }>('/usenet-client/test', data),
   saveDownloadClient: (data: DownloadClientInput) => put<DownloadClientSettings>('/download-client', data),
   testDownloadClient: (data: DownloadClientInput) => post<{ ok: boolean; version?: string; error?: string }>('/download-client/test', data),
   plexWatchlist: () => get<PlexWatchlistStatus>('/plex-watchlist'),
@@ -3563,6 +3786,14 @@ export const api = {
   removeUpdate: (restart = false) => del<{ removed: string; image: string; runningPushed: boolean; restarting: boolean; restartNeeded: boolean }>(`/system/update${restart ? '?restart=true' : ''}`),
   systemOptions: () => get<SystemOptions>('/system/options'),
   putSystemOptions: (o: Partial<SystemOptions>) => put<SystemOptions>('/system/options', o),
+  mcpSettings: () => get<McpSettings>('/system/mcp'),
+  putMcpSettings: (enabled: boolean) => put<McpSettings>('/system/mcp', { enabled }),
+  mcpApps: () => get<{ apps: McpApp[]; clients: McpClient[] }>('/system/mcp/apps'),
+  revokeMcpApp: (id: number) => del<null>(`/system/mcp/apps/${id}`),
+  createMcpClient: (name: string, redirectUri: string) => post<McpClientMade>('/system/mcp/clients', { name, redirectUri }),
+  deleteMcpClient: (clientId: string) => del<null>(`/system/mcp/clients/${encodeURIComponent(clientId)}`),
+  oauthRequest: (id: string) => get<OAuthRequest>(`/oauth/requests/${encodeURIComponent(id)}`),
+  oauthDecide: (id: string, allow: boolean, write: boolean) => post<{ redirect: string }>(`/oauth/requests/${encodeURIComponent(id)}`, { allow, write }),
   getProxySignIn: () => get<ProxySignIn>('/auth/proxy-signin'),
   getScripts: () => get<ScriptsState>('/scripts'),
   putScripts: (body: { script: string; timeoutSec: number }) => put<ScriptsState>('/scripts', body),
@@ -3597,7 +3828,7 @@ export const api = {
       `/discover/list?kind=${kind}&list=${list}&page=${page}${older ? '&older=true' : ''}`,
     ),
   discoverGenres: (kind: 'movie' | 'tv') => get<{ id: number; name: string }[]>(`/discover/genres?kind=${kind}`),
-  discoverBrowse: (q: { kind: 'movie' | 'tv'; genre?: string; yearFrom?: string; yearTo?: string; sort?: string; page?: number }) =>
+  discoverBrowse: (q: { kind: 'movie' | 'tv'; genre?: string; yearFrom?: string; yearTo?: string; sort?: string; language?: string; minRating?: string; runtime?: string; page?: number }) =>
     get<{ page: number; totalPages: number; results: DiscoverMovie[] }>(
       `/discover/browse?${new URLSearchParams(Object.entries(q).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => [k, String(v)])).toString()}`,
     ),
@@ -3697,8 +3928,8 @@ export const api = {
       `/settings/filesystem-check?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`,
     ),
 
-  namingPreview: (preset: string, format?: string, kind: 'movie' | 'tv' = 'movie', keep = false) =>
-    get<{ folder: string; filename: string; problem?: string }>(namingPreviewPath(preset, format, kind, keep)),
+  namingPreview: (preset: string, format?: string, kind: 'movie' | 'tv' = 'movie', keep = false, folder?: string) =>
+    get<{ folder: string; filename: string; problem?: string }>(namingPreviewPath(preset, format, kind, keep, folder)),
 
   namingTokens: () => get<NamingTokens>('/settings/naming-tokens'),
 

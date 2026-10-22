@@ -104,6 +104,12 @@ func (t Torrent) Done() bool {
 	return false
 }
 
+// Paused reports whether the torrent is paused (stopped, on qBittorrent 5)
+// before it has everything.
+func (t Torrent) Paused() bool {
+	return t.State == "pausedDL" || t.State == "stoppedDL"
+}
+
 // Failed reports whether the client gave up on the torrent.
 func (t Torrent) Failed() bool {
 	return t.State == "error" || t.State == "missingFiles"

@@ -122,7 +122,7 @@ func (s *Server) toArrSeries(sr library.Series, c arrSeriesContext) arrSeries {
 		Images: posterImages(metadata.PosterURL(sr.PosterPath)), Seasons: []arrSeason{}, Year: sr.Year,
 		RootFolderPath: s.seriesRootFor(sr), QualityProfileID: s.arrProfileID(sr.ProfileID, c.defaultProfile),
 		LanguageProfileID: 1, SeasonFolder: true, Monitored: sr.Monitored, MonitorNewItems: "all",
-		TVDBID: sr.TVDBID, TMDBID: sr.TMDBID, IMDBID: sr.IMDBID, FirstAired: arrTime(sr.FirstAirDate),
+		TVDBID: sr.TVDBID, TMDBID: sr.TMDBID, IMDBID: sr.IMDBID, TVMazeID: max(sr.TVmazeID, 0), FirstAired: arrTime(sr.FirstAirDate),
 		SeriesType: sr.SeriesType, Genres: sr.Genres, Tags: tagIDs(c.tags[sr.ID], c.numbers),
 		Added: arrTime(c.added[sr.ID]), Ratings: map[string]any{"votes": 0, "value": 0},
 	}
@@ -463,6 +463,9 @@ func (s *Server) arrAddSeries(w http.ResponseWriter, r *http.Request) {
 	case req.AddOptions != nil:
 		if mode := strings.ToLower(req.AddOptions.Monitor); mode == library.MonitorFuture || mode == library.MonitorNone {
 			_, _ = s.MovieRepo.ApplyMonitorMode(created.ID, mode, today(), false)
+			if mode == library.MonitorFuture {
+				_ = s.MovieRepo.SetSeriesMonitored(created.ID, true) // watching for new episodes is monitoring
+			}
 		}
 	}
 	if req.Monitored != nil && !*req.Monitored {
@@ -602,27 +605,37 @@ func (s *Server) arrDeleteSeries(w http.ResponseWriter, r *http.Request) {
 // --- episodes ---
 
 type arrEpisode struct {
-	ID                       int64      `json:"id"`
-	SeriesID                 int64      `json:"seriesId"`
-	TVDBID                   int        `json:"tvdbId"`
-	EpisodeFileID            int64      `json:"episodeFileId"`
-	SeasonNumber             int        `json:"seasonNumber"`
-	EpisodeNumber            int        `json:"episodeNumber"`
-	Title                    string     `json:"title"`
-	AirDate                  string     `json:"airDate,omitempty"`
-	AirDateUTC               string     `json:"airDateUtc,omitempty"`
-	Overview                 string     `json:"overview"`
-	HasFile                  bool       `json:"hasFile"`
-	Monitored                bool       `json:"monitored"`
-	UnverifiedSceneNumbering bool       `json:"unverifiedSceneNumbering"`
-	Grabbed                  bool       `json:"grabbed"`
-	Images                   []arrImage `json:"images"`
-	Series                   *arrSeries `json:"series,omitempty"`
+	ID                       int64           `json:"id"`
+	SeriesID                 int64           `json:"seriesId"`
+	TVDBID                   int             `json:"tvdbId"`
+	EpisodeFileID            int64           `json:"episodeFileId"`
+	SeasonNumber             int             `json:"seasonNumber"`
+	EpisodeNumber            int             `json:"episodeNumber"`
+	Title                    string          `json:"title"`
+	AirDate                  string          `json:"airDate,omitempty"`
+	AirDateUTC               string          `json:"airDateUtc,omitempty"`
+	Overview                 string          `json:"overview"`
+	HasFile                  bool            `json:"hasFile"`
+	Monitored                bool            `json:"monitored"`
+	UnverifiedSceneNumbering bool            `json:"unverifiedSceneNumbering"`
+	Grabbed                  bool            `json:"grabbed"`
+	Images                   []arrImage      `json:"images"`
+	Series                   *arrSeries      `json:"series,omitempty"`
+	EpisodeFile              *arrEpisodeFile `json:"episodeFile,omitempty"`
+}
+
+// arrAirDateUTC is the moment an episode airs for the *arr apps: the exact
+// time when TVmaze gave one, else midnight of the air date, as before.
+func arrAirDateUTC(ep library.Episode) string {
+	if at, err := time.Parse(time.RFC3339, ep.AirAt); err == nil {
+		return at.UTC().Format("2006-01-02T15:04:05Z")
+	}
+	return arrTime(ep.AirDate)
 }
 
 func toArrEpisode(ep library.Episode) arrEpisode {
 	out := arrEpisode{ID: ep.ID, SeriesID: ep.SeriesID, SeasonNumber: ep.Season, EpisodeNumber: ep.Episode, Title: ep.Title,
-		AirDate: ep.AirDate, AirDateUTC: arrTime(ep.AirDate), Overview: ep.Overview, HasFile: ep.Status == library.StatusDownloaded,
+		AirDate: ep.AirDate, AirDateUTC: arrAirDateUTC(ep), Overview: ep.Overview, HasFile: ep.Status == library.StatusDownloaded,
 		Monitored: ep.Monitored, Grabbed: ep.Status == library.StatusDownloading, Images: []arrImage{}}
 	if out.HasFile {
 		out.EpisodeFileID = ep.ID

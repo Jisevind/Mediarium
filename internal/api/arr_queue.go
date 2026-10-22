@@ -1,7 +1,9 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"sort"
 	"strings"
@@ -19,35 +21,37 @@ import (
 // arr.go), for all three apps.
 
 type arrQueueRecord struct {
-	ID                      int64            `json:"id"`
-	MovieID                 int64            `json:"movieId,omitempty"`
-	SeriesID                int64            `json:"seriesId,omitempty"`
-	EpisodeID               int64            `json:"episodeId,omitempty"`
-	SeasonNumber            int              `json:"seasonNumber,omitempty"`
-	ArtistID                int64            `json:"artistId,omitempty"`
-	AlbumID                 int64            `json:"albumId,omitempty"`
-	Title                   string           `json:"title"`
-	Status                  string           `json:"status"`
-	TrackedDownloadStatus   string           `json:"trackedDownloadStatus"`
-	TrackedDownloadState    string           `json:"trackedDownloadState"`
-	StatusMessages          []map[string]any `json:"statusMessages"`
-	ErrorMessage            string           `json:"errorMessage,omitempty"`
-	Size                    float64          `json:"size"`
-	Sizeleft                float64          `json:"sizeleft"`
-	Timeleft                string           `json:"timeleft,omitempty"`
-	EstimatedCompletionTime string           `json:"estimatedCompletionTime,omitempty"`
-	Added                   string           `json:"added,omitempty"`
-	Protocol                string           `json:"protocol"`
-	DownloadClient          string           `json:"downloadClient"`
-	DownloadID              string           `json:"downloadId"`
-	Indexer                 string           `json:"indexer"`
-	OutputPath              string           `json:"outputPath,omitempty"`
-	Quality                 arrQualityModel  `json:"quality"`
-	CustomFormats           []any            `json:"customFormats"`
-	Languages               []arrLanguage    `json:"languages"`
-	Movie                   *arrMovie        `json:"movie,omitempty"`
-	Series                  *arrSeries       `json:"series,omitempty"`
-	Episode                 *arrEpisode      `json:"episode,omitempty"`
+	ID                                  int64            `json:"id"`
+	MovieID                             int64            `json:"movieId,omitempty"`
+	SeriesID                            int64            `json:"seriesId,omitempty"`
+	EpisodeID                           int64            `json:"episodeId,omitempty"`
+	SeasonNumber                        int              `json:"seasonNumber,omitempty"`
+	ArtistID                            int64            `json:"artistId,omitempty"`
+	AlbumID                             int64            `json:"albumId,omitempty"`
+	Title                               string           `json:"title"`
+	Status                              string           `json:"status"`
+	TrackedDownloadStatus               string           `json:"trackedDownloadStatus"`
+	TrackedDownloadState                string           `json:"trackedDownloadState"`
+	StatusMessages                      []map[string]any `json:"statusMessages"`
+	ErrorMessage                        string           `json:"errorMessage,omitempty"`
+	Size                                float64          `json:"size"`
+	Sizeleft                            float64          `json:"sizeleft"`
+	Timeleft                            string           `json:"timeleft,omitempty"`
+	EstimatedCompletionTime             string           `json:"estimatedCompletionTime,omitempty"`
+	Added                               string           `json:"added,omitempty"`
+	Protocol                            string           `json:"protocol"`
+	DownloadClient                      string           `json:"downloadClient"`
+	DownloadID                          string           `json:"downloadId"`
+	Indexer                             string           `json:"indexer"`
+	OutputPath                          string           `json:"outputPath,omitempty"`
+	Quality                             arrQualityModel  `json:"quality"`
+	CustomFormats                       []any            `json:"customFormats"`
+	CustomFormatScore                   int              `json:"customFormatScore"`
+	DownloadClientHasPostImportCategory bool             `json:"downloadClientHasPostImportCategory"`
+	Languages                           []arrLanguage    `json:"languages"`
+	Movie                               *arrMovie        `json:"movie,omitempty"`
+	Series                              *arrSeries       `json:"series,omitempty"`
+	Episode                             *arrEpisode      `json:"episode,omitempty"`
 }
 
 // arrQueueStates maps a queue status to the arr app's status, tracked
@@ -253,37 +257,91 @@ func (s *Server) arrQueueStatus(app arrApp) http.HandlerFunc {
 	}
 }
 
-// arrDeleteQueueItem stops a download (when it's running) and takes it off
-// the list. Its files stay unless removeFromClient asks otherwise.
+// arrRemoveQueueItem stops a download (when it's running) and takes it off
+// the list. found is false when no such item is there.
+func (s *Server) arrRemoveQueueItem(id int64) (found bool, err error) {
+	item, err := s.QueueRepo.Get(id)
+	if err != nil && id >= 1000 {
+		item, err = s.QueueRepo.Get(id / 1000) // one episode of a season pack
+	}
+	if err != nil {
+		return false, nil
+	}
+	if isActiveStatus(item.Status) || item.Status == queue.StatusPaused {
+		if err := s.stopItem(item, false); err != nil {
+			return true, err
+		}
+	}
+	ref, inClient := s.clientRefFor(item)
+	if err := s.QueueRepo.Delete(item.ID); err != nil {
+		return true, err
+	}
+	s.removeFromClient(ref, inClient, false)
+	s.queueItemEvent(item, "removed", queue.LevelInfo, "Removed from the download list: "+item.ReleaseTitle)
+	return true, nil
+}
+
+// arrDeleteQueueItem takes one item off the list. Its files stay unless
+// removeFromClient asks otherwise.
 func (s *Server) arrDeleteQueueItem(app arrApp) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, ok := arrPathID(w, r)
 		if !ok {
 			return
 		}
-		item, err := s.QueueRepo.Get(id)
-		if err != nil && id >= 1000 {
-			item, err = s.QueueRepo.Get(id / 1000) // one episode of a season pack
-		}
-		if err != nil {
+		found, err := s.arrRemoveQueueItem(id)
+		if !found {
 			arrNotFound(w)
 			return
 		}
-		if isActiveStatus(item.Status) || item.Status == queue.StatusPaused {
-			if err := s.stopItem(item, false); err != nil {
-				writeError(w, http.StatusInternalServerError, err.Error())
-				return
-			}
-		}
-		ref, inClient := s.clientRefFor(item)
-		if err := s.QueueRepo.Delete(item.ID); err != nil {
+		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		s.removeFromClient(ref, inClient, false)
-		s.queueItemEvent(item, "removed", queue.LevelInfo, "Removed from the download list: "+item.ReleaseTitle)
 		writeJSON(w, http.StatusOK, map[string]any{})
 	}
+}
+
+// arrBulkDeleteQueue answers DELETE /queue/bulk: several items at once, the
+// ids in the body.
+func (s *Server) arrBulkDeleteQueue(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		IDs []int64 `json:"ids"`
+	}
+	if err := json.NewDecoder(io.LimitReader(r.Body, 1<<20)).Decode(&body); err != nil || len(body.IDs) == 0 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"message": "ids are needed"})
+		return
+	}
+	for _, id := range body.IDs {
+		if id <= 0 {
+			continue
+		}
+		if _, err := s.arrRemoveQueueItem(id); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{})
+}
+
+// arrGrabQueueItem answers POST /queue/grab/{id}: the item is already on the
+// list and being handled here, so there is nothing more to start.
+func (s *Server) arrGrabQueueItem(w http.ResponseWriter, r *http.Request) {
+	id, ok := arrPathID(w, r)
+	if !ok {
+		return
+	}
+	if _, err := s.QueueRepo.Get(id); err != nil {
+		if id < 1000 {
+			arrNotFound(w)
+			return
+		}
+		if _, err := s.QueueRepo.Get(id / 1000); err != nil {
+			arrNotFound(w)
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{})
 }
 
 // --- wanted and calendar ---
@@ -315,7 +373,6 @@ func (s *Server) allShowEpisodes() ([]showEpisode, error) {
 
 func (s *Server) arrWantedMissing(app arrApp) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		page, size := paging(r, 10)
 		desc := !strings.EqualFold(r.URL.Query().Get("sortDirection"), "ascending")
 		var records []any
 		switch app {
@@ -347,7 +404,7 @@ func (s *Server) arrWantedMissing(app arrApp) http.HandlerFunc {
 			series := map[int64]*arrSeries{}
 			var list []arrEpisode
 			for _, se := range all {
-				if !se.series.Monitored || !se.ep.Monitored || se.ep.Status == library.StatusDownloaded || se.ep.AirDate == "" || se.ep.AirDate > today() {
+				if !se.series.Monitored || !se.ep.Monitored || se.ep.Status == library.StatusDownloaded || se.ep.AirDate == "" || se.ep.AirDate > today() || se.ep.AirsLater(time.Now()) {
 					continue
 				}
 				if series[se.series.ID] == nil {
@@ -381,12 +438,7 @@ func (s *Server) arrWantedMissing(app arrApp) http.HandlerFunc {
 				records = append(records, s.toArrAlbum(a, &ar))
 			}
 		}
-		if records == nil {
-			records = []any{}
-		}
-		from, to := pageOf(len(records), page, size)
-		writeJSON(w, http.StatusOK, arrPage{Page: page, PageSize: size, SortKey: r.URL.Query().Get("sortKey"),
-			SortDirection: map[bool]string{true: "descending", false: "ascending"}[desc], TotalRecords: len(records), Records: records[from:to]})
+		arrWantedPage(w, r, records, map[arrApp]string{arrRadarr: "movieMetadata.sortTitle", arrSonarr: "episodes.airDateUtc", arrLidarr: "albums.releaseDate"}[app])
 	}
 }
 
@@ -411,6 +463,7 @@ func (s *Server) arrCalendar(app arrApp) http.HandlerFunc {
 					out = append(out, s.toArrMovie(m, c))
 				}
 			}
+			sort.Slice(out, func(i, j int) bool { return out[i].InCinemas < out[j].InCinemas })
 			writeJSON(w, http.StatusOK, out)
 		case arrSonarr:
 			all, err := s.allShowEpisodes()
@@ -431,6 +484,9 @@ func (s *Server) arrCalendar(app arrApp) http.HandlerFunc {
 				}
 				e := toArrEpisode(se.ep)
 				e.Series = series[se.series.ID]
+				if queryBool(r, "includeEpisodeFile") {
+					e.EpisodeFile = s.toArrEpisodeFile(se.ep)
+				}
 				out = append(out, e)
 			}
 			sort.Slice(out, func(i, j int) bool { return out[i].AirDate < out[j].AirDate })

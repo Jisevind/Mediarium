@@ -40,6 +40,10 @@ type settingsPayload struct {
 	MovieNameFormat   string  `json:"movieNameFormat"`
 	// EpisodeNameFormat is the custom file name format for episodes.
 	EpisodeNameFormat string `json:"episodeNameFormat"`
+	// MovieFolderFormat and SeriesFolderFormat name the folder a new movie or
+	// show gets (Custom style only); empty keeps the usual "Title (Year)".
+	MovieFolderFormat  string `json:"movieFolderFormat"`
+	SeriesFolderFormat string `json:"seriesFolderFormat"`
 	// KeepOriginalNames keeps the file name an imported video came with
 	// (folders are still named by the preset). A pointer so an omitted field
 	// leaves it alone.
@@ -98,6 +102,8 @@ type settingsPayload struct {
 	SubtitleProfiles     map[string]subtitles.Profile `json:"subtitleProfiles,omitempty"`
 	SubtitleAutoDownload *bool                        `json:"subtitleAutoDownload,omitempty"`
 	SubtitleUpgrade      *bool                        `json:"subtitleUpgrade,omitempty"`
+	// NotifyTrashSyncAlways also sends the TRaSH Guides message when nothing changed.
+	NotifyTrashSyncAlways *bool `json:"notifyTrashSyncAlways,omitempty"`
 	// SubtitlesEnabled is the master switch. While it is off nothing searches
 	// for or downloads subtitles and the app stops mentioning them.
 	SubtitlesEnabled *bool `json:"subtitlesEnabled,omitempty"`
@@ -156,6 +162,9 @@ type settingsPayload struct {
 	// SeasonPacks looks for a season pack once a season has ended (off unless
 	// switched on; a show can say otherwise for itself).
 	SeasonPacks *bool `json:"seasonPacks,omitempty"`
+	// TVmazeAirTimes looks up the time episodes air on TVmaze (on unless
+	// switched off; off means TVmaze is never contacted).
+	TVmazeAirTimes *bool `json:"tvmazeAirTimes,omitempty"`
 
 	// Optional OpenSubtitles.com account (raises the daily download limit).
 	OpenSubtitlesUsername    *string `json:"openSubtitlesUsername,omitempty"`
@@ -212,6 +221,10 @@ type settingsPayload struct {
 
 	// Indexer traffic through the VPN. A pointer for the same reason.
 	RouteIndexersThroughVPN *bool `json:"routeIndexersThroughVpn,omitempty"`
+
+	// The person said their torrent client is already behind a VPN, so the
+	// "Torrenting without a VPN" notice stays away.
+	VPNNoticeAcknowledged *bool `json:"vpnNoticeAcknowledged,omitempty"`
 
 	// Curated/public list import — Trakt's public
 	// list-items endpoint only needs an app client ID, no user OAuth.
@@ -344,6 +357,8 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	namingPreset, _ := s.Settings.Get(settings.KeyNamingPreset)
 	movieFormat, _ := s.Settings.Get(settings.KeyMovieNameFormat)
 	episodeFormat, _ := s.Settings.Get(settings.KeyEpisodeNameFormat)
+	movieFolderFormat, _ := s.Settings.Get(settings.KeyMovieFolderFormat)
+	seriesFolderFormat, _ := s.Settings.Get(settings.KeySeriesFolderFormat)
 	keepOriginalNames := s.keepOriginalNames()
 	onboardingDone, _ := s.Settings.GetBool(settings.KeyOnboardingDone)
 	torrentPort := strconv.Itoa(s.torrentListenPort()) // the port in use, 58264 unless changed
@@ -355,6 +370,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	legalAt, _ := s.Settings.Get(settings.KeyLegalAcknowledgedAt)
 	subtitleAuto := s.autoSubtitleSetting()
 	subtitleUpgrade := s.subtitleUpgradeSetting()
+	trashSyncAlways := s.settingOn(settings.KeyTrashSyncAlways, false)
 	numberingLookup := s.numberingLookupOn()
 	countEmbedded := s.countEmbeddedSubtitles()
 	subtitleWizdom := s.wizdomOn()
@@ -362,6 +378,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	osEnabled, subdlEnabled, addonsEnabled := sources.OpenSubtitles.Switch, sources.SubDL.Switch, sources.Addons.Switch
 	unmonitorDownloaded, unmonitorFinished := s.unmonitorDownloaded(), s.unmonitorFinished()
 	seasonPacks := s.seasonPackDefault()
+	tvmazeAirTimes := s.tvmazeOn()
 	qualityLanguageOnly := s.languageOnly()
 	showAdvanced := s.showAdvanced()
 	trashFormatsAuto := s.trashAutoUpdate()
@@ -380,6 +397,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	illegalCharReplacement, _ := s.Settings.Get(settings.KeyIllegalCharReplacement)
 	requireVPNForTorrents := s.vpnRequiredForTorrents()
 	routeIndexersThroughVPN := s.vpnForIndexers()
+	vpnNoticeAcknowledged := s.vpnNoticeAcknowledged()
 	importConflictPolicy, _ := s.Settings.Get(settings.KeyImportConflictPolicy)
 	if importConflictPolicy == "" {
 		importConflictPolicy = "skip"
@@ -428,6 +446,8 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		NamingPreset:             namingPreset,
 		MovieNameFormat:          movieFormat,
 		EpisodeNameFormat:        episodeFormat,
+		MovieFolderFormat:        movieFolderFormat,
+		SeriesFolderFormat:       seriesFolderFormat,
 		KeepOriginalNames:        &keepOriginalNames,
 		HasTMDBAPIKey:            s.TMDB().HasAPIKey(),
 		OnboardingDone:           onboardingDone,
@@ -447,6 +467,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		SubtitleProfiles:         s.subtitleProfiles(),
 		SubtitleAutoDownload:     &subtitleAuto,
 		SubtitleUpgrade:          &subtitleUpgrade,
+		NotifyTrashSyncAlways:    &trashSyncAlways,
 		SubtitlesEnabled:         &subtitlesOn,
 		HasOpenSubtitlesAPIKey:   s.Subtitles().HasAPIKey(),
 		HasSubDLAPIKey:           s.SubDL().HasAPIKey(),
@@ -470,6 +491,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		FFmpegAvailable:          s.ffmpegFound(),
 		UnmonitorFinished:        &unmonitorFinished,
 		SeasonPacks:              &seasonPacks,
+		TVmazeAirTimes:           &tvmazeAirTimes,
 		HasOpenSubtitlesAccount:  s.Subtitles().HasCredentials(),
 		OpenSubtitlesAccountName: osUser,
 		TMDBKeyBuiltIn:           s.builtin.TMDB != "",
@@ -491,6 +513,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		ReleaseCountryEffective:  s.releaseRegion(),
 		RequireVPNForTorrents:    &requireVPNForTorrents,
 		RouteIndexersThroughVPN:  &routeIndexersThroughVPN,
+		VPNNoticeAcknowledged:    &vpnNoticeAcknowledged,
 		ImportConflictPolicy:     importConflictPolicy,
 		HasTraktClientID:         s.Trakt().HasClientID(),
 		HasSimklClientID:         s.Simkl().HasClientID(),
@@ -717,6 +740,8 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		{settings.KeyNamingPreset, req.NamingPreset},
 		{settings.KeyMovieNameFormat, req.MovieNameFormat},
 		{settings.KeyEpisodeNameFormat, req.EpisodeNameFormat},
+		{settings.KeyMovieFolderFormat, req.MovieFolderFormat},
+		{settings.KeySeriesFolderFormat, req.SeriesFolderFormat},
 		{settings.KeyTorrentListenPort, req.TorrentListenPort},
 		{settings.KeyTorrentSeedRatioLimit, req.TorrentSeedRatioLimit},
 		{settings.KeyTorrentSeedTimeLimitH, req.TorrentSeedTimeLimitH},
@@ -784,6 +809,16 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 			value = "0"
 		}
 		if err := tx.Set(settings.KeySubtitleAutoDownload, value, false); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if req.NotifyTrashSyncAlways != nil {
+		value := "0"
+		if *req.NotifyTrashSyncAlways {
+			value = "1"
+		}
+		if err := tx.Set(settings.KeyTrashSyncAlways, value, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -890,6 +925,12 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	if req.TVmazeAirTimes != nil {
+		if err := setBool(tx, settings.KeyTVmazeAirTimes, *req.TVmazeAirTimes); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
 	if req.UnmonitorFinished != nil {
 		if err := setBool(tx, settings.KeyUnmonitorFinished, *req.UnmonitorFinished); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
@@ -990,6 +1031,16 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 			value = "0"
 		}
 		if err := tx.Set(settings.KeyVPNRequireForTorrents, value, false); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if req.VPNNoticeAcknowledged != nil {
+		value := "1"
+		if !*req.VPNNoticeAcknowledged {
+			value = "0"
+		}
+		if err := tx.Set(settings.KeyVPNNoticeAcknowledged, value, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -1305,6 +1356,15 @@ func (s *Server) handleNamingPreview(w http.ResponseWriter, r *http.Request) {
 	}
 	format := r.URL.Query().Get("format")
 	problem := ""
+	folderFormat := r.URL.Query().Get("folder")
+	if folderFormat == "" {
+		folderFormat = organizer.DefaultMovieFolder
+		if tv {
+			folderFormat = organizer.DefaultSeriesFolder
+		}
+	} else {
+		problem = organizer.CheckFolderFormat(folderFormat, kind)
+	}
 	if format == "" {
 		if preset, ok := presets[r.URL.Query().Get("preset")]; ok {
 			format = preset
@@ -1312,11 +1372,13 @@ func (s *Server) handleNamingPreview(w http.ResponseWriter, r *http.Request) {
 			format = presets["plex"]
 		}
 	} else {
-		problem = organizer.CheckFormat(format, kind)
+		if m := organizer.CheckFormat(format, kind); m != "" {
+			problem = m
+		}
 	}
 	mode, replacement := s.illegalCharSettings()
 	clean := func(f string) string { return organizer.Sanitize(organizer.Render(f, sample), mode, replacement) }
-	out := namingPreviewPayload{Folder: clean(organizer.Presets["plex"]), Filename: clean(format) + ".mkv", Problem: problem}
+	out := namingPreviewPayload{Folder: clean(folderFormat), Filename: clean(format) + ".mkv", Problem: problem}
 	if r.URL.Query().Get("keep") == "1" {
 		// "Keep the original file names": the sample file keeps its own name.
 		if name, ok := organizer.OriginalName(sample.OriginalFilename+".mkv", mode, replacement); ok {
@@ -1324,7 +1386,7 @@ func (s *Server) handleNamingPreview(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if tv {
-		out.Folder = clean(organizer.TVSeriesFolder) + "/" + clean(organizer.TVSeasonFolder)
+		out.Folder = clean(folderFormat) + "/" + clean(organizer.TVSeasonFolder)
 	}
 	writeJSON(w, http.StatusOK, out)
 }
@@ -1332,7 +1394,7 @@ func (s *Server) handleNamingPreview(w http.ResponseWriter, r *http.Request) {
 // handleNamingTokens lists the tokens a custom format can use and the
 // ready-made formats to start from, for the builder in Settings.
 func (s *Server) handleNamingTokens(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{"tokens": organizer.Tokens(), "schemes": organizer.Schemes})
+	writeJSON(w, http.StatusOK, map[string]any{"tokens": organizer.Tokens(), "schemes": organizer.Schemes, "folderSchemes": organizer.FolderSchemes})
 }
 
 // nearestExisting walks up from path to the closest folder that exists, and

@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -83,55 +84,78 @@ func (b *arrOffers) get(guid string) (arrOffer, bool) {
 // arrRelease is one release in the shape both apps list. The fields of the
 // other app are left out (omitempty) rather than sent empty.
 type arrRelease struct {
-	GUID                 string          `json:"guid"`
-	Quality              arrQualityModel `json:"quality"`
-	QualityWeight        int             `json:"qualityWeight"`
-	Age                  int             `json:"age"`
-	AgeHours             float64         `json:"ageHours"`
-	AgeMinutes           float64         `json:"ageMinutes"`
-	Size                 int64           `json:"size"`
-	IndexerID            int64           `json:"indexerId"`
-	Indexer              string          `json:"indexer"`
-	ReleaseGroup         string          `json:"releaseGroup,omitempty"`
-	SubGroup             string          `json:"subGroup,omitempty"`
-	ReleaseHash          string          `json:"releaseHash"`
-	Title                string          `json:"title"`
-	SceneSource          bool            `json:"sceneSource"`
-	Languages            []arrLanguage   `json:"languages"`
-	LanguageWeight       int             `json:"languageWeight"`
-	Approved             bool            `json:"approved"`
-	TemporarilyRejected  bool            `json:"temporarilyRejected"`
-	Rejected             bool            `json:"rejected"`
-	Rejections           []string        `json:"rejections"`
-	PublishDate          string          `json:"publishDate"`
-	CommentURL           string          `json:"commentUrl"`
-	DownloadURL          string          `json:"downloadUrl"`
-	InfoURL              string          `json:"infoUrl"`
-	DownloadAllowed      bool            `json:"downloadAllowed"`
-	ReleaseWeight        int             `json:"releaseWeight"`
-	CustomFormats        []any           `json:"customFormats"`
-	CustomFormatScore    int             `json:"customFormatScore"`
-	Protocol             string          `json:"protocol"`
-	Seeders              *int            `json:"seeders"`
-	Leechers             *int            `json:"leechers"`
-	MagnetURL            string          `json:"magnetUrl,omitempty"`
-	InfoHash             string          `json:"infoHash,omitempty"`
-	IndexerFlags         any             `json:"indexerFlags"`
-	MovieTitles          []string        `json:"movieTitles,omitempty"`
-	Edition              string          `json:"edition,omitempty"`
-	TMDBID               int             `json:"tmdbId,omitempty"`
-	IMDBID               string          `json:"imdbId,omitempty"`
-	MappedMovieID        int64           `json:"mappedMovieId,omitempty"`
-	FullSeason           *bool           `json:"fullSeason,omitempty"`
-	SeasonNumber         *int            `json:"seasonNumber,omitempty"`
-	SeriesTitle          string          `json:"seriesTitle,omitempty"`
-	EpisodeNumbers       []int           `json:"episodeNumbers,omitempty"`
-	AbsoluteEpisodeNums  []int           `json:"absoluteEpisodeNumbers,omitempty"`
-	MappedSeasonNumber   *int            `json:"mappedSeasonNumber,omitempty"`
-	MappedEpisodeNumbers []int           `json:"mappedEpisodeNumbers,omitempty"`
-	MappedSeriesID       int64           `json:"mappedSeriesId,omitempty"`
-	Special              *bool           `json:"special,omitempty"`
-	ReleaseType          string          `json:"releaseType,omitempty"`
+	GUID                 string            `json:"guid"`
+	Quality              arrQualityModel   `json:"quality"`
+	QualityWeight        int               `json:"qualityWeight"`
+	Age                  int               `json:"age"`
+	AgeHours             float64           `json:"ageHours"`
+	AgeMinutes           float64           `json:"ageMinutes"`
+	Size                 int64             `json:"size"`
+	IndexerID            int64             `json:"indexerId"`
+	Indexer              string            `json:"indexer"`
+	ReleaseGroup         string            `json:"releaseGroup,omitempty"`
+	SubGroup             string            `json:"subGroup,omitempty"`
+	ReleaseHash          string            `json:"releaseHash"`
+	Title                string            `json:"title"`
+	SceneSource          bool              `json:"sceneSource"`
+	Languages            []arrLanguage     `json:"languages"`
+	LanguageWeight       int               `json:"languageWeight"`
+	Approved             bool              `json:"approved"`
+	TemporarilyRejected  bool              `json:"temporarilyRejected"`
+	Rejected             bool              `json:"rejected"`
+	Rejections           []string          `json:"rejections"`
+	PublishDate          string            `json:"publishDate"`
+	CommentURL           string            `json:"commentUrl"`
+	DownloadURL          string            `json:"downloadUrl"`
+	InfoURL              string            `json:"infoUrl"`
+	DownloadAllowed      bool              `json:"downloadAllowed"`
+	ReleaseWeight        int               `json:"releaseWeight"`
+	CustomFormats        []arrCustomFormat `json:"customFormats"`
+	CustomFormatScore    int               `json:"customFormatScore"`
+	Protocol             string            `json:"protocol"`
+	Seeders              *int              `json:"seeders"`
+	Leechers             *int              `json:"leechers"`
+	MagnetURL            string            `json:"magnetUrl,omitempty"`
+	InfoHash             string            `json:"infoHash,omitempty"`
+	IndexerFlags         any               `json:"indexerFlags"`
+	MovieTitles          []string          `json:"movieTitles,omitempty"`
+	Edition              string            `json:"edition,omitempty"`
+	TMDBID               int               `json:"tmdbId,omitempty"`
+	IMDBID               string            `json:"imdbId,omitempty"`
+	MappedMovieID        int64             `json:"mappedMovieId,omitempty"`
+	FullSeason           *bool             `json:"fullSeason,omitempty"`
+	SeasonNumber         *int              `json:"seasonNumber,omitempty"`
+	SeriesTitle          string            `json:"seriesTitle,omitempty"`
+	EpisodeNumbers       []int             `json:"episodeNumbers,omitempty"`
+	AbsoluteEpisodeNums  []int             `json:"absoluteEpisodeNumbers,omitempty"`
+	MappedSeasonNumber   *int              `json:"mappedSeasonNumber,omitempty"`
+	MappedEpisodeNumbers []int             `json:"mappedEpisodeNumbers,omitempty"`
+	MappedSeriesID       int64             `json:"mappedSeriesId,omitempty"`
+	Special              *bool             `json:"special,omitempty"`
+	ReleaseType          string            `json:"releaseType,omitempty"`
+}
+
+// arrCustomFormat is a custom format as the apps list it next to a release.
+type arrCustomFormat struct {
+	ID                              int64  `json:"id"`
+	Name                            string `json:"name"`
+	IncludeCustomFormatWhenRenaming bool   `json:"includeCustomFormatWhenRenaming"`
+	Specifications                  []any  `json:"specifications"`
+}
+
+// arrRejections lists, in plain words, everything that keeps an automatic
+// search from taking the release: the profile and size reasons, and the flags
+// (blocklisted, too few seeders, another language). The "why not the best"
+// note is no rejection and is left out.
+func arrRejections(p searchResultPayload) []string {
+	out := append([]string{}, p.Rejections...)
+	for _, r := range p.Reasons {
+		switch r.Kind {
+		case "blocklist", "seeders", "language":
+			out = append(out, r.Text)
+		}
+	}
+	return out
 }
 
 // arrReleaseOf turns one search result into the app's release.
@@ -145,7 +169,7 @@ func (s *Server) arrReleaseOf(app arrApp, p searchResultPayload, indexerIDs map[
 	} else {
 		pub = "0001-01-01T00:00:00Z"
 	}
-	rej := append([]string{}, p.Rejections...)
+	rej := arrRejections(p)
 	langs := []arrLanguage{arrEnglish}
 	if p.LanguageFit == "other" && p.Language != "" {
 		langs = []arrLanguage{{ID: 0, Name: p.Language}}
@@ -157,7 +181,13 @@ func (s *Server) arrReleaseOf(app arrApp, p searchResultPayload, indexerIDs map[
 		Title: p.Title, Languages: langs, LanguageWeight: 1,
 		Approved: len(rej) == 0, Rejected: len(rej) > 0, Rejections: rej,
 		PublishDate: pub, DownloadURL: p.DownloadURL, DownloadAllowed: true,
-		CustomFormats: []any{}, Protocol: p.Protocol, InfoHash: p.InfoHash,
+		CustomFormats: []arrCustomFormat{}, Protocol: p.Protocol, InfoHash: p.InfoHash,
+	}
+	if rel.Repack || rel.Proper {
+		out.Quality.Revision = arrRevision{Version: 2, IsRepack: rel.Repack}
+	}
+	for _, f := range p.Formats {
+		out.CustomFormats = append(out.CustomFormats, arrCustomFormat{ID: f.ID, Name: f.Name, Specifications: []any{}})
 	}
 	if p.Best {
 		out.ReleaseWeight = 1
@@ -166,11 +196,13 @@ func (s *Server) arrReleaseOf(app arrApp, p searchResultPayload, indexerIDs map[
 		out.CustomFormatScore = *p.FormatScore
 	}
 	if p.Protocol == "torrent" {
-		out.Seeders, out.Leechers = &p.Seeders, &p.Peers
+		seeders, leechers := p.Seeders, p.Peers
+		out.Seeders, out.Leechers = &seeders, &leechers
 	}
 	if app == arrRadarr {
 		out.IndexerFlags = []string{}
 		out.MovieTitles = []string{}
+		out.Edition = rel.Edition
 		return out
 	}
 	out.IndexerFlags = 0
@@ -184,6 +216,34 @@ func (s *Server) arrReleaseOf(app arrApp, p searchResultPayload, indexerIDs map[
 	out.AbsoluteEpisodeNums = []int{}
 	out.ReleaseType = "unknown"
 	return out
+}
+
+// sortArrReleases puts the best release first, like the web app does: the one
+// an automatic search would take, then the ones nothing speaks against, then by
+// quality, custom format score, seeders and size.
+func sortArrReleases(list []arrRelease) {
+	seeders := func(r arrRelease) int {
+		if r.Seeders == nil {
+			return 0
+		}
+		return *r.Seeders
+	}
+	sort.SliceStable(list, func(i, j int) bool {
+		a, b := list[i], list[j]
+		switch {
+		case a.ReleaseWeight != b.ReleaseWeight:
+			return a.ReleaseWeight > b.ReleaseWeight
+		case a.Approved != b.Approved:
+			return a.Approved
+		case a.QualityWeight != b.QualityWeight:
+			return a.QualityWeight > b.QualityWeight
+		case a.CustomFormatScore != b.CustomFormatScore:
+			return a.CustomFormatScore > b.CustomFormatScore
+		case seeders(a) != seeders(b):
+			return seeders(a) > seeders(b)
+		}
+		return a.Size > b.Size
+	})
 }
 
 // indexerIDsByName maps the indexers' names to their ids, for the releases.
@@ -314,6 +374,7 @@ func (s *Server) arrListReleases(app arrApp) http.HandlerFunc {
 			o.title, o.size, o.protocol = p.Title, p.SizeBytes, p.Protocol
 			book.put(p.DownloadURL, o)
 		}
+		sortArrReleases(out)
 		writeJSON(w, http.StatusOK, out)
 	}
 }

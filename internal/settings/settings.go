@@ -39,6 +39,7 @@ const (
 	KeyNamingPreset        = "library.naming_preset"       // plex|jellyfin|kodi|minimal|custom
 	KeyMovieNameFormat     = "library.movie_name_format"   // token string, used when preset=custom
 	KeyEpisodeNameFormat   = "library.episode_name_format" // token string, used when preset=custom
+	KeyTVmazeAirTimes      = "metadata.tvmaze_air_times"   // "0" stops Mediarium looking up the time episodes air on TVmaze (the calendar then only knows days); anything else (including unset) leaves it on
 	KeyKeepOriginalNames   = "library.keep_original_names" // "1" keeps the file name an imported video came with (folders are still named by the preset; a random, obfuscated name falls back to the preset); unset or "0" renames as the preset says
 	KeyTMDBAPIKey          = "metadata.tmdb_api_key"       // encrypted
 	KeyOnboardingDone      = "onboarding.done"             // "1" once the first-run wizard completes
@@ -85,6 +86,25 @@ const (
 	KeyDownloadClientRemoveOnStop   = "downloadclient.remove_on_stop"      // "0" leaves a stopped or removed download's torrent in the client; unset or "1" removes it too (only an unfinished torrent Mediarium added itself)
 	KeyDownloadClientLinkRoot       = "downloadclient.link_root"           // symlinks from the client may be imported only when they lead into this folder (Decypharr's mount); unset = no symlinks
 
+	// An external Usenet downloader (SABnzbd or NZBGet) Usenet releases can go to instead of the built-in one.
+	KeyUsenetClientKind           = "usenetclient.kind"                // "" (off), "sabnzbd" or "nzbget"
+	KeyUsenetClientUse            = "usenetclient.use"                 // "1" sends Usenet releases to it; unset or "0" keeps the built-in downloader
+	KeyUsenetClientURL            = "usenetclient.url"                 // the client's web address, e.g. http://192.168.1.10:8080
+	KeyUsenetClientUsername       = "usenetclient.username"            // NZBGet's login (ControlUsername)
+	KeyUsenetClientPassword       = "usenetclient.password"            // encrypted; NZBGet's password (ControlPassword)
+	KeyUsenetClientAPIKey         = "usenetclient.api_key"             // encrypted; SABnzbd's API key
+	KeyUsenetClientCategory       = "usenetclient.category"            // the category NZBs are added with; unset = "mediarium" (when no kind has a category of its own either)
+	KeyUsenetClientCategoryMovies = "usenetclient.category_movies"     // category for movies; unset = the main category
+	KeyUsenetClientCategoryTV     = "usenetclient.category_tv"         // category for TV shows; unset = the main category
+	KeyUsenetClientCategoryMusic  = "usenetclient.category_music"      // category for music; unset = the main category
+	KeyUsenetClientCategoryBooks  = "usenetclient.category_books"      // category for books; unset = the main category
+	KeyUsenetClientPriority       = "usenetclient.priority"            // "low", "normal" (default), "high" or "force"
+	KeyUsenetClientSendURL        = "usenetclient.send_url"            // "1" lets the client fetch the NZB from the indexer itself; unset or "0" uploads the file
+	KeyUsenetClientRemotePath     = "usenetclient.remote_path"         // path mapping: a folder as the client reports it, e.g. /downloads/complete
+	KeyUsenetClientLocalPath      = "usenetclient.local_path"          // path mapping: the same folder as Mediarium sees it
+	KeyUsenetClientRemoveImport   = "usenetclient.remove_after_import" // "1" removes the job and its files from the client once imported; unset or "0" leaves them there
+	KeyUsenetClientRemoveOnStop   = "usenetclient.remove_on_stop"      // "0" leaves a stopped or removed download's job in the client; unset or "1" removes it too (only an unfinished job Mediarium added)
+
 	// Automation (RSS sync, scheduled search, hunting).
 	KeyAutomationEnabled  = "automation.enabled"            // "0" disables; anything else (including unset) enables
 	KeyQualityProfile     = "library.quality_profile"       // legacy: an old preset key (any-1080p, ultra-hd, any); only read once to pick the initial default profile
@@ -124,6 +144,8 @@ const (
 	KeyTraktClientID  = "metadata.trakt_client_id" // encrypted
 	KeySimklClientID  = "metadata.simkl_client_id" // encrypted; the Client ID of a Simkl app (own, or the one a release ships with)
 	KeySimklToken     = "metadata.simkl_token"     // encrypted; the access token of the connected Simkl account
+	KeySimklRefresh   = "metadata.simkl_refresh"   // encrypted; the refresh token Simkl gave with the access token, when it gave one
+	KeySimklExpires   = "metadata.simkl_expires"   // when the access token runs out (Unix seconds), when Simkl said; unset for a token that does not expire
 	KeyHardcoverToken = "books.hardcover_token"    // encrypted; a personal Hardcover API token for better book series and release dates. Unset = Open Library only
 
 	// Illegal filename character handling ("configurable
@@ -138,6 +160,10 @@ const (
 	// silently block every torrent grab for anyone who hasn't configured a
 	// VPN at all yet — an opt-in kill switch, not an opt-out one.
 	KeyVPNRequireForTorrents = "vpn.require_for_torrents"
+
+	// "1" once the person said their torrent client is already behind a VPN:
+	// the dashboard no longer warns about torrenting without one.
+	KeyVPNNoticeAcknowledged = "vpn.notice_acknowledged"
 
 	// Indexer traffic through the VPN. Off when unset.
 	KeyVPNRouteIndexers = "vpn.route_indexers" // "1" sends searches, RSS, release downloads, IRC announces and debrid through the VPN, and they wait while it isn't up. Home-network addresses still connect directly
@@ -172,7 +198,7 @@ const (
 	KeyAppLinks            = "apps.links"             // JSON list of add-ons: other programs next to Mediarium with a link to each (name, address, how it opens)
 	KeyQuietUntil          = "automation.quiet_until" // RFC 3339: until then the heavy background jobs do nothing ("Quiet for a while"); unset = not quiet
 	KeyNewestFirst         = "downloads.newest_first" // "1": among the downloads the automatic searches added, newer releases start first; unset = in the order they were added
-	KeyDownloadsConcurrent = "downloads.concurrent"   // how many downloads run at the same time, Usenet and torrents together: 1 to 5; unset = 1
+	KeyDownloadsConcurrent = "downloads.concurrent"   // how many downloads run at the same time, Usenet and torrents together: 1 to 500; unset = 1
 
 	// When the person accepted the legal notice (RFC 3339); unset until then.
 	KeyLegalAcknowledgedAt = "legal.acknowledged_at"
@@ -196,6 +222,7 @@ const (
 	KeyPrecheck             = "downloads.precheck"             // "1" asks the news servers whether a sample of an NZB's articles exist before downloading it, and gives up at once on a release the PAR2 files could not repair; unset or "0" leaves it off
 	KeyDigestDay            = "notify.digest_day"              // the day of the weekly summary, "0" (Sunday) to "6"; unset = no summary
 	KeyDigestHour           = "notify.digest_hour"             // the hour it is sent (server time), "0" to "23"; unset = 9
+	KeyTrashSyncAlways      = "notify.trashsync_always"        // "1" also sends a message when a check of the TRaSH Guides changed nothing (to the targets that listen for that event); unset or "0" sends only when something changed. A check that failed is always sent
 	KeyDigestSent           = "notify.digest_sent"             // when the last one was sent, RFC 3339 (kept by Mediarium, not a setting to edit)
 	KeyNotifyQuietHours     = "notify.quiet_hours"             // hours when everyday messages wait, "23-7" (server time); unset = none. Problems are always sent at once
 	KeyBackupAuto           = "backup.auto"                    // "0" turns the nightly backup into /config/backups off; anything else (including unset) leaves it on
@@ -248,6 +275,7 @@ const (
 	KeyUpdatesCheckedAt   = "updates.last_checked_at"        // when the last check ran (RFC 3339; set by the app, not user-editable)
 	KeyUpdatesNotified    = "updates.notified_version"       // the version the "new version" message was last sent for (set by the app, not user-editable)
 	KeyAutoRestartStuck   = "system.auto_restart_when_stuck" // "0" stops Mediarium restarting itself when it has not answered for three minutes; anything else (including unset) leaves it on
+	KeyMCPEnabled         = "mcp.enabled"                    // "1" lets AI assistants connect to the MCP address (POST /mcp) with an administrator's API key; unset or "0" keeps it off. Only a signed-in browser session can switch it on, not an API key
 
 	// Watched status and cleanup rules (Settings > Connections > Media servers). Both off by default.
 	KeyWatchedSync   = "watched.sync"   // "1" reads what's been watched from Plex, Jellyfin and Emby every six hours; unset or "0" leaves it off
@@ -264,6 +292,7 @@ const (
 	KeyAuthLDAP        = "auth.ldap"         // encrypted; sign-in with a directory (LDAP or Active Directory) (JSON: enabled, server, bind account and password, filters, attribute names, account rules). Off unless enabled is true. Only a signed-in browser session can read or set it, not an API key. MEDIARIUM_DISABLE_SSO=1 overrides it
 	KeyAuthIdleDays    = "auth.idle_days"    // browser sessions not used for this many days (1 to 7) end and the person signs in again. Unset or "0" leaves it off. API keys, calendar feeds and e-reader passwords are not affected
 	KeyAuthPasskeys    = "auth.passkeys"     // "1" lets people sign in with a passkey; needs the public address (server.public_url). Unset or "0" leaves it off
+	KeyAuthAutoSignIn  = "auth.auto_signin"  // "oidc" sends visitors who are not signed in straight to the single sign-on provider from the sign-in page (add ?no-redirect=1 to the address to see the normal page); unset or empty leaves it off. Only a signed-in browser session can set it, and only while single sign-on works
 	KeyAuthLocalSignIn = "auth.local_signin" // "0" turns the username and password form off (only possible once an administrator has signed in with another method); anything else (including unset) leaves it on
 
 	// A script to run after each import (Settings > System > Server and updates). See docs/scripts.md.
@@ -271,8 +300,17 @@ const (
 	KeyScriptLastRun     = "scripts.last_run"     // what the last run did (JSON; set by the app, not user-editable)
 
 	// Search and quality (Settings > Library). Both off until switched on.
-	KeySearchDelay = "search.delay_profile" // delay profile (JSON: preferredProtocol, usenetMinutes, torrentMinutes, bypassIfHighestQuality): automatic searches hold back releases of the less liked protocol for that many minutes; unset or 0 minutes = no wait
-	KeySizeLimits  = "quality.size_limits"  // size limits per quality in MB per minute of runtime (JSON: enabled, limits); applied only while enabled is true
+	KeySearchDelay  = "search.delay_profile"  // delay profile (JSON: preferredProtocol, usenetMinutes, torrentMinutes, bypassIfHighestQuality): automatic searches hold back releases of the less liked protocol for that many minutes; unset or 0 minutes = no wait
+	KeyMinSizeCheck = "search.min_size_check" // "0" turns the built-in minimum size per quality off (Settings > Library > Quality > Size limits); anything else, including unset, leaves it on
+	KeySizeLimits   = "quality.size_limits"   // size limits per quality for movies in MB per minute of runtime (JSON: enabled, limits); applied only while enabled is true
+
+	// The same table for shows (it started as a copy of the movie table).
+	KeySizeLimitsTV = "quality.size_limits_tv"
+
+	// The folder a new movie or show gets, used when the naming style is Custom.
+	KeyMovieFolderFormat  = "library.movie_folder_format"  // token string; unset = "{Movie Title} ({Year})"
+	KeySeriesFolderFormat = "library.series_folder_format" // the same for a new show; unset = "{Series Title} ({Year})"
+
 	// The request portal (Settings > Accounts > All accounts). Everything is off or unlimited until set.
 	KeyRequestOptions = "requests.options" // JSON: notifyRequester (tell people when their request or report is answered), quotaCount (requests per period, 0 = no limit), quotaPeriod (day or week), fourK (let people ask for a 4K copy), fourKProfileId (the quality profile of that copy), reports (let people report a problem with a title)
 	// Permissions of what Mediarium creates in the library (Settings > Library > Folders).

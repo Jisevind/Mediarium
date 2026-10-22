@@ -14,7 +14,7 @@ import { useConfirm } from '../components/ConfirmProvider'
 import AddDownloadDialog from '../components/AddDownloadDialog'
 import BuiltInClients from '../components/BuiltInClients'
 import TorrentControls from '../components/TorrentControls'
-import DownloadClients from '../components/DownloadClients'
+import DownloadClients, { UsenetClients } from '../components/DownloadClients'
 import RecycleBin from '../components/RecycleBin'
 import RequestsList from '../components/RequestsList'
 import IssuesList from '../components/IssuesList'
@@ -1044,7 +1044,7 @@ export default function Queue() {
         <>
           {!loaded && <Loading height={96} onRetry={() => void load()} />}
           {loaded && (
-            <BuiltInClients items={queue} renderRows={rows} onChanged={load}>
+            <BuiltInClients items={queue} renderRows={rows} onChanged={load} usenetChildren={<UsenetClients />}>
               <DownloadClients />
             </BuiltInClients>
           )}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { api, type SizeRow, type SizeTable } from '../api'
 import { plural, t } from '../i18n'
 import { applyTrashSizes, type SizeChange } from '../trashSizes'
@@ -6,6 +6,7 @@ import { useConfirm } from './ConfirmProvider'
 import Switch from './Switch'
 import { useToast } from './Toast'
 import TipLabel from './TipLabel'
+import Collapsible from './Collapsible'
 
 // A row being edited: the boxes hold text, so a half-typed number is not lost.
 interface EditRow extends SizeRow {
@@ -13,15 +14,22 @@ interface EditRow extends SizeRow {
   maxText: string
 }
 
+type Kind = 'movie' | 'tv'
+
 // The size lists the TRaSH Guides publish; the id is the name the server knows.
-const TRASH_LISTS: { id: string; label: () => string }[] = [
-  { id: 'radarr-movie', label: () => t('Movies') },
-  { id: 'radarr-sqp-streaming', label: () => t('Movies, streaming (SQP)') },
-  { id: 'radarr-sqp-uhd', label: () => t('Movies, 4K (SQP)') },
-  { id: 'radarr-anime', label: () => t('Anime movies') },
-  { id: 'sonarr-series', label: () => t('Series') },
-  { id: 'sonarr-anime', label: () => t('Anime series') },
-]
+// Radarr's lists are for the movie table and Sonarr's for the show table.
+const TRASH_LISTS: Record<Kind, { id: string; label: () => string }[]> = {
+  movie: [
+    { id: 'radarr-movie', label: () => t('Movies') },
+    { id: 'radarr-sqp-streaming', label: () => t('Movies, streaming (SQP)') },
+    { id: 'radarr-sqp-uhd', label: () => t('Movies, 4K (SQP)') },
+    { id: 'radarr-anime', label: () => t('Anime movies') },
+  ],
+  tv: [
+    { id: 'sonarr-series', label: () => t('Series') },
+    { id: 'sonarr-anime', label: () => t('Anime series') },
+  ],
+}
 
 const rangeText = (min: number, max: number): string => (max <= 0 ? t('{min} and up', { min }) : t('{min} to {max}', { min, max }))
 
@@ -56,17 +64,17 @@ function rowError(r: EditRow): string | null {
   return null
 }
 
-// Settings > Library > Quality: the smallest and largest release Mediarium
-// takes for each quality, in megabytes per minute of what is in it (a film's
-// length, or an episode's), as in the quality definitions of Radarr and Sonarr.
-export default function SizeLimitsCard() {
+// One size table, for movies or for shows: the smallest and largest release
+// Mediarium takes for each quality, in megabytes per minute of what is in it (a
+// film's length, or an episode's), as in the quality definitions of Radarr and Sonarr.
+function SizeTableEditor({ kind, onEnabled }: { kind: Kind; onEnabled: (on: boolean) => void }) {
   const toast = useToast()
   const confirm = useConfirm()
   const [saved, setSaved] = useState<SizeTable | null>(null)
   const [enabled, setEnabled] = useState(false)
   const [rows, setRows] = useState<EditRow[]>([])
   const [busy, setBusy] = useState(false)
-  const [trashList, setTrashList] = useState(TRASH_LISTS[0].id)
+  const [trashList, setTrashList] = useState(TRASH_LISTS[kind][0].id)
   const [trashBusy, setTrashBusy] = useState(false)
   // What the last "Apply TRaSH sizes" did, shown until the table is saved or reset.
   const [applied, setApplied] = useState<{ list: string; changes: SizeChange[]; untouched: string[]; skipped: string[] } | null>(null)
@@ -78,8 +86,12 @@ export default function SizeLimitsCard() {
     setApplied(null)
   }
   useEffect(() => {
-    api.sizeLimits().then(load).catch(() => undefined)
-  }, [])
+    api.sizeLimits(kind).then(load).catch(() => undefined)
+  }, [kind])
+
+  useEffect(() => {
+    if (saved) onEnabled(saved.enabled)
+  }, [saved, onEnabled])
 
   const errors = rows.map(rowError)
   const hasError = errors.some(Boolean)
@@ -96,7 +108,10 @@ export default function SizeLimitsCard() {
     if (hasError) return
     setBusy(true)
     try {
-      const table = await api.putSizeLimits({ enabled, rows: rows.map((r) => ({ quality: r.quality, min: parse(r.minText) ?? 0, max: parse(r.maxText) ?? 0, defaultMin: r.defaultMin, defaultMax: r.defaultMax })) })
+      const table = await api.putSizeLimits(
+        { enabled, rows: rows.map((r) => ({ quality: r.quality, min: parse(r.minText) ?? 0, max: parse(r.maxText) ?? 0, defaultMin: r.defaultMin, defaultMax: r.defaultMax })) },
+        kind,
+      )
       load(table)
       toast.success(table.enabled ? t('Saved: releases outside these sizes are skipped.') : t('Saved. The size limits are off.'))
     } catch (e) {
@@ -126,7 +141,7 @@ export default function SizeLimitsCard() {
     if (!(await confirm({ title: t('Put every size back to its default?'), body: <p>{t('Your own numbers are replaced. The switch stays as it is.')}</p>, confirmLabel: t('Reset sizes') }))) return
     setBusy(true)
     try {
-      load(await api.resetSizeLimits())
+      load(await api.resetSizeLimits(kind))
       toast.success(t('The sizes are back to their defaults.'))
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e))
@@ -137,11 +152,7 @@ export default function SizeLimitsCard() {
 
   const off = !enabled
   return (
-    <section className="card size-limits span-all">
-      <h2><TipLabel help="quality#size-limits-per-quality">{t('Size limits')}</TipLabel></h2>
-      <p style={{ color: 'var(--text-dim)' }}>
-        {t("The smallest and largest release to take for each quality, in megabytes for each minute of the film or episode. A release outside them is skipped by automatic searches and marked in the list when you search yourself; you can still pick it by hand. They come on top of the built-in minimums and a profile's largest size: the tightest one wins. A release that doesn't say its size always passes, and a season pack is only checked against the smallest.")}
-      </p>
+    <div className="size-kind">
       <Switch
         checked={enabled}
         onChange={setEnabled}
@@ -154,7 +165,7 @@ export default function SizeLimitsCard() {
         <label>
           <TipLabel text={t('Fills the table with the smallest and largest sizes the TRaSH Guides recommend, read from their site. You see what changes first, and nothing is kept until you press Save. Their preferred size has no place here and is left out; a largest size at the end of their scale means no limit.')}>{t('Apply TRaSH sizes')}</TipLabel>
           <select value={trashList} onChange={(e) => setTrashList(e.target.value)} disabled={!saved || busy || trashBusy}>
-            {TRASH_LISTS.map((l) => (
+            {TRASH_LISTS[kind].map((l) => (
               <option key={l.id} value={l.id}>
                 {l.label()}
               </option>
@@ -243,6 +254,67 @@ export default function SizeLimitsCard() {
           {t('Reset to defaults')}
         </button>
       </p>
+    </div>
+  )
+}
+
+// Settings > Library > Quality: the size limits, one table for movies and one
+// for shows. TRaSH's sizes differ between Radarr and Sonarr, so each side has
+// its own table and its own Apply TRaSH sizes.
+export default function SizeLimitsCard() {
+  const toast = useToast()
+  const [minCheck, setMinCheck] = useState<boolean | null>(null)
+  useEffect(() => {
+    api.minSizeCheck().then((r) => setMinCheck(r.enabled)).catch(() => undefined)
+  }, [])
+  async function toggleMinCheck(on: boolean) {
+    const was = minCheck
+    setMinCheck(on)
+    try {
+      await api.putMinSizeCheck(on)
+    } catch (e) {
+      setMinCheck(was)
+      toast.error(t('Not saved: {error}', { error: e instanceof Error ? e.message : String(e) }))
+    }
+  }
+  const [kind, setKind] = useState<Kind>('movie')
+  const [on, setOn] = useState<Record<Kind, boolean | null>>({ movie: null, tv: null })
+  const setMovieOn = useCallback((v: boolean) => setOn((cur) => ({ ...cur, movie: v })), [])
+  const setTvOn = useCallback((v: boolean) => setOn((cur) => ({ ...cur, tv: v })), [])
+  const summary = on.movie === null || on.tv === null ? undefined : on.movie && on.tv ? t('On for movies and TV') : on.movie ? t('On for movies') : on.tv ? t('On for TV') : t('Off')
+  const tabs: { id: Kind; label: string }[] = [
+    { id: 'movie', label: t('Movies') },
+    { id: 'tv', label: t('TV') },
+  ]
+  return (
+    <section className="card size-limits span-all">
+      <h2><TipLabel help="quality#size-limits-per-quality">{t('Size limits')}</TipLabel></h2>
+      <p style={{ color: 'var(--text-dim)' }}>
+        {t("The smallest and largest release to take for each quality, in megabytes for each minute of the film or episode. A release outside them is skipped by automatic searches and marked in the list when you search yourself; you can still pick it by hand. They come on top of the built-in minimums and a profile's largest size: the tightest one wins. A release that doesn't say its size always passes, and a season pack is only checked against the smallest.")}
+      </p>
+      <p style={{ color: 'var(--text-dim)' }}>{t('Movies and TV each have their own table, so the TRaSH sizes for one never change the other.')}</p>
+      <Switch
+        checked={minCheck ?? true}
+        onChange={(on) => void toggleMinCheck(on)}
+        disabled={minCheck === null}
+        label={t('Built-in minimum size check')}
+        description={t('Skips releases that are much smaller than a real release of that quality should be (fakes and samples). Turn it off if you have short shows or small encodes.')}
+        showState
+      />
+      <Collapsible id="size-limits" label={t('Size limits')} summary={summary}>
+      <div className="seg" role="tablist" aria-label={t('Size limits')} style={{ marginBottom: 14 }}>
+        {tabs.map((tab) => (
+          <button key={tab.id} id={`size-tab-${tab.id}`} role="tab" aria-selected={kind === tab.id} aria-controls={`size-panel-${tab.id}`} className={kind === tab.id ? 'active' : ''} onClick={() => setKind(tab.id)}>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+      {tabs.map((tab) => (
+        <div key={tab.id} id={`size-panel-${tab.id}`} role="tabpanel" aria-labelledby={`size-tab-${tab.id}`} hidden={kind !== tab.id}>
+          <SizeTableEditor kind={tab.id} onEnabled={tab.id === 'movie' ? setMovieOn : setTvOn} />
+        </div>
+      ))}
+      </Collapsible>
     </section>
   )
 }
