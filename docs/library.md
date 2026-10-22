@@ -180,6 +180,20 @@ Limits: the services follow TheTVDB's numbering for scene episodes, which matche
 
 Scripts: `GET /api/series/{id}/numbering` answers with `anilist`, `anidb`, `mal` and their `...Url` links, `sceneState` (`mapped`, `none`, `offline` or empty when never looked up), `sceneRows`, `sceneDiffers`, `listsState`, `entries` (`anidb`, `anilist`, `mal`, `type`, `season`, `offset`, `name`), `names`, `note` and `checkedAt`. `POST /api/series/{id}/numbering/refresh` reads it again now (accounts with the Manage permission). The setting is `numbering.lookup` (`numberingLookup` in `GET`/`PUT /api/settings`).
 
+## Air times and the calendar
+
+TMDB only knows the day an episode airs, not the hour, so two shows that both air on Monday evening, one in the UK at 9 pm and one in the US at 9 pm Pacific time, would both sit on Monday. Mediarium asks [TVmaze](https://www.tvmaze.com) for the exact time of each episode and shows it in your own time zone: for someone in the UK the US show moves to Tuesday at 05:00.
+
+- **Where it shows.** The month and list views of the calendar, the Coming up tile on the dashboard and the Next episode fact on a show's page put an episode on the day it airs for you and print the time (24-hour). An episode TVmaze has no time for stays on its date, just as before. Nothing is ever guessed from the country or the network.
+- **Your time zone.** The calendar uses your device's zone. Under the calendar, **Show times in** lets you pick UTC or another zone instead; the choice is kept in that browser only and changes nothing on the server.
+- **The calendar feed.** The private `.ics` address writes a timed event (in UTC, one hour long, so your calendar app shows it in its own zone) for an episode with a known time and an all-day event for the rest.
+- **Wanted and automatic search.** An episode whose date has come but whose exact time is still more than three hours away is not counted as missing and is not searched for. Without a known time the date decides, as before.
+- **How times are found.** When a show is refreshed (daily, and with the **Refresh** button), Mediarium looks the show up on TVmaze once, by its TheTVDB id, then its IMDb id, then by name and year, and remembers the answer. It reads the show's episode list once per refresh, and matches episodes by season and number. A time is only stored when TVmaze's day is the same as TMDB's or one day away, so a wrong match never moves an episode. A show that has ended is read once, and a show TVmaze does not know is tried again after a week. If TVmaze can't be reached the refresh carries on and tries again next time.
+- **What is sent.** Only the show's TheTVDB or IMDb id, or its name and year, and Mediarium's name and version. Nothing about you, your library as a whole or your server. Requests are limited to 20 every 10 seconds and go through the same proxy or VPN settings as the other lookups.
+- **Switching it off.** **Settings > Metadata > Air times > Look up air times on TVmaze** (on by default). Off means TVmaze is never contacted; times already found stay until the show's dates change.
+
+The data comes from TVmaze under the [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/) licence, and the calendar says so ("Air times from TVmaze"). For scripts: `GET /api/calendar` and the episodes of `GET /api/series/{id}` carry `airAt` (RFC 3339, UTC) next to the date when a time is known; in the Sonarr-style API `airDateUtc` uses it, and `tvMazeId` is the show's TVmaze id. The setting is `metadata.tvmaze_air_times` (`tvmazeAirTimes` in `GET`/`PUT /api/settings`).
+
 ## Only monitoring new episodes of a show you already have
 
 If you delete old episodes as you watch them and don't want them downloaded again, open the show's page and use **Which episodes to monitor** next to the Monitored switch. It has the same three choices as when you add a show:

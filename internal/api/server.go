@@ -41,6 +41,7 @@ import (
 	"github.com/rdborg/mediarium/internal/subtitles"
 	"github.com/rdborg/mediarium/internal/torrentopts"
 	"github.com/rdborg/mediarium/internal/trakt"
+	"github.com/rdborg/mediarium/internal/tvmaze"
 	"github.com/rdborg/mediarium/internal/usage"
 	"github.com/rdborg/mediarium/internal/vpn"
 )
@@ -105,6 +106,7 @@ type Server struct {
 	arrRecs arrRecommended
 	tmdbMu  sync.RWMutex
 	tmdb    *metadata.Client
+	tvmaze  *tvmaze.Client // episode air times (tvmaze_airtimes.go); never contacted while the switch is off
 
 	subsMu sync.RWMutex
 	subs   *subtitles.Client
@@ -300,6 +302,7 @@ func New(db *sql.DB, cfg config.Config, box *crypto.Box, defaultTMDBAPIKey, vers
 	s.Audnexus = books.NewAudnexus(s.OpenLibrary.UserAgent)
 	s.Requests = requests.NewRepo(db)
 	s.mb = musicbrainz.New(version)
+	s.tvmaze = tvmaze.New(version)
 	if err := s.MusicRepo.SeedPresets(); err != nil {
 		return nil, fmt.Errorf("init music profiles: %w", err)
 	}

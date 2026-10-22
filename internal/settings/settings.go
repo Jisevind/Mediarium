@@ -36,6 +36,7 @@ const (
 	KeyNamingPreset        = "library.naming_preset"       // plex|jellyfin|kodi|minimal|custom
 	KeyMovieNameFormat     = "library.movie_name_format"   // token string, used when preset=custom
 	KeyEpisodeNameFormat   = "library.episode_name_format" // token string, used when preset=custom
+	KeyTVmazeAirTimes      = "metadata.tvmaze_air_times"   // "0" stops Mediarium looking up the time episodes air on TVmaze (the calendar then only knows days); anything else (including unset) leaves it on
 	KeyKeepOriginalNames   = "library.keep_original_names" // "1" keeps the file name an imported video came with (folders are still named by the preset; a random, obfuscated name falls back to the preset); unset or "0" renames as the preset says
 	KeyTMDBAPIKey          = "metadata.tmdb_api_key"       // encrypted
 	KeyOnboardingDone      = "onboarding.done"             // "1" once the first-run wizard completes

@@ -39,6 +39,7 @@ import ReleaseNotice from '../components/ReleaseNotice'
 import type { Unanswered } from '../releaseHint'
 import { useDocumentTitle } from '../documentTitle'
 import { localDate } from '../bookSeries'
+import { entryDay, entryTime, readZonePref, resolveZone } from '../airTime'
 import { locale, plural, t } from '../i18n'
 import { monitoringSummary, readSeasonsOpen, rememberSeasonsOpen, seasonStartsOpen, type SeasonsOpen } from '../seriesView'
 import { sumBytes } from '../diskTotals'
@@ -322,10 +323,15 @@ function SeriesPage() {
   const isMissing = (e: { status: string; airDate?: string }) => e.status === 'missing' && !!e.airDate && e.airDate <= today
   // The next episode still to air, for the facts at the top.
   const next = series.episodes.filter((e) => e.airDate && e.airDate >= today).sort((a, b) => (a.airDate! < b.airDate! ? -1 : 1))[0]
-  const nextText = next
+  // With an exact air time the day and hour are the viewer's own; without one, the date as TMDB has it.
+  const nextZone = resolveZone(readZonePref())
+  const nextEntry = next ? { kind: 'episode', releaseDate: next.airDate!, airAt: next.airAt } : null
+  const nextText = next && nextEntry
     ? t('{episode} on {date}', {
         episode: `S${String(next.season).padStart(2, '0')}E${String(next.episode).padStart(2, '0')}`,
-        date: new Date(next.airDate + 'T12:00:00').toLocaleDateString(locale(), { day: 'numeric', month: 'short', year: 'numeric' }),
+        date:
+          new Date(entryDay(nextEntry, nextZone) + 'T12:00:00').toLocaleDateString(locale(), { day: 'numeric', month: 'short', year: 'numeric' }) +
+          (entryTime(nextEntry, nextZone) ? `, ${entryTime(nextEntry, nextZone)}` : ''),
       })
     : ''
   // Unless the person chose otherwise (seasonsMode), seasons start folded,

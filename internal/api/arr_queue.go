@@ -404,7 +404,7 @@ func (s *Server) arrWantedMissing(app arrApp) http.HandlerFunc {
 			series := map[int64]*arrSeries{}
 			var list []arrEpisode
 			for _, se := range all {
-				if !se.series.Monitored || !se.ep.Monitored || se.ep.Status == library.StatusDownloaded || se.ep.AirDate == "" || se.ep.AirDate > today() {
+				if !se.series.Monitored || !se.ep.Monitored || se.ep.Status == library.StatusDownloaded || se.ep.AirDate == "" || se.ep.AirDate > today() || se.ep.AirsLater(time.Now()) {
 					continue
 				}
 				if series[se.series.ID] == nil {

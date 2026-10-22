@@ -155,6 +155,9 @@ type settingsPayload struct {
 	// SeasonPacks looks for a season pack once a season has ended (off unless
 	// switched on; a show can say otherwise for itself).
 	SeasonPacks *bool `json:"seasonPacks,omitempty"`
+	// TVmazeAirTimes looks up the time episodes air on TVmaze (on unless
+	// switched off; off means TVmaze is never contacted).
+	TVmazeAirTimes *bool `json:"tvmazeAirTimes,omitempty"`
 
 	// Optional OpenSubtitles.com account (raises the daily download limit).
 	OpenSubtitlesUsername    *string `json:"openSubtitlesUsername,omitempty"`
@@ -368,6 +371,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	osEnabled, subdlEnabled, addonsEnabled := sources.OpenSubtitles.Switch, sources.SubDL.Switch, sources.Addons.Switch
 	unmonitorDownloaded, unmonitorFinished := s.unmonitorDownloaded(), s.unmonitorFinished()
 	seasonPacks := s.seasonPackDefault()
+	tvmazeAirTimes := s.tvmazeOn()
 	qualityLanguageOnly := s.languageOnly()
 	showAdvanced := s.showAdvanced()
 	trashFormatsAuto := s.trashAutoUpdate()
@@ -473,6 +477,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		TrailerSound:             &trailerSound,
 		UnmonitorFinished:        &unmonitorFinished,
 		SeasonPacks:              &seasonPacks,
+		TVmazeAirTimes:           &tvmazeAirTimes,
 		HasOpenSubtitlesAccount:  s.Subtitles().HasCredentials(),
 		OpenSubtitlesAccountName: osUser,
 		TMDBKeyBuiltIn:           s.builtin.TMDB != "",
@@ -884,6 +889,12 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.UnmonitorDownloaded != nil {
 		if err := setBool(tx, settings.KeyUnmonitorDownloaded, *req.UnmonitorDownloaded); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if req.TVmazeAirTimes != nil {
+		if err := setBool(tx, settings.KeyTVmazeAirTimes, *req.TVmazeAirTimes); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}

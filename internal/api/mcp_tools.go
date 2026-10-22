@@ -1104,7 +1104,7 @@ func toolSeriesDetails(c *mcpCtx, a pickArgs) (any, error) {
 			}
 			groups[g]++
 			bytes += cachedFileSize(e.FilePath, now)
-		} else if e.AirDate != "" && e.AirDate <= today && e.Monitored && len(se.Missing) < 40 {
+		} else if e.AirDate != "" && e.AirDate <= today && !e.AirsLater(time.Now()) && e.Monitored && len(se.Missing) < 40 {
 			se.Missing = append(se.Missing, fmt.Sprintf("S%02dE%02d", e.Season, e.Episode))
 		}
 	}

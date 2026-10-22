@@ -114,6 +114,7 @@ The keys the app stores in its settings table. You normally change these from th
 | `metadata.simkl_token` | encrypted; the access token of the connected Simkl account |
 | `metadata.tmdb_api_key` | encrypted |
 | `metadata.trakt_client_id` | encrypted |
+| `metadata.tvmaze_air_times` | "0" stops Mediarium looking up the time episodes air on TVmaze (the calendar then only knows days); anything else (including unset) leaves it on |
 | `modules.audiobooks` | "1" switches it on; unset or "0" leaves it off |
 | `modules.ebooks` | "1" switches it on; unset or "0" leaves it off |
 | `modules.movies` | "0" switches movies off; anything else (including unset) leaves them on |

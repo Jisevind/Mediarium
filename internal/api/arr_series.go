@@ -122,7 +122,7 @@ func (s *Server) toArrSeries(sr library.Series, c arrSeriesContext) arrSeries {
 		Images: posterImages(metadata.PosterURL(sr.PosterPath)), Seasons: []arrSeason{}, Year: sr.Year,
 		RootFolderPath: s.seriesRootFor(sr), QualityProfileID: s.arrProfileID(sr.ProfileID, c.defaultProfile),
 		LanguageProfileID: 1, SeasonFolder: true, Monitored: sr.Monitored, MonitorNewItems: "all",
-		TVDBID: sr.TVDBID, TMDBID: sr.TMDBID, IMDBID: sr.IMDBID, FirstAired: arrTime(sr.FirstAirDate),
+		TVDBID: sr.TVDBID, TMDBID: sr.TMDBID, IMDBID: sr.IMDBID, TVMazeID: max(sr.TVmazeID, 0), FirstAired: arrTime(sr.FirstAirDate),
 		SeriesType: sr.SeriesType, Genres: sr.Genres, Tags: tagIDs(c.tags[sr.ID], c.numbers),
 		Added: arrTime(c.added[sr.ID]), Ratings: map[string]any{"votes": 0, "value": 0},
 	}
@@ -624,9 +624,18 @@ type arrEpisode struct {
 	EpisodeFile              *arrEpisodeFile `json:"episodeFile,omitempty"`
 }
 
+// arrAirDateUTC is the moment an episode airs for the *arr apps: the exact
+// time when TVmaze gave one, else midnight of the air date, as before.
+func arrAirDateUTC(ep library.Episode) string {
+	if at, err := time.Parse(time.RFC3339, ep.AirAt); err == nil {
+		return at.UTC().Format("2006-01-02T15:04:05Z")
+	}
+	return arrTime(ep.AirDate)
+}
+
 func toArrEpisode(ep library.Episode) arrEpisode {
 	out := arrEpisode{ID: ep.ID, SeriesID: ep.SeriesID, SeasonNumber: ep.Season, EpisodeNumber: ep.Episode, Title: ep.Title,
-		AirDate: ep.AirDate, AirDateUTC: arrTime(ep.AirDate), Overview: ep.Overview, HasFile: ep.Status == library.StatusDownloaded,
+		AirDate: ep.AirDate, AirDateUTC: arrAirDateUTC(ep), Overview: ep.Overview, HasFile: ep.Status == library.StatusDownloaded,
 		Monitored: ep.Monitored, Grabbed: ep.Status == library.StatusDownloading, Images: []arrImage{}}
 	if out.HasFile {
 		out.EpisodeFileID = ep.ID

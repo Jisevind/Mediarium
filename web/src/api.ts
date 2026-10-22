@@ -696,6 +696,7 @@ export interface Settings {
   unmonitorDownloaded?: boolean // stop monitoring a movie once it is downloaded (off by default)
   unmonitorFinished?: boolean // stop monitoring a show once it has ended and every episode is in (off by default)
   seasonPacks?: boolean // look for a season pack once a season has ended (off by default)
+  tvmazeAirTimes?: boolean // look up the time episodes air on TVmaze (on by default; off = TVmaze is never contacted)
   hasOpenSubtitlesAccount?: boolean
   openSubtitlesAccountName?: string
   tmdbKeyBuiltIn?: boolean
@@ -1500,6 +1501,7 @@ export interface Episode {
   title?: string
   overview?: string
   airDate?: string
+  airAt?: string // the exact air time (RFC 3339, UTC) once TVmaze has one
   status: MediaStatus
   quality?: string
   filePath?: string
@@ -2475,6 +2477,7 @@ export interface CalendarEntry {
   title: string
   subtitle?: string
   releaseDate: string
+  airAt?: string // an episode's exact air time (RFC 3339, UTC) once TVmaze has one; the page shows it in the viewer's time zone
   release?: 'cinema' | 'digital' // a movie with both dates on different days shows twice: which date this is
   status: 'missing' | 'downloading' | 'downloaded'
   posterUrl?: string // the poster or cover, when there is one

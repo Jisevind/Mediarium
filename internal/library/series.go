@@ -45,6 +45,11 @@ type Series struct {
 	// StatusCheckedAt is when TMDB's details for the show were last read
 	// (RFC 3339, UTC), "" if never.
 	StatusCheckedAt string
+	// TVmazeID is the show's id on TVmaze: 0 until looked up, -1 when TVmaze
+	// does not know the show. TVmazeCheckedAt is when TVmaze was last asked
+	// about it (RFC 3339, UTC), "" if never.
+	TVmazeID        int
+	TVmazeCheckedAt string
 	// RootPath is the library folder the show's files go to (one of the TV
 	// folders in Settings); "" = the default folder.
 	RootPath string
@@ -80,19 +85,43 @@ type Series struct {
 // Episode is one episode of a Series, tracked individually with the same
 // missing -> downloading -> downloaded lifecycle as a Movie.
 type Episode struct {
-	ID        int64
-	SeriesID  int64
-	Season    int
-	Episode   int
-	Title     string
-	Overview  string
-	AirDate   string // "YYYY-MM-DD", empty if TMDB has no date yet
+	ID       int64
+	SeriesID int64
+	Season   int
+	Episode  int
+	Title    string
+	Overview string
+	AirDate  string // "YYYY-MM-DD", empty if TMDB has no date yet
+	// AirAt is the exact moment the episode airs (RFC 3339, UTC), from
+	// TVmaze; "" when no time is known. AirDate stays the day TMDB gives.
+	AirAt     string
 	Status    Status
 	Quality   string
 	FilePath  string
 	Monitored bool
 	// ReleaseTitle is the release the file came from ("" when unknown).
 	ReleaseTitle string
+}
+
+// AirSlack is how far ahead an exact air time may be before an episode whose
+// date has come still counts as not aired yet: a few hours either way are
+// not worth holding a search for.
+const AirSlack = 3 * time.Hour
+
+// AirsLater reports whether the episode's exact air time is known and is
+// still more than AirSlack after now. Such an episode is not missing yet, even
+// when its date (the day TMDB gives, which can be a day early for a show that
+// airs in the evening in the Americas) is today. Without a known time this is
+// false, so the date alone decides, as it always did.
+func (e Episode) AirsLater(now time.Time) bool {
+	if e.AirAt == "" {
+		return false
+	}
+	at, err := time.Parse(time.RFC3339, e.AirAt)
+	if err != nil {
+		return false
+	}
+	return at.After(now.Add(AirSlack))
 }
 
 const seriesSelect = `
@@ -103,7 +132,7 @@ const seriesSelect = `
 	       COALESCE(s.profile_id, 0), s.source_pref, COALESCE(s.added_by, 0), s.genres, s.no_upgrade, s.details_state, s.details_note, s.series_type,
 	       COALESCE(s.copy_of, 0), s.tvdb_id, s.imdb_id, s.tmdb_status, s.root_path, s.season_pack,
 	       COALESCE((SELECT names FROM title_names WHERE kind = 'tv' AND tmdb_id = s.tmdb_id), ''),
-	       s.origin_country, s.status_checked_at
+	       s.origin_country, s.status_checked_at, s.tvmaze_id, s.tvmaze_checked_at
 	FROM series s`
 
 func scanSeries(scan func(dest ...any) error) (Series, error) {
@@ -113,7 +142,7 @@ func scanSeries(scan func(dest ...any) error) (Series, error) {
 		alts   string
 		origin sql.NullString
 	)
-	if err := scan(&s.ID, &s.TMDBID, &s.Title, &s.Year, &s.Overview, &s.PosterPath, &s.FirstAirDate, &s.Monitored, &s.EpisodeCount, &s.DownloadedCount, &s.ProfileID, &s.SourcePref, &s.AddedBy, &genres, &s.NoUpgrade, &s.DetailsState, &s.DetailsNote, &s.SeriesType, &s.CopyOf, &s.TVDBID, &s.IMDBID, &s.TMDBStatus, &s.RootPath, &s.SeasonPack, &alts, &origin, &s.StatusCheckedAt); err != nil {
+	if err := scan(&s.ID, &s.TMDBID, &s.Title, &s.Year, &s.Overview, &s.PosterPath, &s.FirstAirDate, &s.Monitored, &s.EpisodeCount, &s.DownloadedCount, &s.ProfileID, &s.SourcePref, &s.AddedBy, &genres, &s.NoUpgrade, &s.DetailsState, &s.DetailsNote, &s.SeriesType, &s.CopyOf, &s.TVDBID, &s.IMDBID, &s.TMDBStatus, &s.RootPath, &s.SeasonPack, &alts, &origin, &s.StatusCheckedAt, &s.TVmazeID, &s.TVmazeCheckedAt); err != nil {
 		return Series{}, fmt.Errorf("scan series: %w", err)
 	}
 	s.OriginCountry = decodeCountries(origin)
@@ -233,7 +262,8 @@ func upsertEpisodes(tx *sql.Tx, seriesID int64, episodes []Episode, monitorNew b
 		INSERT INTO episodes (series_id, season, episode, title, overview, air_date, monitored)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT (series_id, season, episode) DO UPDATE SET
-			title = excluded.title, overview = excluded.overview, air_date = excluded.air_date`)
+			title = excluded.title, overview = excluded.overview, air_date = excluded.air_date,
+			air_at = CASE WHEN excluded.air_date = episodes.air_date THEN episodes.air_at ELSE NULL END`)
 	if err != nil {
 		return fmt.Errorf("prepare upsert episode: %w", err)
 	}
@@ -318,8 +348,8 @@ func (r *Repo) AddSeriesCopy(mainID, profileID int64) (Series, error) {
 		return Series{}, fmt.Errorf("get the copy's id: %w", err)
 	}
 	if _, err := tx.Exec(
-		`INSERT INTO episodes (series_id, season, episode, title, overview, air_date, monitored)
-		 SELECT ?, season, episode, title, overview, air_date, monitored FROM episodes WHERE series_id = ?`, id, mainID); err != nil {
+		`INSERT INTO episodes (series_id, season, episode, title, overview, air_date, air_at, monitored)
+		 SELECT ?, season, episode, title, overview, air_date, air_at, monitored FROM episodes WHERE series_id = ?`, id, mainID); err != nil {
 		return Series{}, fmt.Errorf("copy the episode list: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -642,13 +672,13 @@ func (r *Repo) DeleteSeries(id int64) error {
 
 const episodeSelect = `
 	SELECT id, series_id, season, episode, COALESCE(title, ''), COALESCE(overview, ''), COALESCE(air_date, ''),
-	       status, COALESCE(quality, ''), COALESCE(file_path, ''), monitored, release_title
+	       status, COALESCE(quality, ''), COALESCE(file_path, ''), monitored, release_title, COALESCE(air_at, '')
 	FROM episodes`
 
 func scanEpisode(scan func(dest ...any) error) (Episode, error) {
 	var e Episode
 	var status string
-	if err := scan(&e.ID, &e.SeriesID, &e.Season, &e.Episode, &e.Title, &e.Overview, &e.AirDate, &status, &e.Quality, &e.FilePath, &e.Monitored, &e.ReleaseTitle); err != nil {
+	if err := scan(&e.ID, &e.SeriesID, &e.Season, &e.Episode, &e.Title, &e.Overview, &e.AirDate, &status, &e.Quality, &e.FilePath, &e.Monitored, &e.ReleaseTitle, &e.AirAt); err != nil {
 		return Episode{}, fmt.Errorf("scan episode: %w", err)
 	}
 	e.Status = Status(status)
@@ -746,6 +776,49 @@ func (r *Repo) SetSeriesExternalIDs(id int64, tvdbID int, imdbID, status string)
 		return fmt.Errorf("set series external ids: %w", err)
 	}
 	return nil
+}
+
+// SetSeriesTVmaze records a show's id on TVmaze (0 to keep what is stored,
+// -1 for "TVmaze does not know it") and that TVmaze was asked at t (the zero
+// time keeps the stored one). A second copy of the show shares the main
+// show's answer.
+func (r *Repo) SetSeriesTVmaze(id int64, tvmazeID int, t time.Time) error {
+	checked := ""
+	if !t.IsZero() {
+		checked = t.UTC().Format(time.RFC3339)
+	}
+	if _, err := r.db.Exec(`UPDATE series SET tvmaze_id = CASE WHEN ? != 0 THEN ? ELSE tvmaze_id END, tvmaze_checked_at = CASE WHEN ? != '' THEN ? ELSE tvmaze_checked_at END WHERE id = ? OR copy_of = ?`,
+		tvmazeID, tvmazeID, checked, checked, id, id); err != nil {
+		return fmt.Errorf("set series tvmaze: %w", err)
+	}
+	return nil
+}
+
+// AirTime is the moment one episode airs, for SetEpisodeAirTimes.
+type AirTime struct {
+	Season, Episode int
+	At              time.Time
+}
+
+// SetEpisodeAirTimes stores when episodes air (UTC). An episode that is not
+// in the show is skipped. It returns how many rows changed.
+func (r *Repo) SetEpisodeAirTimes(seriesID int64, times []AirTime) (int, error) {
+	tx, err := r.db.Begin()
+	if err != nil {
+		return 0, fmt.Errorf("begin air times: %w", err)
+	}
+	defer tx.Rollback()
+	changed := 0
+	for _, a := range times {
+		res, err := tx.Exec(`UPDATE episodes SET air_at = ? WHERE series_id = ? AND season = ? AND episode = ? AND COALESCE(air_at, '') != ?`,
+			a.At.UTC().Format(time.RFC3339), seriesID, a.Season, a.Episode, a.At.UTC().Format(time.RFC3339))
+		if err != nil {
+			return 0, fmt.Errorf("set air time S%02dE%02d: %w", a.Season, a.Episode, err)
+		}
+		n, _ := res.RowsAffected()
+		changed += int(n)
+	}
+	return changed, tx.Commit()
 }
 
 // MarkSeriesChecked records that TMDB's details for a show were read at t.

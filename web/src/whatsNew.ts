@@ -10,6 +10,12 @@ export interface ReleaseNotes {
 
 export const WHATS_NEW: ReleaseNotes[] = [
   {
+    version: '3.7.0',
+    items: [
+      t("The calendar shows each episode on the day and hour it airs in your own time zone, using air times from TVmaze."),
+    ],
+  },
+  {
     version: '3.6.0',
     items: [
       t("Simkl sign-in works again with the apps Simkl creates now, with a code you enter on Simkl's site."),

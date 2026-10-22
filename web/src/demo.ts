@@ -231,8 +231,8 @@ const discoverPool = (offset: number, tv: boolean): DiscoverMovie[] => {
 }
 
 const calendar: CalendarEntry[] = [
-  { kind: 'episode', id: 1, seriesId: 102, season: 3, episode: 9, title: 'Salt & Static', subtitle: 'S03E09 · Second Service', releaseDate: day(1), status: 'missing', posterUrl: poster(102) },
-  { kind: 'episode', id: 2, seriesId: 104, season: 2, episode: 5, title: 'Ember Road', subtitle: 'S02E05 · The Long Fuse', releaseDate: day(2), status: 'missing', posterUrl: poster(104) },
+  { kind: 'episode', id: 1, seriesId: 102, season: 3, episode: 9, title: 'Salt & Static', subtitle: 'S03E09 · Second Service', releaseDate: day(1), airAt: `${day(1)}T21:00:00Z`, status: 'missing', posterUrl: poster(102) },
+  { kind: 'episode', id: 2, seriesId: 104, season: 2, episode: 5, title: 'Ember Road', subtitle: 'S02E05 · The Long Fuse', releaseDate: day(1), airAt: `${day(2)}T05:00:00Z`, status: 'missing', posterUrl: poster(104) },
   { kind: 'movie', id: 3, movieId: 10, tmdbId: 9010, title: 'Tidewalker', releaseDate: day(3), release: 'cinema', status: 'downloading', posterUrl: poster(10) },
   { kind: 'movie', id: 3, movieId: 10, tmdbId: 9010, title: 'Tidewalker', releaseDate: day(24), release: 'digital', status: 'downloading', posterUrl: poster(10) },
   { kind: 'episode', id: 4, seriesId: 101, season: 3, episode: 1, title: 'The Clean Floor', subtitle: 'S03E01 · Season premiere', releaseDate: day(5), status: 'missing', posterUrl: poster(101) },

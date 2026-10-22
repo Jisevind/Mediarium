@@ -8,6 +8,19 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.7.0] - 2026-10-22
+
+In short: the calendar shows episodes on the day and hour they air in your own time zone.
+
+### Added
+
+- The calendar now shows an episode on the day and hour it airs in your own time zone. Mediarium asks TVmaze for the exact air time of each episode; a show that airs Monday 9 pm in the US now sits on Tuesday morning for someone in the UK. Episodes TVmaze has no time for stay on their date, as before. Idea from wivaku on GitHub, discussion #99.
+- New under the calendar: "Show times in" lets you read the calendar in this device's time zone (the default), UTC or another zone. It is kept in the browser only.
+- The calendar feed (.ics) writes timed events (in UTC) for episodes with a known time, and all-day events for the rest.
+- An episode whose date has come but whose air time is still hours away is no longer counted as missing or searched for.
+- New switch Settings > Metadata > Air times > "Look up air times on TVmaze" (on by default). Off means TVmaze is never contacted.
+- The Sonarr-style API now sends the exact air time in `airDateUtc` and the TVmaze id in `tvMazeId` when known.
+
 ## [3.6.1] - 2026-10-22
 
 In short: Simkl's Test connection works for accounts whose account call is refused, and a notification hint reads clearer.

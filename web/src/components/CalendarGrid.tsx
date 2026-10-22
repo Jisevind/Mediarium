@@ -5,6 +5,7 @@ import { useModules } from '../ModulesContext'
 import Icon from './Icon'
 import KindGlyph, { type GlyphKind } from './KindGlyph'
 import { locale, plural, t } from '../i18n'
+import { dayInZone, entryTime, groupByDay, readZonePref, resolveZone } from '../airTime'
 import { useUrlState } from '../useUrlState'
 import '../calendar.css'
 
@@ -85,12 +86,13 @@ function Thumb({ e, g }: { e: CalendarEntry; g: GlyphKind }) {
   )
 }
 
-function Entry({ e, past, card }: { e: CalendarEntry; past: boolean; card?: boolean }) {
+function Entry({ e, past, card, zone }: { e: CalendarEntry; past: boolean; card?: boolean; zone: string }) {
   const g = glyphOf(e.kind, e.subtitle)
   const { code, rest } = splitSubtitle(e)
+  const time = entryTime(e, zone)
   const late = past && e.status === 'missing'
   const cls = `${card ? 'prog-card' : 'prog-slot'} k-${g} s-${e.status}${late ? ' late' : ''}`
-  const tip = `${e.title}${e.subtitle ? ` · ${e.subtitle}` : ''}${releaseLabel(e) ? ` · ${releaseLabel(e)}` : ''} (${STATUS_LABEL[e.status] ?? e.status})`
+  const tip = `${e.title}${e.subtitle ? ` · ${e.subtitle}` : ''}${releaseLabel(e) ? ` · ${releaseLabel(e)}` : ''}${time ? ` · ${time}` : ''} (${STATUS_LABEL[e.status] ?? e.status})`
   const body = card ? (
     <>
       <Thumb e={e} g={g} />
@@ -99,6 +101,7 @@ function Entry({ e, past, card }: { e: CalendarEntry; past: boolean; card?: bool
         {(code || rest) && (
           <span className="prog-card-sub">
             {code && <span className="prog-code">{code}</span>}
+            {time && <span className="prog-time">{time}</span>}
             {rest && <span className="prog-rest">{rest}</span>}
           </span>
         )}
@@ -119,6 +122,7 @@ function Entry({ e, past, card }: { e: CalendarEntry; past: boolean; card?: bool
         <span className="prog-slot-meta">
           <KindGlyph kind={g} size={12} />
           {code ?? releaseLabel(e) ?? KIND_LABEL[g]}
+          {time && <span className="prog-time">{time}</span>}
         </span>
       </span>
       <span className="sr-only">
@@ -141,9 +145,10 @@ function Entry({ e, past, card }: { e: CalendarEntry; past: boolean; card?: bool
 // One release as a big poster with its name in a frosted bubble: the Posters view of the calendar.
 // In the Backdrops view (wide) it is a wide still with the title's logo on it
 // instead, once both have been fetched; before that it falls back to the poster.
-function PosterTile({ e, past, wide }: { e: CalendarEntry; past: boolean; wide?: boolean }) {
+function PosterTile({ e, past, wide, zone }: { e: CalendarEntry; past: boolean; wide?: boolean; zone: string }) {
   const g = glyphOf(e.kind, e.subtitle)
   const { code, rest } = splitSubtitle(e)
+  const time = entryTime(e, zone)
   const [brokenSrc, setBrokenSrc] = useState<string | undefined>()
   const [brokenLogo, setBrokenLogo] = useState(false)
   const late = past && e.status === 'missing'
@@ -166,6 +171,7 @@ function PosterTile({ e, past, wide }: { e: CalendarEntry; past: boolean; wide?:
         <span className="pt-meta">
           <KindGlyph kind={g} size={12} />
           {code ?? rest ?? KIND_LABEL[g]}
+          {time && <span className="prog-time">{time}</span>}
           <span className="pt-state">{STATUS_LABEL[e.status] ?? e.status}</span>
         </span>
       </span>
@@ -192,8 +198,10 @@ function storedView(): View {
   }
 }
 
-export default function CalendarGrid({ entries, compact }: { entries: CalendarEntry[]; compact?: boolean }) {
+// zone is the time zone the days and times are read in (an IANA name); without one, the choice saved in this browser, else the device's.
+export default function CalendarGrid({ entries, compact, zone: zoneProp }: { entries: CalendarEntry[]; compact?: boolean; zone?: string }) {
   const { on } = useModules()
+  const zone = zoneProp ?? resolveZone(readZonePref())
   // The list of days is only built while it can be seen: when it is the chosen view, or when the panel is too narrow
   // for the month grid (calendar.css then always shows the list). A month of releases is hundreds of cards.
   const root = useRef<HTMLDivElement>(null)
@@ -225,15 +233,8 @@ export default function CalendarGrid({ entries, compact }: { entries: CalendarEn
     if (!compact) patchUi({ month: `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` })
   }
 
-  const byDay = useMemo(() => {
-    const m = new Map<string, CalendarEntry[]>()
-    for (const e of entries) {
-      const list = m.get(e.releaseDate) ?? []
-      list.push(e)
-      m.set(e.releaseDate, list)
-    }
-    return m
-  }, [entries])
+  // An episode with a known air time sits on the day it airs in the viewer's zone; the rest stay on their date.
+  const byDay = useMemo(() => groupByDay(entries, zone), [entries, zone])
 
   const cells = useMemo(() => {
     const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1)
@@ -252,7 +253,7 @@ export default function CalendarGrid({ entries, compact }: { entries: CalendarEn
   const weekdays = useMemo(() => Array.from({ length: 7 }, (_, i) => new Date(2024, 0, 1 + i).toLocaleString(locale(), { weekday: 'short' })), [])
 
   const now = new Date()
-  const today = iso(now)
+  const today = dayInZone(now, zone)
   const monthKey = `${cursor.getFullYear()}-${cursor.getMonth()}`
   const monthName = cursor.toLocaleString(locale(), { month: 'long' })
   const monthDays = cells.filter((d) => d.getMonth() === cursor.getMonth() && (byDay.get(iso(d))?.length ?? 0) > 0)
@@ -267,7 +268,7 @@ export default function CalendarGrid({ entries, compact }: { entries: CalendarEn
     setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + n, 1))
   }
   const goToday = () => {
-    const target = new Date(now.getFullYear(), now.getMonth(), 1)
+    const target = new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1, 1)
     if (target.getTime() === cursor.getTime()) return
     setSlide(target > cursor ? 'next' : 'prev')
     setOpenDay(null)
@@ -363,7 +364,7 @@ export default function CalendarGrid({ entries, compact }: { entries: CalendarEn
                 </div>
                 {tiles && list.length > 0 && (
                   <div className="pt-day">
-                    <PosterTile e={list[0]} past={past} wide={view === 'backdrops'} />
+                    <PosterTile e={list[0]} past={past} wide={view === 'backdrops'} zone={zone} />
                     {list.length > 1 && (
                       <button type="button" className="pt-more" onClick={() => setOpenDay(open ? null : key)} aria-expanded={open}>
                         {t('+{n} more', { n: list.length - 1 })}
@@ -379,7 +380,7 @@ export default function CalendarGrid({ entries, compact }: { entries: CalendarEn
                         </div>
                         <div className="pt-pop-grid">
                           {list.map((e) => (
-                            <PosterTile key={`${e.kind}-${e.id}-${e.release ?? ''}`} e={e} past={past} wide={view === 'backdrops'} />
+                            <PosterTile key={`${e.kind}-${e.id}-${e.release ?? ''}`} e={e} past={past} wide={view === 'backdrops'} zone={zone} />
                           ))}
                         </div>
                       </div>
@@ -389,7 +390,7 @@ export default function CalendarGrid({ entries, compact }: { entries: CalendarEn
                 {!tiles && list.length > 0 && (
                   <div className="prog-slots">
                     {(open ? list : list.slice(0, cap)).map((e) => (
-                      <Entry key={`${e.kind}-${e.id}-${e.release ?? ''}`} e={e} past={past} />
+                      <Entry key={`${e.kind}-${e.id}-${e.release ?? ''}`} e={e} past={past} zone={zone} />
                     ))}
                   </div>
                 )}
@@ -424,7 +425,7 @@ export default function CalendarGrid({ entries, compact }: { entries: CalendarEn
                 <ul className="prog-cards">
                   {list.map((e) => (
                     <li key={`${e.kind}-${e.id}-${e.release ?? ''}`}>
-                      <Entry e={e} past={past} card />
+                      <Entry e={e} past={past} card zone={zone} />
                     </li>
                   ))}
                 </ul>

@@ -137,7 +137,7 @@ func (s *Server) tvWants(profiles profileSet, scope tvScope) (wants []tvWant, up
 					// unless they are monitored; asking for specials does not.
 					monitored = ep.Monitored || (scope.force && scope.specials)
 				}
-				aired := ep.AirDate != "" && ep.AirDate <= today
+				aired := ep.AirDate != "" && ep.AirDate <= today && !ep.AirsLater(time.Now())
 				if ep.Status != library.StatusMissing || !aired || !monitored {
 					whole = false
 				}

@@ -102,12 +102,14 @@ func showStatusOf(tmdbStatus string) string {
 }
 
 type episodePayload struct {
-	ID        int64  `json:"id"`
-	Season    int    `json:"season"`
-	Episode   int    `json:"episode"`
-	Title     string `json:"title,omitempty"`
-	Overview  string `json:"overview,omitempty"`
-	AirDate   string `json:"airDate,omitempty"`
+	ID       int64  `json:"id"`
+	Season   int    `json:"season"`
+	Episode  int    `json:"episode"`
+	Title    string `json:"title,omitempty"`
+	Overview string `json:"overview,omitempty"`
+	AirDate  string `json:"airDate,omitempty"`
+	// AirAt is the exact air time (RFC 3339, UTC) when TVmaze has one.
+	AirAt     string `json:"airAt,omitempty"`
 	Status    string `json:"status"`
 	Quality   string `json:"quality,omitempty"`
 	FilePath  string `json:"filePath,omitempty"`
@@ -122,7 +124,7 @@ type episodePayload struct {
 func toEpisodePayload(e library.Episode) episodePayload {
 	return episodePayload{
 		ID: e.ID, Season: e.Season, Episode: e.Episode, Title: e.Title, Overview: e.Overview,
-		AirDate: e.AirDate, Status: string(e.Status), Quality: e.Quality, FilePath: e.FilePath, Monitored: e.Monitored,
+		AirDate: e.AirDate, AirAt: e.AirAt, Status: string(e.Status), Quality: e.Quality, FilePath: e.FilePath, Monitored: e.Monitored,
 	}
 }
 
@@ -530,6 +532,7 @@ func (s *Server) refreshSeries(ctx context.Context, sr library.Series) error {
 			log.Printf("api: refresh %q copy: remove dropped episodes: %v", sr.Title, err)
 		}
 	}
+	s.syncAirTimes(ctx, sr)
 	return nil
 }
 
