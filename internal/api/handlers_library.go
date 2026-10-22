@@ -254,7 +254,7 @@ func (s *Server) handleListMovies(w http.ResponseWriter, r *http.Request) {
 	out := make([]moviePayload, len(list))
 	now := time.Now()
 	movieFolders := s.movieFolders()
-	media := s.mediaSummaryNow().movies
+	media := s.mediaSummaryNow(true).movies
 	for i, m := range list {
 		out[i] = toMoviePayload(m, who)
 		if ms, ok := media[m.ID]; ok {

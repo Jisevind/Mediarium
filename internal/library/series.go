@@ -42,6 +42,9 @@ type Series struct {
 	// TMDBStatus is TMDB's status for the show ("Returning Series", "Ended",
 	// "Canceled"…), "" until the show is next refreshed.
 	TMDBStatus string
+	// StatusCheckedAt is when TMDB's details for the show were last read
+	// (RFC 3339, UTC), "" if never.
+	StatusCheckedAt string
 	// RootPath is the library folder the show's files go to (one of the TV
 	// folders in Settings); "" = the default folder.
 	RootPath string
@@ -100,7 +103,7 @@ const seriesSelect = `
 	       COALESCE(s.profile_id, 0), s.source_pref, COALESCE(s.added_by, 0), s.genres, s.no_upgrade, s.details_state, s.details_note, s.series_type,
 	       COALESCE(s.copy_of, 0), s.tvdb_id, s.imdb_id, s.tmdb_status, s.root_path, s.season_pack,
 	       COALESCE((SELECT names FROM title_names WHERE kind = 'tv' AND tmdb_id = s.tmdb_id), ''),
-	       s.origin_country
+	       s.origin_country, s.status_checked_at
 	FROM series s`
 
 func scanSeries(scan func(dest ...any) error) (Series, error) {
@@ -110,7 +113,7 @@ func scanSeries(scan func(dest ...any) error) (Series, error) {
 		alts   string
 		origin sql.NullString
 	)
-	if err := scan(&s.ID, &s.TMDBID, &s.Title, &s.Year, &s.Overview, &s.PosterPath, &s.FirstAirDate, &s.Monitored, &s.EpisodeCount, &s.DownloadedCount, &s.ProfileID, &s.SourcePref, &s.AddedBy, &genres, &s.NoUpgrade, &s.DetailsState, &s.DetailsNote, &s.SeriesType, &s.CopyOf, &s.TVDBID, &s.IMDBID, &s.TMDBStatus, &s.RootPath, &s.SeasonPack, &alts, &origin); err != nil {
+	if err := scan(&s.ID, &s.TMDBID, &s.Title, &s.Year, &s.Overview, &s.PosterPath, &s.FirstAirDate, &s.Monitored, &s.EpisodeCount, &s.DownloadedCount, &s.ProfileID, &s.SourcePref, &s.AddedBy, &genres, &s.NoUpgrade, &s.DetailsState, &s.DetailsNote, &s.SeriesType, &s.CopyOf, &s.TVDBID, &s.IMDBID, &s.TMDBStatus, &s.RootPath, &s.SeasonPack, &alts, &origin, &s.StatusCheckedAt); err != nil {
 		return Series{}, fmt.Errorf("scan series: %w", err)
 	}
 	s.OriginCountry = decodeCountries(origin)
@@ -353,6 +356,39 @@ func (r *Repo) SetSeriesMonitored(id int64, monitored bool) error {
 		return fmt.Errorf("set series %d monitored: %w", id, err)
 	}
 	return nil
+}
+
+// EnableSeriesOfEpisode switches a show's own Monitored switch on, given one
+// of its episodes. A show with an episode that is monitored is monitored: the
+// switch is what automation and the Wanted lists look at first.
+func (r *Repo) EnableSeriesOfEpisode(episodeID int64) error {
+	_, err := r.db.Exec(`UPDATE series SET monitored = 1 WHERE monitored = 0 AND id = (SELECT series_id FROM episodes WHERE id = ?)`, episodeID)
+	if err != nil {
+		return fmt.Errorf("switch on the show of episode %d: %w", episodeID, err)
+	}
+	return nil
+}
+
+// RepairFutureOnlyMonitoring switches monitoring back on for shows that were
+// set to "only episodes that haven't aired yet" while their own Monitored
+// switch ended up off. Such a show looks like this: the switch is off, at
+// least one real episode that has not aired (or has no date) is monitored,
+// no aired episode is monitored, and at least one aired episode is not. A
+// show someone turned off on purpose keeps all its episodes monitored, so it
+// does not look like that and is left alone. It does nothing the second time
+// (the switch is on by then). today is a YYYY-MM-DD date. It returns how many
+// shows were changed.
+func (r *Repo) RepairFutureOnlyMonitoring(today string) (int, error) {
+	res, err := r.db.Exec(`UPDATE series SET monitored = 1
+		WHERE monitored = 0 AND copy_of IS NULL
+		AND EXISTS (SELECT 1 FROM episodes e WHERE e.series_id = series.id AND e.season > 0 AND e.monitored = 1 AND (COALESCE(e.air_date, '') = '' OR e.air_date >= ?))
+		AND NOT EXISTS (SELECT 1 FROM episodes e WHERE e.series_id = series.id AND e.season > 0 AND e.monitored = 1 AND COALESCE(e.air_date, '') <> '' AND e.air_date < ?)
+		AND EXISTS (SELECT 1 FROM episodes e WHERE e.series_id = series.id AND e.season > 0 AND e.monitored = 0 AND COALESCE(e.air_date, '') <> '' AND e.air_date < ?)`, today, today, today)
+	if err != nil {
+		return 0, fmt.Errorf("repair shows set to future episodes only: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return int(n), nil
 }
 
 // SetEpisodeMonitored turns automatic searching for one episode on or off.
@@ -705,9 +741,17 @@ func (r *Repo) EpisodeFilesBySeries() (map[int64][]string, error) {
 // A zero or empty value leaves the saved one alone.
 func (r *Repo) SetSeriesExternalIDs(id int64, tvdbID int, imdbID, status string) error {
 	if _, err := r.db.Exec(`UPDATE series SET tvdb_id = CASE WHEN ? > 0 THEN ? ELSE tvdb_id END, imdb_id = CASE WHEN ? != '' THEN ? ELSE imdb_id END,
-		tmdb_status = CASE WHEN ? != '' THEN ? ELSE tmdb_status END WHERE id = ?`,
-		tvdbID, tvdbID, imdbID, imdbID, status, status, id); err != nil {
+		tmdb_status = CASE WHEN ? != '' THEN ? ELSE tmdb_status END WHERE id = ? OR copy_of = ?`,
+		tvdbID, tvdbID, imdbID, imdbID, status, status, id, id); err != nil {
 		return fmt.Errorf("set series external ids: %w", err)
+	}
+	return nil
+}
+
+// MarkSeriesChecked records that TMDB's details for a show were read at t.
+func (r *Repo) MarkSeriesChecked(id int64, t time.Time) error {
+	if _, err := r.db.Exec(`UPDATE series SET status_checked_at = ? WHERE id = ?`, t.UTC().Format(time.RFC3339), id); err != nil {
+		return fmt.Errorf("mark series checked: %w", err)
 	}
 	return nil
 }

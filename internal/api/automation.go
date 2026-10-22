@@ -28,6 +28,11 @@ const (
 func (s *Server) StartAutomation() *automation.Scheduler {
 	s.applySpeedLimit(time.Now())
 	_, _ = s.QueueRepo.ClearSettledFailures()
+	if n, err := s.MovieRepo.RepairFutureOnlyMonitoring(todayUTC()); err != nil {
+		log.Printf("library: %v", err)
+	} else if n > 0 {
+		log.Printf("library: switched monitoring back on for %d shows set to episodes that have not aired yet", n)
+	}
 	if s.cfg.PauseAutomation {
 		log.Print("Safe mode: MEDIARIUM_PAUSE_AUTOMATION is set, so automatic searching, downloading and refreshing are switched off until you remove it.")
 		// Two checks still run, as they start nothing by themselves: the

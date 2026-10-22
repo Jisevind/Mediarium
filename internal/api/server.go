@@ -981,6 +981,7 @@ func (s *Server) protectedRoutes() *routeTable {
 	admin.HandleFunc("PUT /api/settings/hardcover", s.handlePutHardcover)
 	admin.HandleFunc("GET /api/settings/simkl", s.handleGetSimkl)
 	admin.HandleFunc("DELETE /api/settings/simkl", s.handleDisconnectSimkl)
+	admin.HandleFunc("POST /api/settings/simkl/test", s.handleTestSimkl)
 	admin.HandleFunc("POST /api/settings/simkl/pin", s.handleStartSimklPin)
 	admin.HandleFunc("GET /api/settings/simkl/pin/{code}", s.handlePollSimklPin)
 	admin.HandleFunc("POST /api/system/restart", s.handleRestart)

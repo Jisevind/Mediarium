@@ -463,6 +463,9 @@ func (s *Server) arrAddSeries(w http.ResponseWriter, r *http.Request) {
 	case req.AddOptions != nil:
 		if mode := strings.ToLower(req.AddOptions.Monitor); mode == library.MonitorFuture || mode == library.MonitorNone {
 			_, _ = s.MovieRepo.ApplyMonitorMode(created.ID, mode, today(), false)
+			if mode == library.MonitorFuture {
+				_ = s.MovieRepo.SetSeriesMonitored(created.ID, true) // watching for new episodes is monitoring
+			}
 		}
 	}
 	if req.Monitored != nil && !*req.Monitored {

@@ -477,7 +477,16 @@ func (s *Server) handleSetSeriesMonitored(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleSetEpisodeMonitored(w http.ResponseWriter, r *http.Request) {
-	s.setMonitored(w, r, "episode", func(ctx context.Context, id int64, v bool) error { return s.MovieRepo.SetEpisodeMonitored(id, v) })
+	s.setMonitored(w, r, "episode", func(ctx context.Context, id int64, v bool) error {
+		if err := s.MovieRepo.SetEpisodeMonitored(id, v); err != nil {
+			return err
+		}
+		if v {
+			// A show with a monitored episode is monitored.
+			return s.MovieRepo.EnableSeriesOfEpisode(id)
+		}
+		return nil
+	})
 }
 
 func (s *Server) handleSetSeasonMonitored(w http.ResponseWriter, r *http.Request) {
@@ -487,7 +496,13 @@ func (s *Server) handleSetSeasonMonitored(w http.ResponseWriter, r *http.Request
 		return
 	}
 	s.setMonitored(w, r, "series", func(ctx context.Context, id int64, v bool) error {
-		return s.MovieRepo.SetSeasonMonitored(id, season, v)
+		if err := s.MovieRepo.SetSeasonMonitored(id, season, v); err != nil {
+			return err
+		}
+		if v {
+			return s.MovieRepo.SetSeriesMonitored(id, true)
+		}
+		return nil
 	})
 }
 

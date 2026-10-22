@@ -33,6 +33,17 @@ const apiBaseURL = "https://api.simkl.com"
 // UserAgent is sent with every call; the app sets it to include its version.
 var UserAgent = "Mediarium (+https://mediarium.app)"
 
+// AppVersion is sent as app-version with every call (Simkl asks every app to
+// say who it is with app-name and app-version).
+var AppVersion = "dev"
+
+// RedirectURI is the redirect address the guide tells people to enter when
+// they make their Simkl app: the "out of band" address for apps that sign in
+// with a code and have no web address of their own. The sign-in code flow
+// sends it as the redirect, so Simkl sees the same address the app was made
+// with.
+const RedirectURI = "urn:ietf:wg:oauth:2.0:oob"
+
 // maxAPIResponse is the biggest answer read from Simkl.
 const maxAPIResponse = 32 << 20
 
@@ -48,6 +59,59 @@ var (
 	// ErrPINExpired means the code was not entered in time, or Simkl does not know it.
 	ErrPINExpired = errors.New("That Simkl code has expired")
 )
+
+// StatusError is an answer Simkl gave that is not a success and not one of the
+// well-known cases above. Message is Simkl's own explanation when it gave one.
+type StatusError struct {
+	Status  int
+	Message string
+}
+
+func (e *StatusError) Error() string {
+	if e.Status >= 500 {
+		return fmt.Sprintf("Simkl isn't answering properly right now (it sent status %d). Try again later", e.Status)
+	}
+	text := fmt.Sprintf("Simkl answered with status %d", e.Status)
+	if e.Message != "" {
+		text += " (\"" + e.Message + "\")"
+	}
+	if e.Status == http.StatusBadRequest {
+		text += ". Check that you pasted the Client ID of your Simkl app (not the secret), and that the app's redirect URI is exactly " + RedirectURI
+	} else {
+		text += ". Try again later"
+	}
+	return text
+}
+
+// errorText pulls the explanation out of a Simkl error answer such as
+// {"error":"client_id_failed","message":"..."}; at most 200 characters.
+func errorText(body []byte) string {
+	var r struct {
+		Error   string `json:"error"`
+		Message string `json:"message"`
+	}
+	if json.Unmarshal(body, &r) != nil {
+		return ""
+	}
+	text := strings.TrimSpace(r.Message)
+	if r.Error != "" {
+		if text != "" {
+			text = r.Error + ": " + text
+		} else {
+			text = r.Error
+		}
+	}
+	text = strings.Map(func(c rune) rune {
+		if c < ' ' || c == '"' {
+			return ' '
+		}
+		return c
+	}, text)
+	if len(text) > 200 {
+		text = text[:200]
+	}
+	return text
+}
 
 // RateLimitError is returned when Simkl asks to slow down.
 type RateLimitError struct{ RetryAfter time.Duration }
@@ -121,14 +185,25 @@ func (c *Client) WrapTransport(wrap func(http.RoundTripper) http.RoundTripper) {
 // do makes one GET and returns the body (at most maxAPIResponse bytes) of a
 // 200 answer. token is empty for the sign-in calls.
 func (c *Client) do(ctx context.Context, path string, q url.Values, token string) ([]byte, error) {
+	return c.request(ctx, http.MethodGet, path, q, token)
+}
+
+// request is do for any method. Every call carries the Client ID as the
+// simkl-api-key header and as client_id, and says which app is calling with
+// app-name and app-version, as Simkl's documentation asks.
+func (c *Client) request(ctx context.Context, method, path string, q url.Values, token string) ([]byte, error) {
 	if c.clientID == "" {
 		return nil, ErrNoClientID
 	}
-	target := c.baseURL + path
-	if len(q) > 0 {
-		target += "?" + q.Encode()
+	full := url.Values{}
+	for k, v := range q {
+		full[k] = v
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	full.Set("client_id", c.clientID)
+	full.Set("app-name", "mediarium")
+	full.Set("app-version", AppVersion)
+	target := c.baseURL + path + "?" + full.Encode()
+	req, err := http.NewRequestWithContext(ctx, method, target, nil)
 	if err != nil {
 		return nil, fmt.Errorf("build simkl request: %w", netguard.CleanError(err))
 	}
@@ -157,7 +232,8 @@ func (c *Client) do(ctx context.Context, path string, q url.Values, token string
 		secs, _ := strconv.Atoi(strings.TrimSpace(resp.Header.Get("Retry-After")))
 		return nil, &RateLimitError{RetryAfter: time.Duration(secs) * time.Second}
 	default:
-		return nil, fmt.Errorf("Simkl isn't answering properly right now (it sent status %d). Try again later", resp.StatusCode)
+		explain, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
+		return nil, &StatusError{Status: resp.StatusCode, Message: errorText(explain)}
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxAPIResponse+1))
 	if err != nil {
@@ -181,7 +257,7 @@ var codeRe = regexp.MustCompile(`^[A-Za-z0-9]{3,32}$`)
 
 // StartPIN asks Simkl for a new code. It also proves the Client ID works.
 func (c *Client) StartPIN(ctx context.Context) (PIN, error) {
-	body, err := c.do(ctx, "/oauth/pin", url.Values{"client_id": {c.clientID}}, "")
+	body, err := c.do(ctx, "/oauth/pin", url.Values{"redirect": {RedirectURI}}, "")
 	if err != nil {
 		return PIN{}, err
 	}
@@ -220,7 +296,7 @@ func (c *Client) CheckPIN(ctx context.Context, userCode string) (string, error) 
 	if !codeRe.MatchString(userCode) {
 		return "", ErrPINExpired
 	}
-	body, err := c.do(ctx, "/oauth/pin/"+userCode, url.Values{"client_id": {c.clientID}}, "")
+	body, err := c.do(ctx, "/oauth/pin/"+userCode, nil, "")
 	if err != nil {
 		return "", err
 	}
@@ -239,6 +315,32 @@ func (c *Client) CheckPIN(ctx context.Context, userCode string) (string, error) 
 		return "", nil
 	}
 	return "", ErrPINExpired
+}
+
+// UserName asks Simkl who the saved sign-in belongs to (the account's name),
+// which proves the Client ID and the sign-in work together.
+func (c *Client) UserName(ctx context.Context, token string) (string, error) {
+	if token == "" {
+		return "", ErrNotConnected
+	}
+	// Simkl documents this call as a POST; an old gateway may only know GET.
+	body, err := c.request(ctx, http.MethodPost, "/users/settings", nil, token)
+	var se *StatusError
+	if errors.As(err, &se) && (se.Status == http.StatusMethodNotAllowed || se.Status == http.StatusNotFound) {
+		body, err = c.request(ctx, http.MethodGet, "/users/settings", nil, token)
+	}
+	if err != nil {
+		return "", err
+	}
+	var r struct {
+		User struct {
+			Name string `json:"name"`
+		} `json:"user"`
+	}
+	if err := json.Unmarshal(body, &r); err != nil {
+		return "", fmt.Errorf("decode simkl account: %w", err)
+	}
+	return strings.TrimSpace(r.User.Name), nil
 }
 
 // Media is one movie, show or anime on a Simkl list.

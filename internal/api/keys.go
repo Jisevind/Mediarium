@@ -206,6 +206,11 @@ func (s *Server) handleTestService(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, simkl.ErrNoClientID):
 			writeJSON(w, http.StatusOK, connTestResult{Message: "Enter a Simkl client ID first."})
 		default:
+			var se *simkl.StatusError
+			if errors.As(err, &se) {
+				writeJSON(w, http.StatusOK, connTestResult{Message: sentence(se.Error())})
+				break
+			}
 			writeJSON(w, http.StatusOK, connTestResult{Message: plainerror.Message(err)})
 		}
 	default:

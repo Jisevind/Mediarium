@@ -10,6 +10,13 @@ export interface ReleaseNotes {
 
 export const WHATS_NEW: ReleaseNotes[] = [
   {
+    version: '3.5.0',
+    items: [
+      t("Shows that have ended now show as ended, and the show page says what is being monitored and how much space it uses."),
+      t("Connecting Simkl works again, and you can be told when the TRaSH Guides sync changed something."),
+    ],
+  },
+  {
     version: '3.4.0',
     items: [
       t("Home Assistant and other assistants can now sign in to MCP with a login and approval, no key to paste."),

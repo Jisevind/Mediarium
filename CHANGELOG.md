@@ -8,6 +8,25 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.5.0] - 2026-10-22
+
+In short: shows that ended are marked as ended, the show page tells what is monitored and how much space it uses, Simkl sign-in is fixed, and the assistant search is more robust.
+
+### Added
+
+- A show's page now says what is being monitored, in a small tag by the name: Monitoring: all episodes, new episodes only, only episodes that haven't aired yet, season 2 only, some episodes, or Not monitoring. The Monitored switch adds the count ("Episodes monitored: 12 of 40"). Thanks to Bayharbourbutcher1 on GitHub, #114.
+- Size on disk on a show's and a movie's page, the size of each season, and the total of the Movies or Shows tab at the end of the Library's status chips (Shown: x of y when a filter is on). Thanks to Bayharbourbutcher1 on GitHub, #114.
+- Seasons on this page (Collapsed, Latest season open, All open) on a show's page, kept in this browser; Open all and Close all were already there. Thanks to Bayharbourbutcher1 on GitHub, #114.
+- The assistant search (`library_search`) also matches genres and the description, and has a `genre` argument (Action, Sci-Fi...). An empty search says "No titles matched" and how many titles the library holds. Thanks to mirisbowring on GitHub, #97.
+- Notification event **TRaSH Guides sync applied**, off until you tick it. It sends one message when the automatic or manual TRaSH update changed custom formats (names, then "and N more") and profile scores, and nothing when nothing changed. Thanks to Bayharbourbutcher1 on GitHub, #109.
+
+### Fixed
+
+- Shows that had ended were not marked as ended in the Library. The status is now read from TMDB for every show, also the ones that are not monitored, once a day for running shows and once a week for finished ones. Thanks to SanketBaraiya on GitHub, #113.
+- A show set to "Only episodes that haven't aired yet" now has its Monitored switch on (also through the Sonarr style API), ticking an episode or a season on a switched-off show switches the show on, and shows that were left off after that choice are switched back on when Mediarium starts. A show you switched off yourself is left alone. Thanks to Bayharbourbutcher1 on GitHub, #114.
+- Asking the assistant for titles through MCP (library_search) no longer comes back as an empty "error communicating with the MCP server". Every failure is now a normal answer with a plain explanation, the search no longer scans the disks for subtitle files or reads every file's size unless the question needs it, and the searches accept movie/movies/film, tv/series/shows and the like. Thanks to mirisbowring on GitHub, #97.
+- Connecting a Simkl account. The sign-in now sends the redirect address the guide tells you to enter (`urn:ietf:wg:oauth:2.0:oob`) and the app name and version Simkl asks for, and when Simkl refuses (for example with status 400) the card shows Simkl's own words and what to check. The badge on the Simkl key card says "Client ID saved" instead of "Connected", and the account card has a **Test connection** button that shows your Simkl name. Thanks to Bayharbourbutcher1 on GitHub, #115 (and nexus4004 on GitHub, #115).
+
 ## [3.4.0] - 2026-10-22
 
 In short: Home Assistant can sign in to MCP, Discover has language and rating filters, richer notifications, import from any folder, and a number of fixes found by users.

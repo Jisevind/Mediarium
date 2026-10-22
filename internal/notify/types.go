@@ -29,6 +29,7 @@ const (
 	// so nobody receives messages they never asked for.
 	EventClientDown = "clientdown" // a download client can't be reached
 	EventClientUp   = "clientup"   // a download client can be reached again
+	EventTrashSync  = "trashsync"  // a check of the TRaSH Guides changed custom formats or their scores
 )
 
 // EventInfo describes one subscribable event for the UI.
@@ -52,12 +53,15 @@ func EventKinds() []EventInfo {
 		{EventDigest, "Weekly summary", "Once a week: what arrived, what failed and what is still missing."},
 		{EventClientDown, "Download client down", "A download client (built-in or external) can't be reached."},
 		{EventClientUp, "Download client back", "A download client that was down can be reached again."},
+		{EventTrashSync, "TRaSH Guides sync applied", "The update from the TRaSH Guides (automatic or by button) changed custom formats or profile scores."},
 	}
 }
 
 // OptIn reports whether a kind is only sent to targets that chose it. An empty
 // list of events (older targets) means every kind except these.
-func OptIn(kind string) bool { return kind == EventClientDown || kind == EventClientUp }
+func OptIn(kind string) bool {
+	return kind == EventClientDown || kind == EventClientUp || kind == EventTrashSync
+}
 
 // DefaultEvents is what a target subscribes to when it doesn't say.
 func DefaultEvents() []string {

@@ -1434,7 +1434,7 @@ export interface Series {
   seriesType?: SeriesType // how releases number the episodes
   firstAirDate?: string // "2022-02-18", for sorting
   sizeBytes?: number // the downloaded episodes on disk
-  showStatus?: 'ended' | 'continuing' | 'upcoming' // where the show stands; left out until it has been refreshed once
+  showStatus?: 'ended' | 'canceled' | 'continuing' | 'upcoming' // where the show stands; left out until it has been refreshed once
   originCountry?: string[] // where it comes from ("US", "GB"); empty until the show is refreshed
   nameTag?: string // tells it from another show of the same name in the library ("US", "UK" or the year)
   media?: MediaSummary // what the downloaded episodes' files hold, once they have been read
@@ -3594,6 +3594,7 @@ export const api = {
   simklStartPin: () => post<{ code: string; url: string; expiresIn: number; interval: number }>('/settings/simkl/pin', {}),
   simklPinStatus: (code: string) => get<{ done: boolean; status?: SimklStatus }>(`/settings/simkl/pin/${encodeURIComponent(code)}`),
   simklDisconnect: () => del<null>('/settings/simkl'),
+  simklTest: () => post<{ ok: boolean; message: string }>('/settings/simkl/test', {}),
   getHardcover: () => get<{ set: boolean; username?: string }>('/settings/hardcover'),
   putHardcover: (token: string) => put<{ set: boolean; username?: string }>('/settings/hardcover', { token }),
   // tracks=false answers with the album alone (fast); the tracklist is a second request.

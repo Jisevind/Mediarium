@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/rdborg/mediarium/internal/notify"
 	"github.com/rdborg/mediarium/internal/quality"
 	"github.com/rdborg/mediarium/internal/settings"
 )
@@ -91,6 +92,11 @@ func (s *Server) recordTrashCheck(res trashUpdateResult, err error, daily bool) 
 	default:
 		slog.Info("custom formats: checked the TRaSH Guides", "daily", daily, "updated", c.Updated, "upToDate", c.UpToDate, "scoresChanged", c.Scores, "profiles", c.Profiles, "formats", strings.Join(c.Names, ", "))
 		_ = s.QueueRepo.LogActivity(0, "update", fmt.Sprintf("Checked the TRaSH Guides: %d formats updated, %d already up to date, %d profile scores changed.", c.Updated, c.UpToDate, c.Scores))
+		// Only a check that changed something is worth a message (and only to
+		// the notifications that ticked the event).
+		if ev, ok := notify.ComposeTrashSync(c.Names, c.Updated, c.Scores, c.Profiles, daily, s.publicLinks(), time.Now()); ok {
+			s.sendNotification(ev)
+		}
 	}
 	return c
 }

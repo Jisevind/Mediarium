@@ -26,6 +26,7 @@ const EVENTS: { key: string; label: string; hint: string }[] = [
   { key: 'digest', label: t('Weekly summary'), hint: t('A short summary once a week of what arrived, what failed and what is still missing') },
   { key: 'clientdown', label: t('Download client down'), hint: t('A download client cannot be reached, for example because it stopped or the network is down') },
   { key: 'clientup', label: t('Download client back'), hint: t('A download client that was down can be reached again') },
+  { key: 'trashsync', label: t('TRaSH Guides sync applied'), hint: t('The update from the TRaSH Guides changed custom formats or profile scores. Nothing is sent when nothing changed') },
 ]
 
 const FALLBACK_TYPES: NotifyType[] = [

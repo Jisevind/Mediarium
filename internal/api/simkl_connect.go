@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
@@ -65,6 +66,9 @@ func (s *Server) handleStartSimklPin(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusTooManyRequests, rl.Error()+".")
 			return
 		}
+		if writeSimklStatusError(w, "start the Simkl sign-in", err) {
+			return
+		}
 		writeUpstreamError(w, "start the Simkl sign-in", err)
 		return
 	}
@@ -97,6 +101,9 @@ func (s *Server) handlePollSimklPin(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"done": false}) // too fast: the page just asks again later
 		return
 	case err != nil:
+		if writeSimklStatusError(w, "check the Simkl sign-in", err) {
+			return
+		}
 		writeUpstreamError(w, "check the Simkl sign-in", err)
 		return
 	case token == "":
@@ -111,6 +118,56 @@ func (s *Server) handlePollSimklPin(w http.ResponseWriter, r *http.Request) {
 	}
 	slog.Info("simkl account connected")
 	writeJSON(w, http.StatusOK, map[string]any{"done": true, "status": s.simklState()})
+}
+
+// writeSimklStatusError shows Simkl's own answer (its status and the reason it
+// gave) with what to check, instead of the generic "couldn't, try again". It
+// reports whether the error was one.
+func writeSimklStatusError(w http.ResponseWriter, doing string, err error) bool {
+	var se *simkl.StatusError
+	if !errors.As(err, &se) {
+		return false
+	}
+	slog.Warn("simkl refused a request", "while", doing, "status", se.Status, "reason", se.Message)
+	writeError(w, http.StatusBadGateway, sentence(se.Error()))
+	return true
+}
+
+// POST /api/settings/simkl/test: ask Simkl who the connected account is. It
+// proves the Client ID and the saved sign-in work together.
+func (s *Server) handleTestSimkl(w http.ResponseWriter, r *http.Request) {
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	reply := func(ok bool, msg string) { writeJSON(w, http.StatusOK, map[string]any{"ok": ok, "message": msg}) }
+	token, terr := s.Settings.Get(settings.KeySimklToken)
+	if terr != nil {
+		reply(false, "The saved Simkl sign-in can't be read. Connect your Simkl account again.")
+		return
+	}
+	name, err := s.Simkl().UserName(ctx, token)
+	var rl *simkl.RateLimitError
+	var se *simkl.StatusError
+	switch {
+	case err == nil && name != "":
+		reply(true, fmt.Sprintf("Connected to Simkl as %s.", name))
+	case err == nil:
+		reply(true, "Simkl accepted the sign-in.")
+	case errors.Is(err, simkl.ErrNoClientID):
+		reply(false, "Add your Simkl client ID first.")
+	case errors.Is(err, simkl.ErrNotConnected):
+		reply(false, "No Simkl account is connected yet.")
+	case errors.Is(err, simkl.ErrUnauthorized):
+		reply(false, "Simkl no longer accepts the saved sign-in. Connect your Simkl account again.")
+	case errors.Is(err, simkl.ErrInvalidClientID):
+		reply(false, "Simkl rejected the client ID. Check it in Settings.")
+	case errors.As(err, &rl):
+		reply(false, sentence(rl.Error()))
+	case errors.As(err, &se):
+		reply(false, sentence(se.Error()))
+	default:
+		slog.Warn("simkl: the connection test failed", "err", err)
+		reply(false, "Couldn't reach Simkl right now. Try again in a moment.")
+	}
 }
 
 // DELETE /api/settings/simkl: forget the connected account. Lists already

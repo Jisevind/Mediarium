@@ -530,6 +530,11 @@ button.danger-ghost { color: var(--danger); border-color: color-mix(in srgb, var
 button.danger-ghost:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
 .state-tag { display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px; border-radius: 999px; font-size: 0.78rem; font-weight: 600; color: var(--stc, var(--text-dim)); background: color-mix(in srgb, var(--stc, var(--text-dim)) 14%, transparent); border: 1px solid color-mix(in srgb, var(--stc, var(--text-dim)) 45%, transparent); }
 .state-tag.st-searching { --stc: var(--warning); }
+.state-tag.st-mon-on { --stc: var(--success); }
+.state-tag.st-mon-off { --stc: var(--text-dim); }
+.lib-total-line { display: none; }
+.lib-total, .lib-total-line { align-items: center; gap: 6px; font-size: 0.8rem; color: var(--text-dim); white-space: nowrap; }
+.lib-total { margin-left: auto; display: inline-flex; align-self: center; }
 .state-tag.st-pending { --stc: var(--c-discover); }
 .state-tag.st-added { --stc: var(--text-dim); }
 .state-tag.st-failed { --stc: var(--danger); }
@@ -2938,7 +2943,7 @@ a.bar-label:hover { color: var(--accent); }
 .pcard-ribbon.tone-ebook { background: var(--c-book); }
 .pcard-ribbon.tone-audio { background: var(--c-audiobook); }
 .pcard-ribbon.tone-both { background: linear-gradient(90deg, var(--c-book), var(--c-audiobook)); }
-.pcard-ribbon.tone-ended { top: 15px; right: -33px; width: 110px; padding: 2px 0; font-size: 0.62rem; background: color-mix(in srgb, var(--danger) 82%, #000); color: #fff; }
+.pcard-ribbon.tone-ended { top: 15px; right: -33px; width: 110px; padding: 2px 0; font-size: 0.62rem; font-weight: 700; background: color-mix(in srgb, var(--surface) 88%, #000); color: var(--text-dim); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
 /* The main action (Add) has its label and lights up as soon as the card is hovered */
 .pcard-actions .icon-btn.primary-act { width: auto; padding: 0 14px; gap: 6px; font-weight: 700; font-size: 0.85rem; }
 .pcard:hover .pcard-actions .icon-btn.primary-act,

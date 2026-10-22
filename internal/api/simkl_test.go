@@ -56,6 +56,13 @@ func newFakeSimkl(t *testing.T) *fakeSimkl {
 			_, _ = w.Write([]byte(`{"result":"KO","message":"Authorization pending"}`))
 		}
 	})
+	mux.HandleFunc("POST /users/settings", func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Authorization") != "Bearer "+simklTestToken {
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		_, _ = w.Write([]byte(`{"user":{"name":"Casey"}}`))
+	})
 	mux.HandleFunc("/sync/all-items/{kind}/{status}", func(w http.ResponseWriter, r *http.Request) {
 		f.calls.Add(1)
 		if r.Header.Get("Authorization") != "Bearer "+simklTestToken || r.Header.Get("simkl-api-key") != simklTestClient {
@@ -203,6 +210,27 @@ func TestSimklErrorsAreShownPlainly(t *testing.T) {
 		if strings.Contains(msg, simklTestToken) || strings.Contains(msg, simklTestClient) {
 			t.Errorf("status %d: a secret is in the message %q", tc.code, msg)
 		}
+	}
+}
+
+func TestSimklTestConnectionAndBadRequestText(t *testing.T) {
+	_, base, admin, f := simklServer(t)
+	res := postJSON[map[string]any](t, admin, base+"/api/settings/simkl/test", nil, http.StatusOK)
+	if res["ok"] != false || !strings.Contains(res["message"].(string), "No Simkl account is connected") {
+		t.Fatalf("before connecting: %v", res)
+	}
+	connectSimkl(t, base, admin, f)
+	res = postJSON[map[string]any](t, admin, base+"/api/settings/simkl/test", nil, http.StatusOK)
+	if res["ok"] != true || !strings.Contains(res["message"].(string), "Casey") {
+		t.Fatalf("after connecting: %v", res)
+	}
+
+	// A 400 when starting the sign-in shows what Simkl said and what to check.
+	f.pinCode.Store(400)
+	resp := postJSON[map[string]any](t, admin, base+"/api/settings/simkl/pin", nil, http.StatusBadGateway)
+	msg, _ := resp["error"].(string)
+	if !strings.Contains(msg, "status 400") || !strings.Contains(msg, "redirect URI") {
+		t.Fatalf("a 400 must say what to check, got %q", msg)
 	}
 }
 

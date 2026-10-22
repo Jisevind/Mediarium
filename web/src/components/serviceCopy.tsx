@@ -97,7 +97,7 @@ export const SIMKL_COPY: ServiceCopy = {
       link: link('https://simkl.com/settings/developer/', t('Simkl developer settings')),
       create: <strong>New Application</strong>,
     }),
-    tx('Name it "Mediarium". If it asks for a {redirect}, enter {uri}. Then save it.', {
+    tx('Name it "Mediarium". When it asks for a {redirect}, enter exactly {uri} and nothing else. Then save it.', {
       redirect: <strong>Redirect URI</strong>,
       uri: <code>urn:ietf:wg:oauth:2.0:oob</code>,
     }),

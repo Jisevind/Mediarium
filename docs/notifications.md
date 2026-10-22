@@ -64,7 +64,7 @@ All three go through Mediarium's usual address check, like the other methods. Th
 
 1. Choose the method on the left.
 2. Fill in the fields. Each has a short explanation underneath, required ones are marked with a star, and mistakes (an address without `http://`, an email address without an `@`, a port that is not a number) are pointed out as you type.
-3. Choose **when** it should tell you: download started, downloaded, failed, needs a decision, subtitles, something is wrong, a new version of Mediarium. There is also **Weekly summary**, which is described [below](#weekly-summary), and **Download client down** and **Download client back**, described [below](#download-client-down-and-back). The default is downloaded, failed, something is wrong and a new version. The two download client events are never on unless you tick them, and notifications you made before they existed do not get them.
+3. Choose **when** it should tell you: download started, downloaded, failed, needs a decision, subtitles, something is wrong, a new version of Mediarium. There is also **Weekly summary**, which is described [below](#weekly-summary), **Download client down** and **Download client back**, described [below](#download-client-down-and-back), and **TRaSH Guides sync applied**, described [below](#trash-guides-sync-applied). The default is downloaded, failed, something is wrong and a new version. The download client events and the TRaSH Guides event are never on unless you tick them, and notifications you made before they existed do not get them.
 4. Press **Send a test** and check your device, then **Add**. Add works without a test, but a test finds a wrong address or password before you rely on it.
 
 ### The test log
@@ -117,6 +117,18 @@ Tick **Download client down** and **Download client back** on a notification to 
 - A client that answers but refuses the login or the category is not counted as down. The Health list and the download itself already say that.
 - "Down" is sent straight away even in quiet hours, "back" waits for the quiet hours to end like the other everyday messages.
 - Both are off for every notification that exists today. The built-in torrent downloader has no separate program to be down, so it sends neither.
+
+
+### TRaSH Guides sync applied
+
+Tick **TRaSH Guides sync applied** to hear when the update of your TRaSH custom formats changed something (see [Keeping the TRaSH formats up to date](quality-profiles.md#keeping-the-trash-formats-up-to-date)). It covers the automatic daily or weekly update and the **Update from TRaSH** button.
+
+- You get one message per update that changed at least one format, for example: `2 custom formats updated from the TRaSH Guides.` with the rows **Custom formats** (the first five names, then `and 3 more`), **Profile scores** (`4 scores changed in 2 profiles`, only when a score moved) and **Started by** (the automatic update, or the button).
+- Nothing is sent when the guides had nothing new, or when GitHub could not be reached (the card and Activity say so).
+- The size limits from the TRaSH Guides are not applied automatically, so they never appear here.
+- It is a normal everyday message: quiet hours hold it back until they end.
+- A webhook gets the usual `event` (`trashsync`), `title`, `message` and `details`, and `customFormats` with the names of the formats that changed (up to ten). The custom body placeholder `{{customFormats}}` has them too.
+- It is off for every notification that exists today and for new ones until you tick it.
 
 
 ### The link

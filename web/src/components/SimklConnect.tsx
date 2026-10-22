@@ -3,6 +3,7 @@ import { api, type SimklStatus } from '../api'
 import { t, tx } from '../i18n'
 import { pollPin } from '../pinPoll'
 import { useConfirm } from './ConfirmProvider'
+import TestButton from './TestButton'
 import { useToast } from './Toast'
 
 // Settings > Info, lists and subtitles > Import lists: connect the Simkl
@@ -105,9 +106,12 @@ export default function SimklConnect({ hasClientId, onChanged }: { hasClientId: 
       {st.connected ? (
         <>
           <p style={{ margin: '0 0 10px' }}>{t('Your Simkl account is connected.')}</p>
-          <button disabled={busy} onClick={() => void disconnect()}>
-            {t('Disconnect')}
-          </button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <button disabled={busy} onClick={() => void disconnect()}>
+              {t('Disconnect')}
+            </button>
+            <TestButton label={t('Test connection')} run={() => api.simklTest()} />
+          </div>
         </>
       ) : pin ? (
         <>

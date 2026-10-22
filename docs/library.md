@@ -15,7 +15,7 @@ To do the same thing to many titles at once, use **Select**.
 - **Back brings the list back as it was.** The tab, the status chip, the search text, the genre, tag and decade live in the address (for example `/library?kind=tv&st=pending`), so pressing Back from a title returns to the same list with the same filters. Discover works the same way for its tab and filters.
 - **The Downloading chip** only shows its moving blue line while something is really downloading.
 - **Clear filters.** When a search, chip, genre or year is narrowing the list, a **Clear filters** button appears beside the chips, and in the "Nothing matches these filters" message when nothing is left. It puts them all back.
-- **Ended shows.** A show that has finished (TMDB says Ended or Canceled) has a red **Ended** ribbon on its poster, and its page says **Ended**, **Continuing** or **Upcoming** next to the episode count. A show shows no status until it has been refreshed once.
+- **Ended shows.** A show that has finished has a small grey **Ended** (or **Canceled**) ribbon in the corner of its poster, and a note beside its name in the list view. Its page says **Ended**, **Canceled**, **Continuing** or **Upcoming** next to the episode count. On the TV tab the **Ended** and **Continuing** chips show only those shows. The status comes from TMDB and is kept up to date in the background: a show that is still running is read again every day (a monitored one at every 12-hour refresh, so new episodes are found quickly), a show that has ended or was canceled once a week, with a short pause between shows. This includes shows that aren't monitored. **Refresh episodes** on a show's page reads its status again right away. A show shows no status until it has been read once. Scripts: `showStatus` on `GET /api/series` is `ended`, `canceled`, `continuing` or `upcoming`; the Sonarr style API has `status` and `ended` on each series.
 - **Sort.** **Recently added**, **Title A–Z** (without a leading "The", "A" or "An", so The Matrix is under M), **Newest release** (release date, or the date a show started), **Largest on disk** (the movie's file, or all of a show's downloaded episodes) and **Status**.
 - **Sort direction.** The button with the up-and-down arrows next to **Sort** reverses the order (oldest first, Z to A, smallest first). The sort and its direction are remembered in this browser.
 - **Poster size.** In the grid, the slider next to the grid and list buttons makes the posters bigger or smaller. It is remembered in this browser (and hidden on small screens).
@@ -191,6 +191,29 @@ If you delete old episodes as you watch them and don't want them downloaded agai
 When episodes would stop being monitored, a confirmation says how many, for example "This stops monitoring 214 episodes that have already aired. Nothing is deleted." Only the monitoring changes: your files stay where they are, nothing is searched for and no download is started. Episodes that already have a file are treated like any other. You can still switch single episodes or seasons on again by hand.
 
 Scripts: `POST /api/series/{id}/monitor-mode` with `{"mode": "all"}`, `"future"` or `"none"` answers with how many episodes stopped (`stopped`) and started (`started`) being monitored. Add `"dryRun": true` to only count.
+
+### What a show is monitoring
+
+A small tag next to the show's name says what is being looked for, and the Monitored switch repeats it with the counts. It reads one of:
+
+- **Monitoring: all episodes**
+- **Monitoring: new episodes only** (the show is on, but no episode is ticked, so only episodes that turn up later are monitored)
+- **Monitoring: only episodes that haven't aired yet**
+- **Monitoring: season 2 only** (or **seasons 1, 3 only**), when whole seasons are ticked and the rest isn't
+- **Monitoring: some episodes**, when it is a mix, with "Episodes monitored: 12 of 40" next to the switch
+- **Not monitoring**, when the show is switched off
+
+Specials are left out of the counts. The tag is worked out from what is ticked on the page, nothing extra is stored.
+
+A show counts as monitored when its Monitored switch is on, and the switch is the first thing automation, the Wanted lists, the Library and the Sonarr style API (`monitored`) look at. So choosing **Only episodes that haven't aired yet** when you add a show (also through the Sonarr style API's add options) leaves the switch on. Ticking an episode or a season on a show that was switched off switches the show on again too. When Mediarium starts it also repairs shows that were left switched off after being set to **Only episodes that haven't aired yet**: a show whose switch is off, that has monitored episodes that haven't aired and none that have, and has aired episodes that aren't monitored. A show you switched off yourself keeps its episodes ticked, so it doesn't look like that and is left alone.
+
+## Disk space
+
+A show's page shows **Size on disk** among the facts at the top, and each season's header shows what that season's files take (the grey tag next to the count, for example 38.4 GB). A movie's page shows the size of its file in the same place. The Library has a **Largest on disk** sort, and the line at the end of the status chips adds up the tab you are on (**Movies: 1.4 TB** or **Shows: 2.4 TB**); with a filter on it says **Shown: 310.2 GB of 2.4 TB**. The sizes are what the files weigh on the disk now, read when you open the page and kept for a short while, so a big library stays quick.
+
+## Seasons on a show's page
+
+By default the show's page opens with only the season that needs attention (the latest with missing episodes, or else the latest). **Seasons on this page**, above the episodes, changes that for this browser: **Collapsed** (every season folded), **Latest season open** (the default) or **All open**. **Open all** and **Close all** next to it change the page right away. The choice is remembered in this browser only.
 
 ## Specials
 

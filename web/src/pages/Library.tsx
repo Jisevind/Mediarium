@@ -12,6 +12,7 @@ import BulkBar from '../components/BulkBar'
 import { BulkTagMenu, TagChips } from '../components/Tags'
 import Dropdown from '../components/Dropdown'
 import Icon, { type IconName } from '../components/Icon'
+import { isFinishedShow, isRunningShow, showRibbon, showStatusLabel } from '../showStatus'
 import KindGlyph from '../components/KindGlyph'
 import MoveToFolderDialog from '../components/MoveToFolderDialog'
 import PosterCard, { PosterFallback, type CardAction } from '../components/PosterCard'
@@ -32,6 +33,7 @@ import { useUrlState } from '../useUrlState'
 import { plural, t, tx, st } from '../i18n'
 import { compareTitles } from '../titleSort'
 import { looseIncludes } from '../looseText'
+import { largestFirst, libraryTotalText, sumBytes } from '../diskTotals'
 import { fileFilterOptions, fileFiltersActive, langName, matchesFileFilters, NO_FILE_FILTERS, type FileFilters } from '../fileInfo'
 
 type Kind = 'movie' | 'tv'
@@ -65,7 +67,7 @@ interface Item {
   copies: number // second copies kept in another quality
   released: string // "2024-03-01", or the year alone when that is all there is
   sizeBytes: number // on disk
-  ended: boolean // a show that has finished (TMDB says Ended or Canceled)
+  showStatus: string // where a show stands (ended, canceled, continuing, upcoming), '' for movies and shows not read yet
   media?: MediaSummary // what the files hold (codecs, HDR, audio and subtitle languages), once they have been read
 }
 
@@ -102,7 +104,7 @@ function fromMovie(m: Movie, queue: QueueItem[]): Item {
     copies: m.copies ?? 0,
     released: m.releaseDate || (m.year ? String(m.year) : ''),
     sizeBytes: m.sizeBytes ?? 0,
-    ended: false,
+    showStatus: '',
     media: m.media,
   }
 }
@@ -117,7 +119,7 @@ function fromSeries(s: Series, queue: QueueItem[]): Item {
     copies: s.copies ?? 0,
     released: s.firstAirDate || (s.year ? String(s.year) : ''),
     sizeBytes: s.sizeBytes ?? 0,
-    ended: s.showStatus === 'ended',
+    showStatus: s.showStatus ?? '',
     media: s.media,
   }
 }
@@ -133,8 +135,13 @@ const STATE_FILTERS: { id: string; label: string; test: (i: Item) => boolean }[]
   { id: 'failed', label: t('Failed'), test: (i) => i.state.key === 'failed' },
 ]
 // The symbol each state filter wears (the same ones the posters' pills use).
-const FILTER_ICON: Record<string, IconName> = { all: 'grid', downloaded: 'check', downloading: 'download', pending: 'clock', searching: 'search', partial: 'download', added: 'bookmark', failed: 'warning' }
-const FILTERS: Record<Kind, { id: string; label: string; test: (i: Item) => boolean }[]> = { movie: STATE_FILTERS, tv: STATE_FILTERS }
+const FILTER_ICON: Record<string, IconName> = { ended: 'stop', continuing: 'play', all: 'grid', downloaded: 'check', downloading: 'download', pending: 'clock', searching: 'search', partial: 'download', added: 'bookmark', failed: 'warning' }
+// Shows can also be told apart by whether more episodes are coming.
+const SHOW_FILTERS = [
+  { id: 'ended', label: t('Ended'), test: (i: Item) => isFinishedShow(i.showStatus) },
+  { id: 'continuing', label: t('Continuing'), test: (i: Item) => isRunningShow(i.showStatus) },
+]
+const FILTERS: Record<Kind, { id: string; label: string; test: (i: Item) => boolean }[]> = { movie: STATE_FILTERS, tv: [...STATE_FILTERS, ...SHOW_FILTERS] }
 
 // Your library: movies and shows as posters or a list, with the things you do
 // most a click away on every item (search for a release, monitor, open,
@@ -304,13 +311,15 @@ export default function Library() {
     )
     if (sort === 'title') list.sort((a, b) => compareTitles(a.title, b.title))
     else if (sort === 'released') list.sort((a, b) => b.released.localeCompare(a.released) || compareTitles(a.title, b.title))
-    else if (sort === 'size') list.sort((a, b) => b.sizeBytes - a.sizeBytes || compareTitles(a.title, b.title))
+    else if (sort === 'size') list.sort((a, b) => largestFirst(a, b, (x, y) => compareTitles(x.title, y.title)))
     else if (sort === 'status') list.sort((a, b) => a.state.key.localeCompare(b.state.key) || compareTitles(a.title, b.title))
     if (reverse) list.reverse()
     return list
   }, [items, kind, filter, text, sort, reverse, genre, tag, decade, collection, collections, fileFilters])
   // Everything that narrows the list (sorting does not), and the way back.
-  const filtersActive = text.trim() !== '' || filter !== 'all' || genre !== '' || tag !== '' || decade !== '' || (kind === 'movie' && collection !== '') || fileFiltersActive(fileFilters)
+  const filtersActive =text.trim() !== '' || filter !== 'all' || genre !== '' || tag !== '' || decade !== '' || (kind === 'movie' && collection !== '') || fileFiltersActive(fileFilters)
+  // What the files of this tab take on disk, for the line at the end of the chips.
+  const totalText = useMemo(() => libraryTotalText(sumBytes(items ?? []), sumBytes(shown ?? []), filtersActive, kind), [items, shown, filtersActive, kind])
   function clearFilters() {
     patchUi({ q: '', st: 'all', genre: '', tag: '', decade: '', collection: '', ...NO_FILE_FILTERS })
   }
@@ -685,6 +694,11 @@ export default function Library() {
       {fileProgress && fileProgress.total > 0 && fileProgress.done < fileProgress.total && (
         <p className="file-note">{t('Reading the video and audio details of your files in the background: {done} of {total} done. The file filters cover the files read so far.', { done: fileProgress.done.toLocaleString(), total: fileProgress.total.toLocaleString() })}</p>
       )}
+      {totalText && (
+        <p className="lib-total-line mono">
+          <Icon name="folder" size={14} /> {totalText}
+        </p>
+      )}
       <div className="chip-row state-chips" style={{ marginBottom: 18, alignItems: 'center' }}>
         <InfoTip
           text={t(
@@ -701,6 +715,11 @@ export default function Library() {
           <button className="btn-sm" onClick={clearFilters}>
             {t('Clear filters')}
           </button>
+        )}
+        {totalText && (
+          <span className="lib-total mono" title={t('What the downloaded files take on disk')}>
+            <Icon name="folder" size={14} /> {totalText}
+          </span>
         )}
       </div>
 
@@ -850,7 +869,7 @@ export default function Library() {
               kind={i.kind}
               progress={i.live ? { pct: i.live.progressPct, label: `${i.live.sizeBytes ? t('{pct}% of {size}', { pct: Math.round(i.live.progressPct), size: formatBytes(i.live.sizeBytes) }) : `${Math.round(i.live.progressPct)}%`} · ${i.live.protocol}` } : undefined}
               dim={!i.monitored}
-              ribbon={i.ended ? { label: t('Ended'), tone: 'ended' } : undefined}
+              ribbon={showRibbon(i.showStatus)}
               actions={actionsFor(i)}
               selection={selecting ? { selected: selected.has(i.key), onToggle: (e) => pick(i.key, e.shiftKey) } : undefined}
               footer={
@@ -911,6 +930,7 @@ export default function Library() {
                       <small>
                         {i.year || '—'}
                         {i.monitored ? '' : ` · ${t('unmonitored')}`}
+                        {isFinishedShow(i.showStatus) ? ` · ${showStatusLabel(i.showStatus)}` : ''}
                       </small>
                     </span>
                   </Link>

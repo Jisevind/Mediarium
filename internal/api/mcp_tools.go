@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"path/filepath"
+	"runtime/debug"
 	"slices"
 	"sort"
 	"strconv"
@@ -162,15 +164,21 @@ func (c *mcpCtx) callTool(params json.RawMessage) (any, *rpcError) {
 	case tool.write && c.user.ReadOnly():
 		err = toolErr("This API key is read-only, so it can't change anything. Use an administrator's key that is not read-only for this tool.")
 	default:
-		out, err = tool.run(c, p.Arguments)
-	}
-	var argErr *mcpArgError
-	if asArgError(err, &argErr) {
-		return nil, &rpcError{Code: rpcInvalidParams, Message: argErr.msg}
+		out, err = c.runTool(tool, coerceArgs(p.Arguments, tool.schema))
 	}
 	if err != nil {
+		// Every failure is an ordinary tool result with isError set and a plain
+		// explanation: some clients (Home Assistant) show a protocol error or an
+		// empty answer as a bare "error communicating with the MCP server".
 		msg := err.Error()
-		if _, ok := err.(*mcpToolError); !ok {
+		var argErr *mcpArgError
+		var toolE *mcpToolError
+		switch {
+		case errors.As(err, &argErr), errors.As(err, &toolE):
+		case errors.Is(err, context.DeadlineExceeded) || c.ctx.Err() != nil:
+			slog.Warn("mcp: a tool ran out of time", "tool", p.Name, "err", err)
+			msg = "That took too long and was stopped. Try a narrower question, for example with a smaller limit or a filter."
+		default:
 			slog.Warn("mcp: a tool failed", "tool", p.Name, "err", err)
 			msg = "Something went wrong while running that. An administrator can find the details in the log."
 		}
@@ -188,17 +196,119 @@ func (c *mcpCtx) callTool(params json.RawMessage) (any, *rpcError) {
 			result = toolResult(s, false)
 		}
 	}
+	if took := time.Since(start); took > 5*time.Second {
+		slog.Warn("mcp: a tool was slow", "tool", p.Name, "ms", took.Milliseconds())
+	}
 	// What is logged: the tool, how it went and how big the answer was. Never the arguments.
 	slog.Info("mcp: tool call", "tool", p.Name, "write", tool.write, "error", result["isError"], "bytes", len(fmt.Sprint(result["content"])), "ms", time.Since(start).Milliseconds(), "account", c.user.ID)
 	return result, nil
 }
 
-func asArgError(err error, target **mcpArgError) bool {
-	if e, ok := err.(*mcpArgError); ok {
-		*target = e
-		return true
+// runTool runs a tool and turns a panic into an error, so one bad tool call
+// can't drop the connection (which a client reports as an empty error).
+func (c *mcpCtx) runTool(tool *mcpTool, args json.RawMessage) (out any, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("mcp: a tool crashed", "tool", tool.name, "panic", fmt.Sprint(r), "stack", string(debug.Stack()))
+			out, err = nil, fmt.Errorf("tool %s crashed: %v", tool.name, r)
+		}
+	}()
+	return tool.run(c, args)
+}
+
+// coerceArgs makes the arguments a model sent fit the tool's schema where the
+// meaning is plain: numbers and booleans sent as text ("5", "true"), whole
+// numbers sent with a fraction, nulls for options left out and numbers or
+// booleans sent for text. Anything it can't make sense of is left as it is
+// and reported by the normal argument check.
+func coerceArgs(raw json.RawMessage, schema map[string]any) json.RawMessage {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || trimmed[0] != '{' {
+		return raw
 	}
-	return false
+	var m map[string]any
+	if err := json.Unmarshal(trimmed, &m); err != nil {
+		return raw
+	}
+	props, _ := schema["properties"].(map[string]any)
+	for k, v := range m {
+		if v == nil {
+			delete(m, k)
+			continue
+		}
+		spec, _ := props[k].(map[string]any)
+		typ, _ := spec["type"].(string)
+		switch typ {
+		case "integer", "number":
+			if s, ok := v.(string); ok {
+				if f, err := strconv.ParseFloat(strings.TrimSpace(s), 64); err == nil {
+					v = f
+				} else if strings.TrimSpace(s) == "" {
+					delete(m, k)
+					continue
+				}
+			}
+			if f, ok := v.(float64); ok && typ == "integer" {
+				v = math.Trunc(f)
+			}
+		case "boolean":
+			if s, ok := v.(string); ok {
+				switch strings.ToLower(strings.TrimSpace(s)) {
+				case "true", "yes", "1":
+					v = true
+				case "false", "no", "0":
+					v = false
+				case "":
+					delete(m, k)
+					continue
+				}
+			}
+		case "string":
+			switch x := v.(type) {
+			case float64:
+				v = strconv.FormatFloat(x, 'f', -1, 64)
+			case bool:
+				v = strconv.FormatBool(x)
+			}
+		}
+		m[k] = v
+	}
+	out, err := json.Marshal(m)
+	if err != nil {
+		return raw
+	}
+	return out
+}
+
+// canonicalKind maps the many ways a person or a model names a part of the
+// library onto movies, tv, music or books; "" when it is none of them.
+func canonicalKind(s string) string {
+	switch strings.ToLower(strings.TrimSpace(s)) {
+	case "movie", "movies", "film", "films", "feature", "features":
+		return "movies"
+	case "tv", "show", "shows", "series", "tv show", "tv shows", "tv series", "television", "tvshow", "tvshows", "episode", "episodes":
+		return "tv"
+	case "music", "artist", "artists", "album", "albums", "song", "songs":
+		return "music"
+	case "book", "books", "ebook", "ebooks", "audiobook", "audiobooks":
+		return "books"
+	}
+	return ""
+}
+
+// singularKind is canonicalKind for the tools that say movie, tv, music or book.
+func singularKind(s string) string {
+	switch canonicalKind(s) {
+	case "movies":
+		return "movie"
+	case "tv":
+		return "tv"
+	case "music":
+		return "music"
+	case "books":
+		return "book"
+	}
+	return ""
 }
 
 // ---- Calling the web app's own handlers ----
@@ -349,9 +459,10 @@ func yearOf(y int) any {
 func mcpReadTools() []*mcpTool {
 	return []*mcpTool{
 		readTool("library_search",
-			"Search the library and filter it. kind is movies (default), tv, music or books. Filters: query (part of the title), quality (such as 1080p, 2160p, 4k, remux, bluray), min_size_gb and max_size_gb (size of the file; for TV the total of the show), release_group (part of the group name, movies and TV), audio_language (movies and TV: has an audio track in this language, such as German or de), missing_subtitle_language (movies and TV: no subtitles in this language, inside the video or as a file beside it) and video_codec (movies and TV: h264, hevc, av1, vp9, mpeg2), has_file, monitored. Returns total (all matches) and one page of results (limit up to 100, offset to page). To count, ask with limit 1 and read total. Sizes are in GB (1024 MB steps).",
+			"Search the library and filter it. kind is movies (default), tv, music or books. Filters: query (part of the title; movies and TV also match the genre names and the description, so \"action\" finds action films), genre (a genre name such as Action, Comedy, Horror, Sci-Fi; movies and TV), quality (such as 1080p, 2160p, 4k, remux, bluray), min_size_gb and max_size_gb (size of the file; for TV the total of the show), release_group (part of the group name, movies and TV), audio_language (movies and TV: has an audio track in this language, such as German or de), missing_subtitle_language (movies and TV: no subtitles in this language, inside the video or as a file beside it) and video_codec (movies and TV: h264, hevc, av1, vp9, mpeg2), has_file, monitored. Returns total (all matches) and one page of results (limit up to 100, offset to page). To count, ask with limit 1 and read total. Sizes are in GB (1024 MB steps).",
 			schemaOf(props{
-				"query": pStr("Part of the title."), "kind": pEnum("Which part of the library. Default movies.", "movies", "tv", "music", "books"),
+				"query": pStr("Part of the title, a genre name or a word from the description (title matches come first)."), "genre": pStr("A genre name such as Action, Comedy, Horror or Sci-Fi (movies and TV)."),
+				"kind":    pEnum("Which part of the library. Default movies.", "movies", "tv", "music", "books"),
 				"quality": pStr("Quality text such as 1080p, 2160p, 4k, bluray, remux."), "min_size_gb": pNum("Smallest size in GB."), "max_size_gb": pNum("Largest size in GB."),
 				"release_group": pStr("Part of the release group's name."), "audio_language": pStr("Only titles with an audio track in this language, for example German, de or ger."),
 				"missing_subtitle_language": pStr("Only titles whose files have no subtitles in this language (inside the video or beside it), for example Dutch or nl."),
@@ -391,6 +502,7 @@ func mcpReadTools() []*mcpTool {
 
 type librarySearchArgs struct {
 	Query        string   `json:"query"`
+	Genre        string   `json:"genre"`
 	Kind         string   `json:"kind"`
 	Quality      string   `json:"quality"`
 	MinSizeGB    *float64 `json:"min_size_gb"`
@@ -486,19 +598,86 @@ func (a librarySearchArgs) sizeOK(gb float64, hasFile bool) bool {
 	return (a.MinSizeGB == nil || gb >= *a.MinSizeGB) && (a.MaxSizeGB == nil || gb <= *a.MaxSizeGB)
 }
 
+// textRank says whether a title matches the query: 0 when its title does, 1
+// when a genre does, 2 when its description does. ok is false when none does.
+func (a librarySearchArgs) textRank(title, overview string, genres []string) (rank int, ok bool) {
+	q := strings.TrimSpace(a.Query)
+	if q == "" {
+		return 0, true
+	}
+	if containsFold(title, q) {
+		return 0, true
+	}
+	if genreMatches(genres, q) {
+		return 1, true
+	}
+	if containsFold(overview, q) {
+		return 2, true
+	}
+	return 0, false
+}
+
+// genreMatches is true when one of the genres contains want ("action" finds
+// "Action & Adventure"); sci-fi finds both TMDB spellings.
+func genreMatches(genres []string, want string) bool {
+	want = strings.ToLower(strings.TrimSpace(want))
+	if want == "" {
+		return true
+	}
+	wants := []string{want}
+	switch strings.NewReplacer("-", "", " ", "").Replace(want) {
+	case "scifi", "sf", "sciencefiction":
+		wants = []string{"science fiction", "sci-fi"}
+	case "romcom":
+		wants = []string{"romance"}
+	case "docu", "doc":
+		wants = []string{"documentary"}
+	}
+	for _, g := range genres {
+		g = strings.ToLower(g)
+		for _, w := range wants {
+			if strings.Contains(g, w) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// genreNote says how many titles have no genre information yet, when the
+// question depended on genres.
+func (a librarySearchArgs) genreNote(out map[string]any, missing int) {
+	if missing > 0 && (a.Genre != "" || strings.TrimSpace(a.Query) != "") {
+		out["genre_note"] = fmt.Sprintf("%d titles have no genre information yet, so a genre match can miss them.", missing)
+	}
+}
+
+// emptyNote adds a plain sentence when nothing matched, so the assistant
+// doesn't have to guess what an empty list means.
+func emptyNote(out map[string]any, total, inLibrary int, what string) map[string]any {
+	if total == 0 {
+		out["message"] = fmt.Sprintf("No titles matched. The library holds %d %s in total.", inLibrary, what)
+	}
+	return out
+}
+
 func toolLibrarySearch(c *mcpCtx, a librarySearchArgs) (any, error) {
 	limit := clampLimit(a.Limit, 25, 100)
-	switch strings.ToLower(a.Kind) {
-	case "", "movies", "movie":
+	kind := "movies"
+	if strings.TrimSpace(a.Kind) != "" {
+		if kind = canonicalKind(a.Kind); kind == "" {
+			return nil, toolErr("kind must be movies, tv, music or books.")
+		}
+	}
+	switch kind {
+	case "movies":
 		return c.searchMovies(a, limit)
-	case "tv", "series", "shows":
+	case "tv":
 		return c.searchSeries(a, limit)
 	case "music":
 		return c.searchOther(a, limit, "/api/music/artists")
-	case "books", "book":
-		return c.searchOther(a, limit, "/api/books")
 	}
-	return nil, toolErr("kind must be movies, tv, music or books.")
+	return c.searchOther(a, limit, "/api/books")
 }
 
 func (c *mcpCtx) searchMovies(a librarySearchArgs, limit int) (any, error) {
@@ -522,11 +701,20 @@ func (c *mcpCtx) searchMovies(a librarySearchArgs, limit int) (any, error) {
 		Monitored    bool    `json:"monitored"`
 		Video        string  `json:"video_codec,omitempty"`
 		AudioLangs   string  `json:"audio_languages,omitempty"`
+		Genres       string  `json:"genres,omitempty"`
+		rank         int
+		path         string
 	}
 	rows := []row{}
-	media := c.s.mediaSummaryNow().movies
+	media := c.s.mediaSummaryNow(a.MissingSubtitleLanguage != "").movies
+	noGenres := 0
+	sizeFilter := a.MinSizeGB != nil || a.MaxSizeGB != nil
 	for _, m := range list {
-		if !containsFold(m.Title, a.Query) || !qualityMatches(m.Quality, a.Quality) {
+		if m.Genres == nil {
+			noGenres++
+		}
+		rank, ok := a.textRank(m.Title, m.Overview, m.Genres)
+		if !ok || !genreMatches(m.Genres, a.Genre) || !qualityMatches(m.Quality, a.Quality) {
 			continue
 		}
 		hasFile := m.Status == library.StatusDownloaded && m.FilePath != ""
@@ -536,9 +724,12 @@ func (c *mcpCtx) searchMovies(a librarySearchArgs, limit int) (any, error) {
 		if a.Monitored != nil && *a.Monitored != m.Monitored {
 			continue
 		}
-		gb := sizeGB(cachedFileSize(m.FilePath, now))
-		if !a.sizeOK(gb, hasFile) {
-			continue
+		var gb float64
+		if sizeFilter { // reading a file's size can be slow (network disks): only when it decides the answer
+			gb = sizeGB(cachedFileSize(m.FilePath, now))
+			if !a.sizeOK(gb, hasFile) {
+				continue
+			}
 		}
 		group := groupOf(m.ReleaseTitle, m.FilePath)
 		if a.ReleaseGroup != "" && !containsFold(group, a.ReleaseGroup) {
@@ -553,11 +744,24 @@ func (c *mcpCtx) searchMovies(a librarySearchArgs, limit int) (any, error) {
 		}
 		video, audio := mediaText(sums)
 		rows = append(rows, row{ID: m.ID, TMDBID: m.TMDBID, Title: m.Title, Year: yearOf(m.Year), Status: string(m.Status), HasFile: hasFile,
-			Quality: m.Quality, SizeGB: gb, ReleaseGroup: group, Profile: names[m.ProfileID], Monitored: m.Monitored, Video: video, AudioLangs: audio})
+			Quality: m.Quality, SizeGB: gb, ReleaseGroup: group, Profile: names[m.ProfileID], Monitored: m.Monitored, Video: video, AudioLangs: audio,
+			Genres: strings.Join(m.Genres, ", "), rank: rank, path: m.FilePath})
 	}
-	sort.SliceStable(rows, func(i, j int) bool { return strings.ToLower(rows[i].Title) < strings.ToLower(rows[j].Title) })
+	sort.SliceStable(rows, func(i, j int) bool {
+		if rows[i].rank != rows[j].rank {
+			return rows[i].rank < rows[j].rank
+		}
+		return strings.ToLower(rows[i].Title) < strings.ToLower(rows[j].Title)
+	})
 	from, to := mcpWindow(len(rows), a.Offset, limit)
-	return c.withMediaNote(a, map[string]any{"kind": "movies", "total": len(rows), "offset": from, "results": rows[from:to]}), nil
+	if !sizeFilter {
+		for i := from; i < to; i++ {
+			rows[i].SizeGB = sizeGB(cachedFileSize(rows[i].path, now))
+		}
+	}
+	out := c.withMediaNote(a, map[string]any{"kind": "movies", "total": len(rows), "offset": from, "results": rows[from:to]})
+	a.genreNote(out, noGenres)
+	return emptyNote(out, len(rows), len(list), "movies"), nil
 }
 
 func (c *mcpCtx) searchSeries(a librarySearchArgs, limit int) (any, error) {
@@ -581,11 +785,18 @@ func (c *mcpCtx) searchSeries(a librarySearchArgs, limit int) (any, error) {
 		ShowStatus string  `json:"show_status,omitempty"`
 		Video      string  `json:"video_codec,omitempty"`
 		AudioLangs string  `json:"audio_languages,omitempty"`
+		Genres     string  `json:"genres,omitempty"`
+		rank       int
 	}
 	rows := []row{}
-	media := c.s.mediaSummaryNow().series
+	media := c.s.mediaSummaryNow(a.MissingSubtitleLanguage != "").series
+	noGenres := 0
 	for _, sr := range data.list {
-		if !containsFold(sr.Title, a.Query) {
+		if sr.Genres == nil {
+			noGenres++
+		}
+		rank, ok := a.textRank(sr.Title, sr.Overview, sr.Genres)
+		if !ok || !genreMatches(sr.Genres, a.Genre) {
 			continue
 		}
 		if a.Monitored != nil && *a.Monitored != sr.Monitored {
@@ -623,11 +834,19 @@ func (c *mcpCtx) searchSeries(a librarySearchArgs, limit int) (any, error) {
 		}
 		video, audio := mediaText(media[sr.ID])
 		rows = append(rows, row{ID: sr.ID, TMDBID: sr.TMDBID, Title: sr.Title, Year: yearOf(sr.Year), Episodes: sr.EpisodeCount, WithFile: have,
-			Missing: max(sr.EpisodeCount-have, 0), SizeGB: gb, Profile: names[sr.ProfileID], Monitored: sr.Monitored, Video: video, AudioLangs: audio})
+			Missing: max(sr.EpisodeCount-have, 0), SizeGB: gb, Profile: names[sr.ProfileID], Monitored: sr.Monitored, Video: video, AudioLangs: audio,
+			Genres: strings.Join(sr.Genres, ", "), rank: rank})
 	}
-	sort.SliceStable(rows, func(i, j int) bool { return strings.ToLower(rows[i].Title) < strings.ToLower(rows[j].Title) })
+	sort.SliceStable(rows, func(i, j int) bool {
+		if rows[i].rank != rows[j].rank {
+			return rows[i].rank < rows[j].rank
+		}
+		return strings.ToLower(rows[i].Title) < strings.ToLower(rows[j].Title)
+	})
 	from, to := mcpWindow(len(rows), a.Offset, limit)
-	return c.withMediaNote(a, map[string]any{"kind": "tv", "total": len(rows), "offset": from, "results": rows[from:to]}), nil
+	out := c.withMediaNote(a, map[string]any{"kind": "tv", "total": len(rows), "offset": from, "results": rows[from:to]})
+	a.genreNote(out, noGenres)
+	return emptyNote(out, len(rows), len(data.list), "shows"), nil
 }
 
 // searchOther lists music artists or books through the web app's own list
@@ -657,8 +876,9 @@ func (c *mcpCtx) searchOther(a librarySearchArgs, limit int, path string) (any, 
 		rows = append(rows, m)
 	}
 	from, to := mcpWindow(len(rows), a.Offset, limit)
-	return map[string]any{"kind": strings.TrimPrefix(path, "/api/"), "total": len(rows), "offset": from, "results": rows[from:to],
-		"note": "For music and books only query and monitored are used as filters."}, nil
+	out := map[string]any{"kind": strings.TrimPrefix(path, "/api/"), "total": len(rows), "offset": from, "results": rows[from:to],
+		"note": "For music and books only query (the title) and monitored are used as filters."}
+	return emptyNote(out, len(rows), len(list), strings.TrimPrefix(path, "/api/")), nil
 }
 
 // -- library_stats --
@@ -740,7 +960,7 @@ func toolLookupTitle(c *mcpCtx, a struct {
 		return nil, toolErr("Give a title to look up.")
 	}
 	kind := "movie"
-	if strings.EqualFold(a.Kind, "tv") {
+	if canonicalKind(a.Kind) == "tv" {
 		kind = "tv"
 	}
 	var found []importCandidatePayload
@@ -913,8 +1133,8 @@ func toolWantedList(c *mcpCtx, a struct {
 		kind = "cutoff"
 	}
 	q := url.Values{"group": {"1"}, "kind": {kind}, "limit": {strconv.Itoa(clampLimit(a.Limit, 25, 100))}, "offset": {strconv.Itoa(max(a.Offset, 0))}}
-	if a.Media == "movie" || a.Media == "tv" {
-		q.Set("media", a.Media)
+	if media := singularKind(a.Media); media == "movie" || media == "tv" {
+		q.Set("media", media)
 	}
 	if strings.TrimSpace(a.Query) != "" {
 		q.Set("q", strings.TrimSpace(a.Query))
@@ -1095,7 +1315,7 @@ func toolRequestsList(c *mcpCtx, a struct {
 		if a.Status != "" && !strings.EqualFold(r.Status, a.Status) {
 			continue
 		}
-		if a.Kind != "" && !strings.EqualFold(r.Kind, a.Kind) {
+		if a.Kind != "" && !strings.EqualFold(r.Kind, singularKind(a.Kind)) {
 			continue
 		}
 		if r.Status == requests.Pending {
@@ -1180,7 +1400,7 @@ func toolReleaseGroupReport(c *mcpCtx, a struct {
 		return nil, toolErr("Give the release group to check, such as FuN.")
 	}
 	limit := clampLimit(a.Limit, 50, 100)
-	if strings.EqualFold(a.Kind, "tv") {
+	if canonicalKind(a.Kind) == "tv" {
 		return c.groupReportTV(group, limit)
 	}
 	movies, err := c.s.MovieRepo.List()

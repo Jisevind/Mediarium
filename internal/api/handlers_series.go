@@ -55,7 +55,7 @@ type seriesPayload struct {
 	// its episodes are, or where they go when it has none. Only filled in for
 	// a single show.
 	FolderPath string `json:"folderPath,omitempty"`
-	// ShowStatus is where the show stands: "ended", "continuing" or "upcoming"
+	// ShowStatus is where the show stands: "ended", "canceled", "continuing" or "upcoming"
 	// (from TMDB); left out until the show has been refreshed once.
 	ShowStatus string `json:"showStatus,omitempty"`
 	// Media is what the downloaded episodes' files hold: the different values
@@ -93,6 +93,9 @@ func toSeriesPayload(s library.Series, who func(int64) *userRef) seriesPayload {
 func showStatusOf(tmdbStatus string) string {
 	if strings.TrimSpace(tmdbStatus) == "" {
 		return ""
+	}
+	if strings.EqualFold(strings.TrimSpace(tmdbStatus), "Canceled") || strings.EqualFold(strings.TrimSpace(tmdbStatus), "Cancelled") {
+		return "canceled"
 	}
 	status, _ := showEndedStatus(tmdbStatus)
 	return status
@@ -180,7 +183,7 @@ func (s *Server) handleListSeries(w http.ResponseWriter, r *http.Request) {
 	out := make([]seriesPayload, len(list))
 	tvFolders := s.tvFolders()
 	nameTags := sameNameTags(list)
-	media := s.mediaSummaryNow().series
+	media := s.mediaSummaryNow(true).series
 	for i, sr := range list {
 		out[i] = toSeriesPayload(sr, who)
 		out[i].Media = mediaSummaryOf(media[sr.ID]...)
@@ -327,6 +330,12 @@ func (s *Server) handleAddSeries(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Monitor == library.MonitorFuture || req.Monitor == library.MonitorNone {
 		_, _ = s.MovieRepo.ApplyMonitorMode(created.ID, req.Monitor, todayUTC(), false)
+		if req.Monitor == library.MonitorFuture {
+			// Watching for episodes that have not aired is monitoring: the show's own switch is on.
+			if err := s.MovieRepo.SetSeriesMonitored(created.ID, true); err == nil {
+				created.Monitored = true
+			}
+		}
 	}
 	if req.ProfileID != 0 {
 		if err := s.MovieRepo.SetSeriesProfile(created.ID, req.ProfileID); err == nil {
@@ -502,6 +511,9 @@ func (s *Server) refreshSeries(ctx context.Context, sr library.Series) error {
 		log.Printf("api: refresh %q: removed %d missing episodes TMDB no longer lists", sr.Title, n)
 	}
 	s.saveSeriesIDs(&sr, detail)
+	if err := s.MovieRepo.MarkSeriesChecked(sr.ID, time.Now()); err != nil {
+		log.Printf("api: refresh %q: %v", sr.Title, err)
+	}
 	s.refreshOtherTitles(ctx, "tv", sr.TMDBID, sr.Title)
 	s.noteSeriesNumbering(sr)
 	s.stopMonitoringIfFinished(sr.ID, detail.Status)

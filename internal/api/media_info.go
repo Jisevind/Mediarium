@@ -69,10 +69,11 @@ type folderNames struct {
 
 // mediaSummaries is what the Library lists need, kept for a short time.
 type mediaSummaries struct {
-	at     time.Time
-	gen    int64
-	movies map[int64]library.MediaSummary
-	series map[int64][]library.MediaSummary
+	at       time.Time
+	gen      int64
+	sidecars bool // the subtitle files beside the videos were looked at too
+	movies   map[int64]library.MediaSummary
+	series   map[int64][]library.MediaSummary
 }
 
 type miOutcome int
@@ -332,16 +333,19 @@ func mediaSummaryOf(list ...library.MediaSummary) *mediaSummaryPayload {
 }
 
 // mediaSummaryNow returns the file details of every movie and show, kept for
-// a few seconds and renewed when a file has been read since.
-func (s *Server) mediaSummaryNow() *mediaSummaries {
+// a few seconds and renewed when a file has been read since. Looking for
+// subtitle files beside the videos touches every folder on the disks, which
+// is slow on a big library or a network share, so sidecars says whether the
+// caller needs it.
+func (s *Server) mediaSummaryNow(sidecars bool) *mediaSummaries {
 	st := &s.mediaInfo
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	gen := st.gen.Load()
-	if st.summaries != nil && st.summaries.gen == gen && time.Since(st.summaries.at) < mediaSummaryTTL {
+	if st.summaries != nil && st.summaries.gen == gen && time.Since(st.summaries.at) < mediaSummaryTTL && (st.summaries.sidecars || !sidecars) {
 		return st.summaries
 	}
-	out := &mediaSummaries{at: time.Now(), gen: gen}
+	out := &mediaSummaries{at: time.Now(), gen: gen, sidecars: sidecars}
 	var err error
 	if out.movies, err = s.MovieRepo.MovieMediaSummaries(); err != nil {
 		slog.Warn("media info: couldn't read the movies' file details", "err", err)
@@ -349,7 +353,9 @@ func (s *Server) mediaSummaryNow() *mediaSummaries {
 	if out.series, err = s.MovieRepo.SeriesMediaSummaries(); err != nil {
 		slog.Warn("media info: couldn't read the shows' file details", "err", err)
 	}
-	s.addSidecarSubtitles(out)
+	if sidecars {
+		s.addSidecarSubtitles(out)
+	}
 	st.summaries = out
 	return out
 }

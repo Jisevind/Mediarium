@@ -66,6 +66,8 @@ function MoviePage() {
   const [adding, setAdding] = useState(false)
   const [locating, setLocating] = useState(false)
   const [monitored, setMonitored] = useState<boolean | null>(null)
+  // What the movie's file takes on disk (0 when there is none).
+  const [diskBytes, setDiskBytes] = useState(0)
   const [results, setResults] = useState<SearchResult[] | null>(null)
   // The releases list is drawn above the files and settings: bring it into view when a search answers.
   const releasesRef = useRef<HTMLElement>(null)
@@ -132,9 +134,12 @@ function MoviePage() {
     if (!libraryId) return
     api
       .getMovie(libraryId)
-      .then((m) => setMonitored(m.monitored ?? true))
+      .then((m) => {
+        setMonitored(m.monitored ?? true)
+        setDiskBytes(m.sizeBytes ?? 0)
+      })
       .catch(() => undefined)
-  }, [libraryId])
+  }, [libraryId, movie?.filePath])
 
   async function toggleMonitored(v: boolean) {
     if (!libraryId) return
@@ -265,6 +270,7 @@ function MoviePage() {
             ...(writers.length ? [{ label: writers.length > 1 ? t('Writers') : t('Writer'), value: <PeopleLinks people={writers} /> }] : []),
             ...releaseFacts(movie.releaseDates, movie.releaseDate),
             ...(movie.releaseStatus ? [{ label: t('Status'), value: movie.releaseStatus }] : []),
+            ...(inLibrary && movie.filePath && diskBytes > 0 ? [{ label: t('Size on disk'), value: formatBytes(diskBytes) }] : []),
           ],
           links: titleLinks('movie', movie.tmdbId, movie.imdbId, movie.homepage),
         }}

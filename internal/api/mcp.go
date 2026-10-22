@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -253,7 +255,13 @@ func rpcFail(id json.RawMessage, code int, message string) *rpcResponse {
 
 // handleMessage answers one JSON-RPC message. It returns nil for a
 // notification (a message without an id), which gets no answer.
-func (c *mcpCtx) handleMessage(raw json.RawMessage) *rpcResponse {
+func (c *mcpCtx) handleMessage(raw json.RawMessage) (answer *rpcResponse) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("mcp: a message crashed", "panic", fmt.Sprint(r), "stack", string(debug.Stack()))
+			answer = rpcFail(nil, rpcInternalError, "Something went wrong inside Mediarium while handling that. An administrator can find the details in the log.")
+		}
+	}()
 	var req rpcRequest
 	if err := json.Unmarshal(raw, &req); err != nil {
 		return rpcFail(nil, rpcInvalidRequest, "That isn't a JSON-RPC message.")

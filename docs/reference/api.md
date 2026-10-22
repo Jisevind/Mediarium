@@ -700,6 +700,7 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | GET | `/api/settings/simkl` | admin | GET /api/settings/simkl |
 | POST | `/api/settings/simkl/pin` | admin | POST /api/settings/simkl/pin: start connecting an account. |
 | GET | `/api/settings/simkl/pin/{code}` | admin | GET /api/settings/simkl/pin/{code}: has the code been entered yet? |
+| POST | `/api/settings/simkl/test` | admin | POST /api/settings/simkl/test: ask Simkl who the connected account is. |
 | POST | `/api/settings/test-service` | admin | checks a key for an outside service without saving it, so the setup wizard and Settings can say whether it works before the person moves on. |
 
 ## stats
@@ -887,4 +888,4 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | PUT | `/api/watched/settings` | admin | PUT /api/watched/settings {"sync": true, "cleanup": {...}} |
 | POST | `/api/watched/sync` | admin | POST /api/watched/sync: read what's been watched now. |
 
-537 routes.
+538 routes.

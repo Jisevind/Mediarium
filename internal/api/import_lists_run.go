@@ -45,6 +45,7 @@ func (s *Server) setListAgents() {
 		agent := "Mediarium/" + s.version + " (+https://mediarium.app)"
 		trakt.UserAgent = agent
 		simkl.UserAgent = agent
+		simkl.AppVersion = s.version
 		importlists.UserAgent = agent
 	})
 }
@@ -106,6 +107,7 @@ func listErrorText(err error) string {
 	var rl *importlists.RateLimitError
 	var tl *trakt.RateLimitError
 	var sl *simkl.RateLimitError
+	var sk *simkl.StatusError
 	var se *metadata.StatusError
 	switch {
 	case errors.Is(err, metadata.ErrNoAPIKey):
@@ -128,7 +130,7 @@ func listErrorText(err error) string {
 		return "The saved Simkl sign-in can't be read. Connect your Simkl account again."
 	case errors.As(err, &se) && se.Code == http.StatusNotFound && strings.HasPrefix(se.Path, "/list/"):
 		return "TMDB has no public list with that number."
-	case errors.As(err, &rl), errors.As(err, &tl), errors.As(err, &sl),
+	case errors.As(err, &rl), errors.As(err, &tl), errors.As(err, &sl), errors.As(err, &sk),
 		errors.Is(err, trakt.ErrNotFound), errors.Is(err, trakt.ErrPrivate),
 		errors.Is(err, importlists.ErrBlocked), errors.Is(err, importlists.ErrMDBListKey), errors.Is(err, importlists.ErrNotAList):
 		return sentence(err.Error())

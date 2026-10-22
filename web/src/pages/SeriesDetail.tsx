@@ -38,6 +38,8 @@ import type { Unanswered } from '../releaseHint'
 import { useDocumentTitle } from '../documentTitle'
 import { localDate } from '../bookSeries'
 import { locale, plural, t } from '../i18n'
+import { monitoringSummary, readSeasonsOpen, rememberSeasonsOpen, seasonStartsOpen, type SeasonsOpen } from '../seriesView'
+import { sumBytes } from '../diskTotals'
 
 // A target for interactive search: one episode, or a whole season (no
 // episode set) which only offers season packs.
@@ -92,6 +94,13 @@ function SeriesPage() {
   // Which seasons are open (unset: only the one that needs attention), and the
   // "Missing episodes only" switch.
   const [openSeasons, setOpenSeasons] = useState<Record<number, boolean>>({})
+  // How the seasons start (all folded, the latest open, all open): this browser's choice.
+  const [seasonsMode, setSeasonsMode] = useState<SeasonsOpen>(() => readSeasonsOpen())
+  function chooseSeasonsMode(mode: SeasonsOpen) {
+    setSeasonsMode(mode)
+    rememberSeasonsOpen(mode)
+    setOpenSeasons({})
+  }
   const [missingOnly, setMissingOnly] = useState(false)
   const toast = useToast()
 
@@ -309,10 +318,13 @@ function SeriesPage() {
         date: new Date(next.airDate + 'T12:00:00').toLocaleDateString(locale(), { day: 'numeric', month: 'short', year: 'numeric' }),
       })
     : ''
-  // Seasons start folded, except the one that needs attention: the latest with
-  // missing episodes, or else the latest season.
+  // Unless the person chose otherwise (seasonsMode), seasons start folded,
+  // except the one that needs attention: the latest with missing episodes, or
+  // else the latest season.
   const attention = [...seasons].reverse().find(([, eps]) => eps.some(isMissing))?.[0] ?? seasons[seasons.length - 1]?.[0]
-  const isOpen = (season: number) => openSeasons[season] ?? season === attention
+  const isOpen = (season: number) => openSeasons[season] ?? seasonStartsOpen(seasonsMode, season, attention)
+  const monitoring = monitoringSummary(series.monitored, series.episodes, today)
+  const diskBytes = sumBytes(series.episodes)
   const shownSeasons = missingOnly ? seasons.filter(([, eps]) => eps.some(isMissing)) : seasons
 
   return (
@@ -337,10 +349,16 @@ function SeriesPage() {
             ...(creators.length ? [{ label: creators.length > 1 ? t('Creators') : t('Creator'), value: <PeopleLinks people={creators} /> }] : []),
             ...(series.showStatus ? [{ label: t('Status'), value: showStatusLabel(series.showStatus) }] : []),
             { label: t('Episodes'), value: t('{done} of {total} downloaded', { done: series.downloadedCount, total: series.episodeCount }) },
+            ...(diskBytes > 0 ? [{ label: t('Size on disk'), value: formatBytes(diskBytes) }] : []),
             ...(nextText ? [{ label: t('Next episode'), value: nextText }] : []),
             ...(tv?.networks?.length ? [{ label: t('Network'), value: tv.networks.join(', ') }] : []),
           ],
         }}
+        status={
+          <span className={`state-tag st-mon-${monitoring.kind === 'off' ? 'off' : 'on'}`} title={monitoring.detail}>
+            <Icon name={monitoring.kind === 'off' ? 'eye-off' : 'eye'} size={13} /> {monitoring.text}
+          </span>
+        }
         actions={
           <>
             {canManage && (
@@ -370,7 +388,7 @@ function SeriesPage() {
         }
       >
         <div className="title-controls">
-          <Switch checked={series.monitored} onChange={toggleSeries} disabled={!canManage} label={<span className="has-tip">{t('Monitored')}<InfoTip text={t('Mediarium keeps searching for the episodes of this show that are monitored and missing. Switch it off to leave the show alone; files you already have stay where they are.')} /></span>} description={series.monitored ? t('Keeps looking for missing episodes.') : t('Not looking for missing episodes. Files you already have stay where they are.')} />
+          <Switch checked={series.monitored} onChange={toggleSeries} disabled={!canManage} label={<span className="has-tip">{t('Monitored')}<InfoTip text={t('Mediarium keeps searching for the episodes of this show that are monitored and missing. Switch it off to leave the show alone; files you already have stay where they are.')} /></span>} description={[series.monitored ? t('Keeps looking for missing episodes.') : t('Not looking for missing episodes. Files you already have stay where they are.'), monitoring.detail].filter(Boolean).join(' ')} />
           <ProfilePicker kind="series" itemId={seriesId}>
             <TitleTags kind="tv" id={seriesId} />
           </ProfilePicker>
@@ -431,6 +449,15 @@ function SeriesPage() {
               <input type="checkbox" checked={missingOnly} onChange={(e) => setMissingOnly(e.target.checked)} />
               {t('Missing episodes only')}
               <InfoTip text={t('Shows only the episodes that have aired and are not downloaded yet.')} />
+            </label>
+            <label className="inline-field">
+              {t('Seasons on this page')}
+              <select value={seasonsMode} onChange={(e) => chooseSeasonsMode(e.target.value as SeasonsOpen)} aria-label={t('Seasons on this page')}>
+                <option value="collapsed">{t('Collapsed')}</option>
+                <option value="latest">{t('Latest season open')}</option>
+                <option value="all">{t('All open')}</option>
+              </select>
+              <InfoTip text={t('Which seasons are open when you visit a show. Open all and Close all change the page right now. Your choice is kept in this browser.')} />
             </label>
             <button className="btn-sm" onClick={() => setOpenSeasons(Object.fromEntries(seasons.map(([s]) => [s, true])))}>
               {t('Open all')}
