@@ -957,6 +957,27 @@ input:focus, select:focus, textarea:focus { border-color: var(--sec, var(--accen
 .auth-card .error-text { margin: 0; }
 .auth-card .auth-done { margin: 0; color: var(--success); }
 .auth-alt { display: grid; gap: 10px; }
+.connect-card { width: min(460px, 100%); }
+.connect-title { font-family: var(--font-display); font-size: 1.25rem; line-height: 1.35; margin: 0; font-weight: 500; }
+.connect-note { margin: 0; color: var(--text-dim); font-size: 0.88rem; line-height: 1.5; }
+.connect-card .switch-row { text-align: left; }
+.connect-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.connect-actions button.primary { margin-top: 0; }
+.connected-apps { width: 100%; }
+.connected-apps td, .connected-apps th { text-align: left; }
+@media (max-width: 640px) {
+  .connected-apps thead { display: none; }
+  .connected-apps, .connected-apps tbody { display: block; }
+  .connected-apps tr { display: grid; gap: 4px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .connected-apps td { display: flex; justify-content: space-between; gap: 12px; padding: 0; border: 0; }
+  .connected-apps td[data-label]::before { content: attr(data-label); color: var(--text-dim); font-size: 0.82rem; }
+  .connected-apps td.app-name { font-weight: 600; }
+  .connected-apps td:last-child { justify-content: flex-start; margin-top: 4px; }
+}
+.client-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; align-items: end; }
+.client-form label { display: grid; gap: 6px; }
+.client-made { display: grid; gap: 8px; margin-top: 12px; }
+@media (max-width: 480px) { .connect-actions { grid-template-columns: 1fr; } }
 .auth-or { display: flex; align-items: center; gap: 10px; color: var(--text-dim); font-size: 0.85rem; }
 .auth-or::before, .auth-or::after { content: ''; flex: 1; border-top: 1px solid var(--border); }
 .auth-alt-btn { box-sizing: border-box; display: flex; align-items: center; justify-content: center; width: 100%; min-height: 44px; padding: 0 14px; text-align: center; text-decoration: none; cursor: pointer; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); color: var(--text); font: inherit; }
@@ -1266,6 +1287,8 @@ fieldset.group .card, fieldset.group table { max-width: 100%; }
 
 .filter-bar { flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
 .filter-bar select { width: auto; min-width: 130px; }
+.more-filters { margin: -8px 0 20px; }
+.more-filters .collapsible-head { max-width: 420px; }
 .toolbar select { width: auto; }
 
 /* Sidebar, calmer: room between items so hover and selection never touch,

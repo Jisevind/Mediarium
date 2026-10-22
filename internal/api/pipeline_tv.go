@@ -125,6 +125,7 @@ func (s *Server) grabTV(series library.Series, hintSeason, hintEpisode int, rele
 	_ = s.QueueRepo.LogSeriesActivity(series.ID, "grabbed", grabbed)
 	grabbedItem := seriesItem(series, season, episodes)
 	grabbedItem.Quality, grabbedItem.SizeBytes, grabbedItem.Release = string(quality.Classify(parser.Parse(releaseTitle))), sizeBytes, releaseTitle
+	s.seriesReleaseDetails(&grabbedItem, series, releaseTitle, downloadURL)
 	s.notifyItem("grabbed", grabbedItem)
 
 	s.dispatch.Kick()
@@ -384,6 +385,7 @@ func (s *Server) runTVPipeline(queueID int64, series library.Series, season int,
 	s.checkFinishedShowSoon(series.ID)
 	importedItem := seriesItemFor(series, season, importedEps)
 	importedItem.Quality, importedItem.SizeBytes, importedItem.Release = string(tier), fileSize(importedFiles...), releaseTitle
+	s.seriesReleaseDetails(&importedItem, series, releaseTitle, downloadURL)
 	importedItem.Subtitles = subtitleNote
 	if len(importedFiles) == 1 {
 		importedItem.Path = importedFiles[0]

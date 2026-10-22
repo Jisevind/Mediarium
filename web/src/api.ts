@@ -160,7 +160,7 @@ export interface ManualDownloadResult {
   sizeBytes: number
 }
 
-// A video file in the downloads folder that can be imported by hand.
+// A video file in a folder that can be imported by hand.
 export interface ManualFile {
   path: string
   size: number
@@ -170,6 +170,28 @@ export interface ManualFile {
   season?: number
   episode?: number
   quality?: string
+  incomplete?: boolean
+}
+
+// What a look in a folder for files to import by hand found.
+export interface ManualList {
+  folder: string
+  downloadsFolder: string
+  files: ManualFile[]
+  more?: boolean
+  hiddenIncomplete?: number
+}
+
+// How a file comes in by hand: a hardlink (a copy on another drive, like every
+// import), a copy of its own, or a move (the original is removed).
+export type ManualMode = 'link' | 'copy' | 'move'
+
+// The folders inside a folder, for choosing where to look.
+export interface ManualFolders {
+  path: string
+  parent?: string
+  folders: { name: string; path: string }[]
+  shortcuts?: { name: string; path: string }[]
 }
 
 export interface LibraryStats {
@@ -692,6 +714,8 @@ export interface Settings {
   requireVpnForTorrents?: boolean
   // Send indexer traffic through the VPN; off until switched on.
   routeIndexersThroughVpn?: boolean
+  // The person said their torrent client is already behind a VPN: no "Torrenting without a VPN" notice.
+  vpnNoticeAcknowledged?: boolean
   importConflictPolicy?: string
   torrentEnabled?: boolean
   flareSolverrUrl?: string
@@ -2355,6 +2379,8 @@ export interface HealthItem {
   title: string
   impact: string
   action?: { label: string; path: string }
+  // A button that hides the item for good (the VPN notice), with its label.
+  dismiss?: string
 }
 
 export interface DiskUsage {
@@ -2717,6 +2743,8 @@ export interface SearchAnswer<T> {
   unanswered: { name: string; message: string }[]
   // For example an indexer that was asked after its daily limit was used up.
   warnings?: string[]
+  // Indexers that were not asked because they don't list this kind of release.
+  skipped?: string[]
 }
 
 export interface MusicRelease extends SearchResult {
@@ -3182,6 +3210,37 @@ export interface McpSettings {
   path: string
 }
 
+// An app connected to MCP with OAuth (Settings > Other apps).
+export interface McpApp {
+  id: number
+  clientName: string
+  account: string
+  scope: string
+  createdAt: string
+  lastUsedAt: string
+}
+
+// A client an administrator registered by hand, for apps that ask for a client ID and secret.
+export interface McpClient {
+  clientId: string
+  name: string
+  redirectUris: string[]
+  createdAt: string
+}
+
+export interface McpClientMade extends McpClient {
+  clientSecret: string
+}
+
+// What the consent page shows about an app that wants to connect.
+export interface OAuthRequest {
+  clientName: string
+  redirectHost: string
+  scopes: string[]
+  account: string
+  canApprove: boolean
+}
+
 export interface SystemControl {
   kind: 'docker' | 'systemd' | 'launchd' | 'custom' | 'none'
   canRestart: boolean
@@ -3475,8 +3534,11 @@ export const api = {
   // The form carries movieId, or seriesId with season and episode (episode 0 = the whole season), and one of
   // file or url; name is optional. The empty headers let the browser set the multipart boundary.
   manualDownload: (form: FormData) => request<ManualDownloadResult>('/downloads/manual', { method: 'POST', body: form, headers: {} }),
-  manualImportList: () => get<{ folder: string; files: ManualFile[]; more?: boolean }>('/manual-import'),
-  manualImport: (body: { path: string; movieId?: number; seriesId?: number; season?: number; episode?: number }) => post<{ path: string }>('/manual-import', body),
+  manualImportList: (folder = '', incomplete = false) =>
+    get<ManualList>(`/manual-import?folder=${encodeURIComponent(folder)}${incomplete ? '&incomplete=1' : ''}`),
+  manualImportFolders: (path = '') => get<ManualFolders>(`/manual-import/folders?path=${encodeURIComponent(path)}`),
+  manualImport: (body: { folder?: string; path: string; mode?: ManualMode; incomplete?: boolean; movieId?: number; seriesId?: number; season?: number; episode?: number }) =>
+    post<{ path: string; sourceKept?: boolean }>('/manual-import', body),
   listExclusions: () => get<{ kind: 'movie' | 'tv'; tmdbId: number; title: string; year?: number }[]>('/exclusions'),
   addExclusion: (e: { kind: 'movie' | 'tv'; tmdbId: number; title: string; year?: number }) => post<null>('/exclusions', e),
   removeExclusion: (kind: string, tmdbId: number) => del<null>(`/exclusions/${kind}/${tmdbId}`),
@@ -3557,7 +3619,7 @@ export const api = {
   bookCoverEditions: (id: number) => get<{ editions: { coverId: number; url: string }[]; current: number }>(`/books/${id}/cover/editions`),
   pickBookCover: (id: number, coverId: number) => put<Book>(`/books/${id}/cover/edition`, { coverId }),
   removeBookCover: (id: number) => del<Book>(`/books/${id}/cover`),
-  bookReleases: (id: number, format: BookFormat) => get<SearchResult[]>(`/books/${id}/releases?format=${format}`),
+  bookReleases: (id: number, format: BookFormat) => get<SearchAnswer<SearchResult>>(`/books/${id}/releases?format=${format}&detail=1`),
   grabBook: (id: number, data: { format: BookFormat; releaseTitle: string; downloadUrl: string; sizeBytes: number; protocol?: 'usenet' | 'torrent' }) =>
     post<{ queueId: number }>(`/books/${id}/grab`, data),
   searchNowBook: (id: number, format: BookFormat) => post<{ grabbed: number; message: string }>(`/books/${id}/search?format=${format}`),
@@ -3691,6 +3753,12 @@ export const api = {
   putSystemOptions: (o: Partial<SystemOptions>) => put<SystemOptions>('/system/options', o),
   mcpSettings: () => get<McpSettings>('/system/mcp'),
   putMcpSettings: (enabled: boolean) => put<McpSettings>('/system/mcp', { enabled }),
+  mcpApps: () => get<{ apps: McpApp[]; clients: McpClient[] }>('/system/mcp/apps'),
+  revokeMcpApp: (id: number) => del<null>(`/system/mcp/apps/${id}`),
+  createMcpClient: (name: string, redirectUri: string) => post<McpClientMade>('/system/mcp/clients', { name, redirectUri }),
+  deleteMcpClient: (clientId: string) => del<null>(`/system/mcp/clients/${encodeURIComponent(clientId)}`),
+  oauthRequest: (id: string) => get<OAuthRequest>(`/oauth/requests/${encodeURIComponent(id)}`),
+  oauthDecide: (id: string, allow: boolean, write: boolean) => post<{ redirect: string }>(`/oauth/requests/${encodeURIComponent(id)}`, { allow, write }),
   getProxySignIn: () => get<ProxySignIn>('/auth/proxy-signin'),
   getScripts: () => get<ScriptsState>('/scripts'),
   putScripts: (body: { script: string; timeoutSec: number }) => put<ScriptsState>('/scripts', body),
@@ -3717,7 +3785,7 @@ export const api = {
       `/discover/list?kind=${kind}&list=${list}&page=${page}${older ? '&older=true' : ''}`,
     ),
   discoverGenres: (kind: 'movie' | 'tv') => get<{ id: number; name: string }[]>(`/discover/genres?kind=${kind}`),
-  discoverBrowse: (q: { kind: 'movie' | 'tv'; genre?: string; yearFrom?: string; yearTo?: string; sort?: string; page?: number }) =>
+  discoverBrowse: (q: { kind: 'movie' | 'tv'; genre?: string; yearFrom?: string; yearTo?: string; sort?: string; language?: string; minRating?: string; runtime?: string; page?: number }) =>
     get<{ page: number; totalPages: number; results: DiscoverMovie[] }>(
       `/discover/browse?${new URLSearchParams(Object.entries(q).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => [k, String(v)])).toString()}`,
     ),

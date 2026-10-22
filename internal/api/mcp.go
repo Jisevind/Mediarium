@@ -134,6 +134,11 @@ func (s *Server) handleMCP(w http.ResponseWriter, r *http.Request) {
 		mcpReply(w, http.StatusNotFound, "MCP is switched off. An administrator can turn on Let AI assistants connect (MCP) in Settings > Other apps.")
 		return
 	}
+	if r.Method == http.MethodOptions {
+		oauthCORS(w)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	if r.Method != http.MethodPost {
 		w.Header().Set("Allow", http.MethodPost)
 		mcpReply(w, http.StatusMethodNotAllowed, "Send MCP messages with POST.")
@@ -142,11 +147,19 @@ func (s *Server) handleMCP(w http.ResponseWriter, r *http.Request) {
 	key := mcpKey(r)
 	var user *auth.User
 	if key != "" {
-		user, _ = s.Auth.UserForAPIKey(key)
+		if auth.HasOAuthTokenPrefix(key) {
+			user, _ = s.Auth.UserForOAuthToken(key)
+		} else {
+			user, _ = s.Auth.UserForAPIKey(key)
+		}
 	}
 	if user == nil {
-		w.Header().Set("WWW-Authenticate", `Bearer realm="mediarium"`)
-		mcpReply(w, http.StatusUnauthorized, "Send an administrator's API key as a Bearer token.")
+		challenge := `Bearer realm="mediarium", resource_metadata="` + s.resourceMetadataURL(r) + `"`
+		if key != "" {
+			challenge += `, error="invalid_token"`
+		}
+		w.Header().Set("WWW-Authenticate", challenge)
+		mcpReply(w, http.StatusUnauthorized, "Send an administrator's API key as a Bearer token, or sign in with OAuth.")
 		return
 	}
 	if !user.IsAdmin {

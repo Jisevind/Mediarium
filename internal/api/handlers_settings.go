@@ -210,6 +210,10 @@ type settingsPayload struct {
 	// Indexer traffic through the VPN. A pointer for the same reason.
 	RouteIndexersThroughVPN *bool `json:"routeIndexersThroughVpn,omitempty"`
 
+	// The person said their torrent client is already behind a VPN, so the
+	// "Torrenting without a VPN" notice stays away.
+	VPNNoticeAcknowledged *bool `json:"vpnNoticeAcknowledged,omitempty"`
+
 	// Curated/public list import — Trakt's public
 	// list-items endpoint only needs an app client ID, no user OAuth.
 	// A pointer for the same reason as OpenSubtitlesAPIKey.
@@ -376,6 +380,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	illegalCharReplacement, _ := s.Settings.Get(settings.KeyIllegalCharReplacement)
 	requireVPNForTorrents := s.vpnRequiredForTorrents()
 	routeIndexersThroughVPN := s.vpnForIndexers()
+	vpnNoticeAcknowledged := s.vpnNoticeAcknowledged()
 	importConflictPolicy, _ := s.Settings.Get(settings.KeyImportConflictPolicy)
 	if importConflictPolicy == "" {
 		importConflictPolicy = "skip"
@@ -485,6 +490,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		ReleaseCountryEffective:  s.releaseRegion(),
 		RequireVPNForTorrents:    &requireVPNForTorrents,
 		RouteIndexersThroughVPN:  &routeIndexersThroughVPN,
+		VPNNoticeAcknowledged:    &vpnNoticeAcknowledged,
 		ImportConflictPolicy:     importConflictPolicy,
 		HasTraktClientID:         s.Trakt().HasClientID(),
 		HasSimklClientID:         s.Simkl().HasClientID(),
@@ -968,6 +974,16 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 			value = "0"
 		}
 		if err := tx.Set(settings.KeyVPNRequireForTorrents, value, false); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if req.VPNNoticeAcknowledged != nil {
+		value := "1"
+		if !*req.VPNNoticeAcknowledged {
+			value = "0"
+		}
+		if err := tx.Set(settings.KeyVPNNoticeAcknowledged, value, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}

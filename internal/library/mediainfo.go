@@ -194,6 +194,45 @@ func (r *Repo) SeriesMediaSummaries() (map[int64][]MediaSummary, error) {
 	return out, rows.Err()
 }
 
+// MediaFilePaths maps each movie, and each show, to the paths of its
+// downloaded files that have been read, for looking beside them (subtitle
+// files next to the video).
+func (r *Repo) MediaFilePaths() (movies map[int64]string, series map[int64][]string, err error) {
+	movies, series = map[int64]string{}, map[int64][]string{}
+	rows, err := r.db.Query(`SELECT m.id, m.file_path FROM movies m JOIN media_info mi ON mi.path = m.file_path WHERE mi.failed = 0 AND m.status = 'downloaded'`)
+	if err != nil {
+		return nil, nil, fmt.Errorf("movie file paths: %w", err)
+	}
+	for rows.Next() {
+		var id int64
+		var p string
+		if err := rows.Scan(&id, &p); err != nil {
+			rows.Close()
+			return nil, nil, fmt.Errorf("scan movie file path: %w", err)
+		}
+		movies[id] = p
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, nil, fmt.Errorf("movie file paths: %w", err)
+	}
+	rows.Close()
+	rows, err = r.db.Query(`SELECT e.series_id, e.file_path FROM episodes e JOIN media_info mi ON mi.path = e.file_path WHERE mi.failed = 0 AND e.status = 'downloaded'`)
+	if err != nil {
+		return nil, nil, fmt.Errorf("episode file paths: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var p string
+		if err := rows.Scan(&id, &p); err != nil {
+			return nil, nil, fmt.Errorf("scan episode file path: %w", err)
+		}
+		series[id] = append(series[id], p)
+	}
+	return movies, series, rows.Err()
+}
+
 // EpisodeMediaInfo maps each downloaded episode of a show to the saved details
 // of its file.
 func (r *Repo) EpisodeMediaInfo(seriesID int64) (map[int64]MediaInfoRow, error) {

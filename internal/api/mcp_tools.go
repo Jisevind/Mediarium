@@ -349,12 +349,13 @@ func yearOf(y int) any {
 func mcpReadTools() []*mcpTool {
 	return []*mcpTool{
 		readTool("library_search",
-			"Search the library and filter it. kind is movies (default), tv, music or books. Filters: query (part of the title), quality (such as 1080p, 2160p, 4k, remux, bluray), min_size_gb and max_size_gb (size of the file; for TV the total of the show), release_group (part of the group name, movies and TV), audio_language (movies and TV: has an audio track in this language, such as German or de) and video_codec (movies and TV: h264, hevc, av1, vp9, mpeg2), has_file, monitored. Returns total (all matches) and one page of results (limit up to 100, offset to page). To count, ask with limit 1 and read total. Sizes are in GB (1024 MB steps).",
+			"Search the library and filter it. kind is movies (default), tv, music or books. Filters: query (part of the title), quality (such as 1080p, 2160p, 4k, remux, bluray), min_size_gb and max_size_gb (size of the file; for TV the total of the show), release_group (part of the group name, movies and TV), audio_language (movies and TV: has an audio track in this language, such as German or de), missing_subtitle_language (movies and TV: no subtitles in this language, inside the video or as a file beside it) and video_codec (movies and TV: h264, hevc, av1, vp9, mpeg2), has_file, monitored. Returns total (all matches) and one page of results (limit up to 100, offset to page). To count, ask with limit 1 and read total. Sizes are in GB (1024 MB steps).",
 			schemaOf(props{
 				"query": pStr("Part of the title."), "kind": pEnum("Which part of the library. Default movies.", "movies", "tv", "music", "books"),
 				"quality": pStr("Quality text such as 1080p, 2160p, 4k, bluray, remux."), "min_size_gb": pNum("Smallest size in GB."), "max_size_gb": pNum("Largest size in GB."),
 				"release_group": pStr("Part of the release group's name."), "audio_language": pStr("Only titles with an audio track in this language, for example German, de or ger."),
-				"video_codec": pStr("Only titles with this video codec: h264, hevc, av1, vp9, mpeg2."), "has_file": pBool("true: only titles with a file. false: only titles without one."),
+				"missing_subtitle_language": pStr("Only titles whose files have no subtitles in this language (inside the video or beside it), for example Dutch or nl."),
+				"video_codec":               pStr("Only titles with this video codec: h264, hevc, av1, vp9, mpeg2."), "has_file": pBool("true: only titles with a file. false: only titles without one."),
 				"monitored": pBool("true: only monitored. false: only unmonitored."), "limit": pInt("How many to return, 1 to 100. Default 25."), "offset": pInt("Skip this many results."),
 			}), toolLibrarySearch),
 		readTool("library_stats", "Totals for the library: how many movies, shows, episodes and albums there are and how many have files, the space used, the split by quality, and how movies divide by file size and by release group. Good for overview questions.",
@@ -404,11 +405,25 @@ type librarySearchArgs struct {
 	// codec (h264, hevc, av1, vp9, mpeg2).
 	AudioLanguage string `json:"audio_language"`
 	VideoCodec    string `json:"video_codec"`
+	// MissingSubtitleLanguage keeps the titles whose files have no subtitles in
+	// this language, neither inside the video nor as a file beside it.
+	MissingSubtitleLanguage string `json:"missing_subtitle_language"`
 }
 
 // mediaWanted says whether any of a title's file summaries satisfies the
 // audio_language and video_codec filters; with neither set everything does.
 func (a librarySearchArgs) mediaWanted(sums ...library.MediaSummary) bool {
+	if sub := mediainfo.LanguageCode(a.MissingSubtitleLanguage); sub != "" {
+		// Only titles whose files were read can lack a language.
+		if len(sums) == 0 {
+			return false
+		}
+		for _, m := range sums {
+			if slices.Contains(mediainfo.Split(m.SLangs), sub) {
+				return false
+			}
+		}
+	}
 	if a.AudioLanguage == "" && a.VideoCodec == "" {
 		return true
 	}
@@ -452,7 +467,7 @@ func mediaText(sums []library.MediaSummary) (video, audio string) {
 // withMediaNote says, when the answer was filtered on what the files hold,
 // how many files have been read so far: the others cannot match yet.
 func (c *mcpCtx) withMediaNote(a librarySearchArgs, out map[string]any) map[string]any {
-	if a.AudioLanguage == "" && a.VideoCodec == "" {
+	if a.AudioLanguage == "" && a.VideoCodec == "" && a.MissingSubtitleLanguage == "" {
 		return out
 	}
 	if done, total, err := c.s.MovieRepo.MediaInfoCounts(); err == nil && done < total {

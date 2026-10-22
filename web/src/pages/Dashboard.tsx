@@ -92,7 +92,7 @@ function ModuleCard({ icon, glyph, label, value, unit, sub, to, color, off, soon
 
 const LEVEL_ICON: Record<HealthItem['level'], IconName> = { error: 'warning', warn: 'warning', info: 'info' }
 
-function Health({ items, showOptional, errors = 0 }: { items: HealthItem[]; showOptional: boolean; errors?: number }) {
+function Health({ items, showOptional, errors = 0, onChanged }: { items: HealthItem[]; showOptional: boolean; errors?: number; onChanged?: () => void }) {
   const problems = items.filter((i) => i.level !== 'info')
   const optional = items.filter((i) => i.level === 'info')
   if (problems.length === 0 && errors === 0 && (!showOptional || optional.length === 0)) return null
@@ -109,6 +109,15 @@ function Health({ items, showOptional, errors = 0 }: { items: HealthItem[]; show
         <Link to={it.action.path} className="health-action">
           {st(it.action.label)} <Icon name="open" size={14} />
         </Link>
+      )}
+      {it.dismiss && it.id === 'no-vpn' && (
+        <button
+          type="button"
+          className="health-action"
+          onClick={() => api.putSettings({ vpnNoticeAcknowledged: true }).then(() => onChanged?.()).catch(() => undefined)}
+        >
+          {t('My download client is already behind a VPN')}
+        </button>
       )}
     </li>
   )
@@ -532,7 +541,7 @@ export default function Dashboard() {
 
       {admin && (
         <div id="attention">
-          <Health items={data.health} showOptional={showOptional} errors={unreadErrors} />
+          <Health items={data.health} showOptional={showOptional} errors={unreadErrors} onChanged={loadDashboard} />
         </div>
       )}
 

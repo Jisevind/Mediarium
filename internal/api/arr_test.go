@@ -21,6 +21,9 @@ func arrTMDB(t *testing.T) *httptest.Server {
 	mux.HandleFunc("/movie/701", func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{"id": 701, "title": "Night Harbour", "release_date": "2021-05-14", "poster_path": "/nh.jpg", "overview": "A ferry, a storm."})
 	})
+	mux.HandleFunc("/trending/movie/week", func(w http.ResponseWriter, r *http.Request) {
+		json.NewEncoder(w).Encode(map[string]any{"results": []map[string]any{{"id": 701, "title": "Night Harbour", "release_date": "2021-05-14"}, {"id": 702, "title": "Low Tide", "release_date": "2022-01-02", "poster_path": "/lt.jpg"}}})
+	})
 	mux.HandleFunc("/search/movie", func(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]any{"results": []map[string]any{{"id": 701, "title": "Night Harbour", "release_date": "2021-05-14"}}})
 	})

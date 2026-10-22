@@ -218,6 +218,7 @@ func (s *Server) grabMovieReplacing(movie library.Movie, releaseTitle, downloadU
 	_ = s.QueueRepo.LogActivity(movie.ID, "grabbed", grabbedMessage)
 	grabbedItem := movieItem(movie)
 	grabbedItem.Quality, grabbedItem.SizeBytes, grabbedItem.Release = string(quality.Classify(parser.Parse(releaseTitle))), sizeBytes, releaseTitle
+	s.movieReleaseDetails(&grabbedItem, movie, releaseTitle, downloadURL)
 	s.notifyItem("grabbed", grabbedItem)
 
 	s.dispatch.Kick()

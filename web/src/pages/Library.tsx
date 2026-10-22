@@ -219,7 +219,7 @@ export default function Library() {
   const setDecade = (v: string) => patchUi({ decade: v })
   const collection = ui.collection
   // What the files hold: video codec, HDR, resolution, audio and subtitle languages (read from the files' headers).
-  const fileFilters: FileFilters = useMemo(() => ({ vc: ui.vc, hdr: ui.hdr, res: ui.res, al: ui.al, ac: ui.ac, sl: ui.sl, nal: ui.nal }), [ui.vc, ui.hdr, ui.res, ui.al, ui.ac, ui.sl, ui.nal])
+  const fileFilters: FileFilters = useMemo(() => ({ vc: ui.vc, hdr: ui.hdr, res: ui.res, al: ui.al, ac: ui.ac, sl: ui.sl, nal: ui.nal, nsl: ui.nsl }), [ui.vc, ui.hdr, ui.res, ui.al, ui.ac, ui.sl, ui.nal, ui.nsl])
   const setCollection = (v: string) => patchUi({ collection: v })
   // The series of films (trilogies, franchises) with a film in the library, for the Collection filter.
   const [collections, setCollections] = useState<CollectionListItem[]>([])
@@ -622,6 +622,7 @@ export default function Library() {
             <Dropdown icon="volume-off" label={t('Missing audio language')} value={ui.nal} onChange={(v) => patchUi({ nal: v })} options={[{ value: '', label: t('Missing audio') }, ...fileOptions.audioLangs.map((c) => ({ value: c, label: t('No {language} audio', { language: langName(c) }) }))]} />
             <Dropdown icon="headphones" label={t('Audio codec')} value={ui.ac} onChange={(v) => patchUi({ ac: v })} options={[{ value: '', label: t('Audio codec') }, ...fileOptions.audioCodecs.map((c) => ({ value: c, label: c }))]} />
             <Dropdown icon="chat" label={t('Subtitle language')} value={ui.sl} onChange={(v) => patchUi({ sl: v })} options={[{ value: '', label: t('Subtitles') }, ...fileOptions.subLangs.map(langOption)]} />
+            <Dropdown icon="chat" label={t('Missing subtitle language')} value={ui.nsl} onChange={(v) => patchUi({ nsl: v })} options={[{ value: '', label: t('Missing subtitles') }, ...[...new Set([...fileOptions.audioLangs, ...fileOptions.subLangs])].sort((a, b) => a.localeCompare(b)).map((c) => ({ value: c, label: t('No {language} subtitles', { language: langName(c) }) }))]} />
           </>
         )}
         <Dropdown

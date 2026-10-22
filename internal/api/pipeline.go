@@ -217,6 +217,9 @@ func (s *Server) runPipeline(queueID, movieID int64, movieTitle string, movieYea
 	_ = s.QueueRepo.LogActivity(movieID, "imported", importedMessage)
 	importedItem := s.movieItemByID(movieID, movieTitle, movieYear, tmdbID)
 	importedItem.Quality, importedItem.SizeBytes, importedItem.Path = string(tier), fileSize(result.DestPath), result.DestPath
+	if m, err := s.MovieRepo.Get(movieID); err == nil {
+		s.movieReleaseDetails(&importedItem, m, releaseTitle, downloadURL)
+	}
 	importedItem.Subtitles = subtitleNote
 	s.notifyItem("imported", importedItem)
 	s.movieImported(result.DestPath)
@@ -292,6 +295,13 @@ func (s *Server) prepareDownload(ctx context.Context, queueID int64, downloadURL
 		} else {
 			missing, downloadErr = s.downloadUsenet(ctx, queueID, downloadURL, incompleteDir)
 			release()
+			if ctx.Err() == nil {
+				if downloadErr == nil {
+					s.noteClientCheck(watchBuiltinUsenet, builtinUsenetLabel, nil)
+				} else if builtinUsenetUnreachable(downloadErr) {
+					s.noteClientCheck(watchBuiltinUsenet, builtinUsenetLabel, downloadErr)
+				}
+			}
 		}
 	}
 	if downloadErr != nil {

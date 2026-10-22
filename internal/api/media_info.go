@@ -7,12 +7,17 @@ import (
 	"log/slog"
 	"net/http"
 	"os"
+	"path/filepath"
+	"slices"
+	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/rdborg/mediarium/internal/library"
 	"github.com/rdborg/mediarium/internal/mediainfo"
+	"github.com/rdborg/mediarium/internal/subtitles"
 )
 
 // What the library's video files hold (video codec, HDR, audio and subtitle
@@ -52,6 +57,14 @@ type mediaInfoState struct {
 
 	mu        sync.Mutex
 	summaries *mediaSummaries
+	folders   map[string]folderNames // folder listings, for the subtitle files beside the videos
+}
+
+// folderNames is the files in one folder, valid while the folder's time is
+// the same.
+type folderNames struct {
+	mtime time.Time
+	names []string
 }
 
 // mediaSummaries is what the Library lists need, kept for a short time.
@@ -336,8 +349,83 @@ func (s *Server) mediaSummaryNow() *mediaSummaries {
 	if out.series, err = s.MovieRepo.SeriesMediaSummaries(); err != nil {
 		slog.Warn("media info: couldn't read the shows' file details", "err", err)
 	}
+	s.addSidecarSubtitles(out)
 	st.summaries = out
 	return out
+}
+
+// addSidecarSubtitles adds the languages of the subtitle files that sit next
+// to the videos (movie.en.srt) to what each title's files hold, so a title
+// with a subtitle file in a language counts as having it, like one with the
+// track inside the video. The caller holds st.mu.
+func (s *Server) addSidecarSubtitles(out *mediaSummaries) {
+	st := &s.mediaInfo
+	moviePaths, seriesPaths, err := s.MovieRepo.MediaFilePaths()
+	if err != nil {
+		slog.Warn("media info: couldn't list the files to look beside for subtitles", "err", err)
+		return
+	}
+	seen := map[string]folderNames{}
+	langsOf := func(video string) []string {
+		dir := filepath.Dir(video)
+		f, ok := seen[dir]
+		if !ok {
+			f = st.folders[dir]
+			fi, err := os.Stat(dir)
+			if err != nil {
+				return nil
+			}
+			if f.names == nil || !f.mtime.Equal(fi.ModTime()) {
+				f = folderNames{mtime: fi.ModTime()}
+				if entries, err := os.ReadDir(dir); err == nil {
+					f.names = make([]string, 0, len(entries))
+					for _, e := range entries {
+						if !e.IsDir() {
+							f.names = append(f.names, e.Name())
+						}
+					}
+				}
+			}
+			seen[dir] = f
+		}
+		var langs []string
+		for lang := range subtitles.DiskHaveFromNames(video, f.names) {
+			if c := mediainfo.LanguageCode(lang); c != "" {
+				langs = append(langs, c)
+			}
+		}
+		return langs
+	}
+	join := func(have string, extra []string) string {
+		all := mediainfo.Split(have)
+		for _, l := range extra {
+			if !slices.Contains(all, l) {
+				all = append(all, l)
+			}
+		}
+		return strings.Join(all, ",")
+	}
+	for id, p := range moviePaths {
+		if ms, ok := out.movies[id]; ok {
+			ms.SLangs = join(ms.SLangs, langsOf(p))
+			out.movies[id] = ms
+		}
+	}
+	for id, paths := range seriesPaths {
+		var extra []string
+		for _, p := range paths {
+			for _, l := range langsOf(p) {
+				if !slices.Contains(extra, l) {
+					extra = append(extra, l)
+				}
+			}
+		}
+		if len(extra) > 0 && out.series != nil {
+			sort.Strings(extra)
+			out.series[id] = append(out.series[id], library.MediaSummary{SLangs: strings.Join(extra, ",")})
+		}
+	}
+	st.folders = seen // folders no title uses any more are dropped
 }
 
 // fileInfoPayload is the full details of one file for a detail page.

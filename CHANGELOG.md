@@ -8,6 +8,34 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.4.0] - 2026-10-22
+
+In short: Home Assistant can sign in to MCP, Discover has language and rating filters, richer notifications, import from any folder, and a number of fixes found by users.
+
+### Added
+
+- Apps like nzb360 that ask Radarr for recommended movies on their home screen now get an answer: what is trending on TMDB without the movies you already have (up to 20, refreshed hourly). Several settings pages those apps load (naming, media management, download client and indexer options, delay profiles, exclusions, backups, auto tagging) are answered too, so they no longer end up as unanswered requests in the log. Thanks to Bayharbourbutcher1 on GitHub, #94.
+- Library filters have a new **Missing subtitles** choice next to Missing audio: pick a language and see the titles that have no subtitles in it, neither inside the video nor as a subtitle file next to it (like Movie.nl.srt). Subtitle files next to the video now also count for the existing Subtitle language filter. The assistant tool library_search has a matching missing_subtitle_language. Thanks to nexus4004 on GitHub, #89.
+- The "Torrenting without a VPN" notice on the dashboard has a button **My download client is already behind a VPN** that hides it for good (administrators; the same option is under Settings > VPN, where switching it off shows the notice again). The notice is also left out when the built-in torrent client is off and torrents go to an external client. Thanks to Bayharbourbutcher1 on GitHub, #108.
+- The "download started" and "ready to watch" messages now say the custom format score, the custom formats it matched (the top five), the release group and the indexer, whenever they are known. Webhooks get the same as `customFormatScore`, `customFormats`, `releaseGroup`, `indexer` and `size`, and a custom JSON body can use `{{customFormatScore}}`, `{{customFormats}}`, `{{releaseGroup}}`, `{{indexer}}`, `{{size}}` and `{{sizeText}}`. (Bayharbourbutcher1 on GitHub, #109)
+- Two new events, **Download client down** and **Download client back**, for the torrent client and the Usenet downloader you connected and for the built-in Usenet downloader. One message per outage, off until you tick them. (Bayharbourbutcher1 on GitHub, #109)
+- Import a file by hand now looks in any folder you choose (type it or pick it), not only the downloads folder, and a file can come in as a hardlink, a copy or a move. Incomplete download folders (like qBittorrent's `incomplete`), samples and unfinished files are left out unless you turn on Show incomplete downloads. (lazy-adams on GitHub, #110)
+- The search results page has a Books tab, next to Movies and shows and Releases, when ebooks or audiobooks are on. It shows the same books as the search box, with the same Add button and the number found. (Deemer15 on GitHub, #112)
+- Discover (Movies and TV shows tabs) has a **More filters** row: **Original language** (English, Korean, Japanese and the other common ones first, then every other language, named in your own language), **Lowest rating** (6+, 7+, 8+; titles with very few votes are left out) and **Runtime** (under 90, 90 to 120, over 120 minutes; for shows, per episode). The heading says what is filtered, for example "Shows in Korean from 2020 to 2026, rated 7+", and the choices stay in the address so a reload or a shared link shows the same list. Thanks to an idea sent from inside the app.
+- Discover: **Hide owned** now keeps reading further pages until the grid is full of titles you don't have, instead of leaving holes where your titles were.
+- MCP assistants that look for a sign-in by themselves, such as Home Assistant, can now connect. Mediarium answers the standard OAuth discovery addresses (`/.well-known/oauth-protected-resource`, `/.well-known/oauth-authorization-server`), lets an app register itself, and shows an Allow page where an administrator signs in and approves. API keys keep working as before. Thanks to mirisbowring on GitHub, #97.
+- Under Settings > Other apps, the MCP card lists connected apps (name, account, access, when connected, last used) with a Revoke button, and a form to register a client for apps that ask for a client ID and secret (for example Home Assistant's application credentials).
+
+### Changed
+
+- The 401 from the MCP address now says where the sign-in information is (`WWW-Authenticate: Bearer resource_metadata=...`).
+
+### Fixed
+
+- Pressing Pause on a download that runs in an external torrent client (qBittorrent, Transmission and the others) now pauses the torrent in the client too; before, only Mediarium stopped watching and the client carried on. Resume starts it again. A torrent you pause in the client yourself is left alone and is no longer mistaken for a stalled download. Thanks to Bayharbourbutcher1 on GitHub, #108.
+- Searching for the releases of a book no longer asks movie and TV sites, and the second, title-only search leaves out indexers that already failed. The search stops after 25 seconds and shows what the quick indexers found instead of failing, and the list says which indexers were left out. (Deemer15 on GitHub, #111)
+- Unknown `/.well-known/...` and other discovery addresses answered the web page's HTML, which made some MCP clients stop with a JSON error. They now answer a JSON 404.
+
 ## [3.3.0] - 2026-10-21
 
 In short: connect AI assistants to your library, use SABnzbd or NZBGet for Usenet, see what is inside your video files, order and group qualities, and rescan music albums.

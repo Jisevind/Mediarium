@@ -199,6 +199,7 @@ The keys the app stores in its settings table. You normally change these from th
 | `usenetclient.url` | the client's web address, e.g. http://192.168.1.10:8080 |
 | `usenetclient.use` | "1" sends Usenet releases to it; unset or "0" keeps the built-in downloader |
 | `usenetclient.username` | NZBGet's login (ControlUsername) |
+| `vpn.notice_acknowledged` |  |
 | `vpn.require_for_torrents` |  |
 | `vpn.route_indexers` | "1" sends searches, RSS, release downloads, IRC announces and debrid through the VPN, and they wait while it isn't up. Home-network addresses still connect directly |
 | `watched.status` | the last read and cleanup (JSON; set by the app, not user-editable) |

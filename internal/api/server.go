@@ -102,8 +102,9 @@ type Server struct {
 	version      string
 	security     securityState // trusted proxies, allowed origins, per-account sign-in limit (security.go)
 
-	tmdbMu sync.RWMutex
-	tmdb   *metadata.Client
+	arrRecs arrRecommended
+	tmdbMu  sync.RWMutex
+	tmdb    *metadata.Client
 
 	subsMu sync.RWMutex
 	subs   *subtitles.Client
@@ -152,8 +153,10 @@ type Server struct {
 	torrents torrentRegistry // live torrent clients, so the on/off switch can stop them
 	irc      ircLibrary      // the titles IRC announcements are matched against (irc_announce_decide.go)
 
-	usenetSlots  slotGate // how many built-in Usenet downloads run at once (builtin_slots.go)
-	torrentSlots slotGate // the same for built-in torrents
+	bookWait     time.Duration      // how long a book release search may take; 0 means bookSearchWait (books_api.go)
+	clientWatch  notify.ClientWatch // when a download client goes down and comes back (client_watch.go)
+	usenetSlots  slotGate           // how many built-in Usenet downloads run at once (builtin_slots.go)
+	torrentSlots slotGate           // the same for built-in torrents
 
 	grabMu sync.Mutex     // makes "is this already being downloaded?" and "queue it" one step (see grab_claim.go)
 	bg     sync.WaitGroup // download pipelines and automatic retries still running (see grab_claim.go)
@@ -183,7 +186,8 @@ type Server struct {
 	moveJob moveJob      // moving the files of titles to another library folder (move_files.go)
 	metaJob metaFilesJob // writing NFO and artwork files for the whole library (metadata_files.go)
 
-	mcp mcpState // AI assistants connecting over MCP (mcp.go)
+	mcp   mcpState   // AI assistants connecting over MCP (mcp.go)
+	oauth oauthState // their OAuth sign-in (mcp_oauth.go)
 
 	upd updateRuntime // the new-version notice, pushed and downloaded updates, and the self-restart marker (update_*.go, watchdog.go)
 }
@@ -412,6 +416,12 @@ func (s *Server) Routes() http.Handler {
 	// Prometheus' default path. It is the same protected page as /api/metrics.
 	root.Handle("GET /metrics", s.busyGuard(noStore(metricsAlias(public))))
 	root.Handle("/mcp", s.busyGuard(noStore(http.HandlerFunc(s.handleMCP))))
+	// Sign-in for MCP clients that find it themselves (mcp_oauth.go). Anything else
+	// under these paths answers JSON, never the web app's page: a client looking for
+	// OAuth metadata can't read HTML.
+	root.Handle("/.well-known/", s.busyGuard(noStore(http.HandlerFunc(s.handleWellKnown))))
+	root.Handle("/oauth/", s.busyGuard(noStore(http.HandlerFunc(s.handleOAuth))))
+	root.Handle("/mcp/", s.busyGuard(noStore(http.HandlerFunc(handleMCPOther))))
 	// Radarr, Sonarr and Lidarr-style endpoints for other apps (arr.go).
 	s.arrRoutes(root)
 	// E-readers: the OPDS catalogue and Kobo sync sign in their own way (ereader_auth.go).
@@ -464,6 +474,10 @@ func (s *Server) protectedRoutes() *routeTable {
 	member.HandleFunc("DELETE /api/auth/passkeys/{id}", s.handleDeletePasskey)
 	member.HandleFunc("POST /api/auth/oidc/link", s.handleOIDCLinkStart)
 	member.HandleFunc("DELETE /api/auth/oidc/link", s.handleOIDCUnlink)
+
+	// The page where an administrator lets an AI assistant connect (mcp_oauth.go).
+	member.HandleFunc("GET /api/oauth/requests/{id}", s.handleOAuthRequestInfo)
+	member.HandleFunc("POST /api/oauth/requests/{id}", s.handleOAuthDecision)
 
 	// Overview (members get a trimmed view: no setup problems, no folder paths).
 	member.HandleFunc("GET /api/health", s.handleHealth)
@@ -788,6 +802,7 @@ func (s *Server) protectedRoutes() *routeTable {
 	admin.HandleFunc("POST /api/downloads/manual", s.handleManualDownload)
 	admin.HandleFunc("GET /api/manual-import", s.handleManualImportList)
 	admin.HandleFunc("POST /api/manual-import", s.handleManualImport)
+	admin.HandleFunc("GET /api/manual-import/folders", s.handleManualImportFolders)
 	admin.HandleFunc("GET /api/trash", s.handleListTrash)
 	admin.HandleFunc("POST /api/trash/{kind}/{id}/restore", s.handleRestoreTrash)
 	admin.HandleFunc("DELETE /api/trash/{kind}/{id}", s.handleDeleteTrash)
@@ -917,6 +932,10 @@ func (s *Server) protectedRoutes() *routeTable {
 	admin.HandleFunc("PUT /api/system/options", s.handlePutOptions)
 	admin.HandleFunc("GET /api/system/mcp", s.handleGetMCP)
 	admin.HandleFunc("PUT /api/system/mcp", s.handlePutMCP)
+	admin.HandleFunc("GET /api/system/mcp/apps", s.handleListMCPApps)
+	admin.HandleFunc("DELETE /api/system/mcp/apps/{id}", s.handleRevokeMCPApp)
+	admin.HandleFunc("POST /api/system/mcp/clients", s.handleCreateMCPClient)
+	admin.HandleFunc("DELETE /api/system/mcp/clients/{id}", s.handleDeleteMCPClient)
 	admin.HandleFunc("GET /api/auth/sign-in", s.handleGetSignIn)
 	admin.HandleFunc("PUT /api/auth/sign-in", s.handlePutSignIn)
 	admin.HandleFunc("GET /api/auth/oidc", s.handleGetOIDC)

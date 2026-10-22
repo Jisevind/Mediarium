@@ -24,6 +24,8 @@ const EVENTS: { key: string; label: string; hint: string }[] = [
   { key: 'health', label: t('Something is wrong'), hint: t('Your Usenet provider or an indexer stopped working, for example because a subscription expired') },
   { key: 'update', label: t('New version'), hint: t('A new version of Mediarium is available') },
   { key: 'digest', label: t('Weekly summary'), hint: t('A short summary once a week of what arrived, what failed and what is still missing') },
+  { key: 'clientdown', label: t('Download client down'), hint: t('A download client cannot be reached, for example because it stopped or the network is down') },
+  { key: 'clientup', label: t('Download client back'), hint: t('A download client that was down can be reached again') },
 ]
 
 const FALLBACK_TYPES: NotifyType[] = [

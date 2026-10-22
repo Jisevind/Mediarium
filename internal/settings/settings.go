@@ -155,6 +155,10 @@ const (
 	// VPN at all yet — an opt-in kill switch, not an opt-out one.
 	KeyVPNRequireForTorrents = "vpn.require_for_torrents"
 
+	// "1" once the person said their torrent client is already behind a VPN:
+	// the dashboard no longer warns about torrenting without one.
+	KeyVPNNoticeAcknowledged = "vpn.notice_acknowledged"
+
 	// Indexer traffic through the VPN. Off when unset.
 	KeyVPNRouteIndexers = "vpn.route_indexers" // "1" sends searches, RSS, release downloads, IRC announces and debrid through the VPN, and they wait while it isn't up. Home-network addresses still connect directly
 

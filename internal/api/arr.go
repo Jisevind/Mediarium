@@ -125,6 +125,8 @@ func (s *Server) arrHandler(app arrApp) http.Handler {
 	h("GET", "/rename", arrEmptyList)
 	h("GET", "/manualimport", arrEmptyList)
 
+	app.extraRoutes(s, h)
+
 	switch app {
 	case arrRadarr:
 		h("GET", "/movie", s.arrListMovies)

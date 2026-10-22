@@ -295,6 +295,7 @@ func (s *Server) downloadViaUsenetClient(ctx context.Context, queueID int64, nzb
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
+			s.noteClientCheck(watchUsenetClient, label, err)
 			if !fails.tolerate(err, usenetclient.ErrAuth) {
 				return usenetClientError(cfg.Kind, err)
 			}
@@ -307,6 +308,7 @@ func (s *Server) downloadViaUsenetClient(ctx context.Context, queueID int64, nzb
 			continue
 		}
 		fails.reset()
+		s.noteClientCheck(watchUsenetClient, label, nil)
 		switch {
 		case !found:
 			if gone.IsZero() {

@@ -238,8 +238,10 @@ func TestEventNormalizationAndMapping(t *testing.T) {
 	if _, err := notify.NormalizeEvents([]string{"lunch"}); err == nil {
 		t.Fatal("unknown events must be rejected")
 	}
-	if def, _ := notify.NormalizeEvents(nil); len(def) != len(notify.EventKinds()) {
-		t.Fatalf("empty means all events, got %v", def)
+	// Empty means every event except the two that must be asked for (a
+	// download client going down or coming back).
+	if def, _ := notify.NormalizeEvents(nil); len(def) != len(notify.EventKinds())-2 {
+		t.Fatalf("empty means all the default events, got %v", def)
 	}
 }
 

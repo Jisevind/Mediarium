@@ -31,6 +31,8 @@ var memberRoutes = []string{
 	"GET /api/auth/api-keys",
 	"POST /api/auth/api-keys",
 	"DELETE /api/auth/api-keys/{id}",
+	"GET /api/oauth/requests/{id}",
+	"POST /api/oauth/requests/{id}",
 	"GET /api/auth/ereader",
 	"POST /api/auth/ereader/opds",
 	"DELETE /api/auth/ereader/opds",
