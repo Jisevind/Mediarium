@@ -901,10 +901,10 @@ export interface IndexerDefinitionSetting {
 }
 
 // The debrid service as saved. canCheck: the service can say which releases it
-// already has (TorBox). preferCached asks it and ranks a cached release ahead of
+// already has (TorBox, Premiumize). preferCached asks it and ranks a cached release ahead of
 // an equal one; cachedLowerScore lets the cached one win even with a lower score.
 export interface DebridSettings {
-  service: '' | 'realdebrid' | 'torbox'
+  service: '' | 'realdebrid' | 'torbox' | 'premiumize'
   hasKey: boolean
   canCheck: boolean
   preferCached: boolean
@@ -916,6 +916,8 @@ export interface DebridAccount {
   name: string
   premium: boolean
   expires?: string
+  // How much of the monthly fair-use limit is used, 0 to 1 (Premiumize).
+  fairUse?: number
 }
 
 // An external download client torrent releases go to (Settings > Downloading).
@@ -1128,7 +1130,7 @@ export interface SearchResult {
   seeders?: number
   peers?: number
   // The debrid service already has this torrent, so it starts at once. Only
-  // set when it is known (TorBox).
+  // set when it is known (TorBox, Premiumize).
   cached?: boolean
   // A torrent with fewer seeders than its indexer's minimum: automatic downloads
   // skip it, grabbing it by hand is allowed. minSeeders is that minimum.
@@ -2402,6 +2404,17 @@ export interface FolderCheck {
   warnings: string[]
   // A missing folder that Mediarium can create safely (inside a mapped, writable one).
   canCreate?: boolean
+  // Set for a library folder that has no .mediarium-root file (see RootMarkerFix).
+  marker?: RootMarkerInfo
+}
+
+export interface RootMarkerInfo {
+  name: string
+  seen: boolean // Mediarium saw the folder with its file before, and it was lost
+  titles: number // movies and shows with files recorded under the folder
+  strong: boolean // titles are recorded but none of their folders is there: the drive is probably not connected
+  canCreate: boolean
+  why?: string
 }
 
 export interface HealthItem {
@@ -3505,7 +3518,7 @@ export const api = {
   resumeQueueItem: (id: number) => post<{ status: string }>(`/queue/${id}/resume`),
   stopQueueItem: (id: number, deleteFiles: boolean) => post<{ status: string; pending?: string }>(`/queue/${id}/stop`, { deleteFiles }),
   frontQueueItem: (id: number) => post<{ status: string }>(`/queue/${id}/front`),
-  bulkQueue: (ids: number[], action: 'pause' | 'resume' | 'stop' | 'front' | 'remove', deleteFiles = false) =>
+  bulkQueue: (ids: number[], action: 'pause' | 'resume' | 'stop' | 'retry' | 'front' | 'remove', deleteFiles = false) =>
     post<{ done: number; failed: { id: number; error: string }[] }>('/queue/bulk', { ids, action, deleteFiles }),
   pauseAllQueue: (protocol?: 'usenet' | 'torrent') => post<{ paused: number }>(`/queue/pause-all${protocol ? `?protocol=${protocol}` : ''}`),
   resumeAllQueue: (protocol?: 'usenet' | 'torrent') => post<{ resumed: number; skipped: number; problem?: string }>(`/queue/resume-all${protocol ? `?protocol=${protocol}` : ''}`),
@@ -3917,6 +3930,7 @@ export const api = {
   testService: (data: { service: 'tmdb' | 'opensubtitles' | 'subdl' | 'wizdom' | 'trakt' | 'simkl'; key?: string; username?: string; password?: string }) =>
     post<{ ok: boolean; message: string }>('/settings/test-service', data),
   createFolder: (path: string) => post<FolderCheck>('/settings/folder-create', { path }),
+  createRootMarker: (path: string, driveConnected: boolean) => post<{ ok: boolean; folder: string }>('/settings/library-marker', { path, driveConnected }),
   folderCheck: (path: string) => get<FolderCheck>(`/settings/folder-check?path=${encodeURIComponent(path)}`),
   health: () => get<{ items: HealthItem[] }>('/health'),
   modules: () => get<ModulesAnswer>('/modules'),

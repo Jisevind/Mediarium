@@ -269,8 +269,8 @@ type debridTorrentsAnswer struct {
 	Torrents   []debridTorrent `json:"torrents"`
 }
 
-// handleDebridTorrents is GET /api/debrid/torrents: what is on the Real-Debrid
-// or TorBox account. Always 200; a problem is in "error".
+// handleDebridTorrents is GET /api/debrid/torrents: what is on the Real-Debrid,
+// TorBox or Premiumize account. Always 200; a problem is in "error".
 func (s *Server) handleDebridTorrents(w http.ResponseWriter, r *http.Request) {
 	out := debridTorrentsAnswer{Torrents: []debridTorrent{}}
 	if !s.debridOn() {

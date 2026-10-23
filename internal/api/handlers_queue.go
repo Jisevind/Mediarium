@@ -331,9 +331,26 @@ func (s *Server) handleRetryQueueItem(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "That download is no longer in the queue.")
 		return
 	}
-	if item.Status != queue.StatusFailed && item.Status != queue.StatusStopped {
-		writeError(w, http.StatusConflict, "Only a failed or stopped download can be retried.")
+	newID, err := s.retryQueueItem(item)
+	if errors.Is(err, errNotRetryable) {
+		writeError(w, http.StatusConflict, err.Error())
 		return
+	}
+	if err != nil {
+		writeGrabError(w, err, http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]int64{"queueId": newID})
+}
+
+// errNotRetryable answers a retry of a download that is not failed or stopped.
+var errNotRetryable = errors.New("Only a failed or stopped download can be retried.")
+
+// retryQueueItem is Retry on one download (see handleRetryQueueItem), shared
+// with the bulk action. It answers the new queue item.
+func (s *Server) retryQueueItem(item queue.Item) (int64, error) {
+	if item.Status != queue.StatusFailed && item.Status != queue.StatusStopped {
+		return 0, errNotRetryable
 	}
 	keptDir, reuse := s.keptDownload(item)
 	// The new item must not start before the earlier files are in its folder.
@@ -341,8 +358,7 @@ func (s *Server) handleRetryQueueItem(w http.ResponseWriter, r *http.Request) {
 	newID, err := s.regrab(item)
 	if err != nil {
 		release()
-		writeGrabError(w, err, http.StatusBadRequest)
-		return
+		return 0, err
 	}
 	if reuse {
 		// Moved now, not when the new item starts: while it waits in line the
@@ -355,8 +371,8 @@ func (s *Server) handleRetryQueueItem(w http.ResponseWriter, r *http.Request) {
 		message = "Retrying from the files already downloaded: " + item.ReleaseTitle
 	}
 	s.queueItemEvent(item, "retried", queue.LevelInfo, message)
-	_ = s.QueueRepo.Delete(id) // the retry replaces the failed entry
-	writeJSON(w, http.StatusAccepted, map[string]int64{"queueId": newID})
+	_ = s.QueueRepo.Delete(item.ID) // the retry replaces the failed entry
+	return newID, nil
 }
 
 // regrab queues the same release again for the same movie or episode(s).
@@ -557,7 +573,7 @@ func (s *Server) handleListActivity(w http.ResponseWriter, r *http.Request) {
 	for _, e := range entries {
 		// Updates, restarts and shut-downs, and changes to accounts, say who
 		// did it and from which address: for administrators only.
-		if (e.EventType == "update" || e.EventType == "account") && !admin {
+		if (e.EventType == "update" || e.EventType == "account" || e.EventType == "library") && !admin {
 			continue
 		}
 		msg := plainFailure(e.EventType, e.Message)

@@ -115,11 +115,11 @@ Every field in Settings points out a mistake under the box when you leave it, or
 
 Only what you change is checked, so a value an older version saved never stops you saving something else.
 
-## Debrid services (Real-Debrid, TorBox)
+## Debrid services (Real-Debrid, TorBox, Premiumize)
 
 Instead of downloading torrents here, Mediarium can hand them to a debrid service. The service downloads the torrent on its own servers, and Mediarium then downloads the finished files from it over https into the download's folder, where unpacking and import work as for any other download.
 
-- **Set up:** Settings > Downloading > Torrents > **Debrid service**. Pick **Real-Debrid** or **TorBox**, paste your API key (Real-Debrid: real-debrid.com/apitoken; TorBox: torbox.app/settings), press **Test** to see the account and when its premium ends, then **Save**. Most downloads need a premium account.
+- **Set up:** Settings > Downloading > Torrents > **Debrid service**. Pick **Real-Debrid**, **TorBox** or **Premiumize**, paste your API key (Real-Debrid: real-debrid.com/apitoken; TorBox: torbox.app/settings; Premiumize: premiumize.me/account), press **Test** to see the account and when its premium ends, then **Save**. Most downloads need a premium account.
 - **The built-in torrent client can stay off.** Torrent sites are still searched while a debrid service is set, and torrent releases go to the service. No torrent traffic leaves your home, nothing is seeded from here, and the VPN for torrents isn't needed for them. Seeding settings don't apply.
 - **Progress:** the first half of the bar is the service downloading the torrent, the second half is Mediarium bringing the files home. A download that was paused or interrupted carries on where it stopped, also after a restart, without adding the torrent to the service again.
 - **When the service gives up** (no one sharing it, a dead or harmful torrent), or nothing moves there for 6 hours, the release is blocklisted and, with automation on, the next-best one is tried, as with a stalled torrent.
@@ -128,17 +128,31 @@ Instead of downloading torrents here, Mediarium can hand them to a debrid servic
 - The service's API key is stored encrypted. Requests to the service go through the proxy set for indexers, if you have one (Settings > Downloading > VPN and proxy > Proxy).
 - Mediarium never mounts anything or streams from the service: no special container permissions are needed.
 
-### Releases that are already cached (TorBox)
+### Premiumize
 
-TorBox keeps torrents other people already downloaded. When you grab one of those, it is ready at once. TorBox will tell Mediarium which torrents it has, so you can see them and have them preferred.
+Premiumize works like the other two, with a few differences worth knowing.
 
-- **In the release list:** a green **Cached** tag on a release means TorBox already has it. Mediarium asks once per search, for the whole list, and remembers the answer for 5 minutes. A release with no tag is either not cached or not known: some indexers give no torrent hash, and a plain .torrent link is not downloaded just to find out.
+- **Where to find the API key:** sign in at premiumize.me and open [premiumize.me/account](https://www.premiumize.me/account). The key is on that page. Paste it into the **API key** box. It is stored encrypted, like the other keys.
+- **What the Test button does:** it asks Premiumize for your account (`/account/info`) and shows your customer number, the date your premium ends and how much of this month's fair-use limit is used. A wrong key is reported as such. A free account is accepted by the test, but Premiumize refuses most downloads on it.
+- **Cached torrents are instant.** Premiumize keeps torrents other people already downloaded. When you grab one of those, Mediarium reads the file list straight away and starts bringing the files home, without adding anything to your account. Everything else becomes a normal transfer on your account, and the first half of the progress bar follows it.
+- **Cached tags and ranking** work as for TorBox, see below.
+- **Clean-up:** when the files are home, Mediarium deletes the transfer and the folder it made in your Premiumize cloud storage, so the finished torrent doesn't use up your space. Anything else in your cloud storage, and other transfers on the account, are never touched.
+- **Limits and manners:** Premiumize has a monthly fair-use limit that every transfer counts against (the Test button shows how much is left). Mediarium asks for the list of your transfers at most once every 5 seconds, no matter how many downloads are waiting, and only while a torrent is waiting on Premiumize or the Activity page is open. If Premiumize answers "too many requests" (HTTP 429), Mediarium waits and tries again at the next check instead of giving up on the download.
+- **When Premiumize gives up** (an error, a time-out, a banned torrent) the release is blocklisted with Premiumize's own message, as with the other services.
+- **Private torrents** are your own call: some trackers forbid debrid services. Mediarium doesn't check.
+- Requests go through the proxy set for indexers, if you have one, and only to premiumize.me, only while Premiumize is the chosen service.
+
+### Releases that are already cached (TorBox and Premiumize)
+
+TorBox and Premiumize keep torrents other people already downloaded. When you grab one of those, it is ready at once. They will tell Mediarium which torrents they have, so you can see them and have them preferred.
+
+- **In the release list:** a green **Cached** tag on a release means TorBox or Premiumize (whichever you chose) already has it. Mediarium asks once per search, for the whole list, and remembers the answer for 5 minutes. A release with no tag is either not cached or not known: some indexers give no torrent hash, and a plain .torrent link is not downloaded just to find out.
 - **In automatic searches:** among releases of the same quality, a cached one is picked before one that has to be downloaded first. The quality profile is applied first, so a release the profile would refuse is never picked for being cached, and a cached release of a lower quality never wins over a better one. The delay profile, size limits, blocklist and the order of your indexers and protocols work as before: a cached release is not treated specially there. Between two releases that score differently under the profile's preferred terms, the higher score still wins.
-- **Settings > Downloading > Debrid service** (with TorBox chosen):
-  - **Prefer releases TorBox already has** is on by default for TorBox. Turn it off and Mediarium stops asking TorBox about torrents: no tags and no ranking, and no hashes are sent (`debrid.prefer_cached`).
+- **Settings > Downloading > Debrid service** (with TorBox or Premiumize chosen):
+  - **Prefer releases TorBox already has** (or Premiumize) is on by default for both. Turn it off and Mediarium stops asking the service about torrents: no tags and no ranking, and no hashes are sent (`debrid.prefer_cached`).
   - **Accept a lower score for a cached release** is off by default. Turn it on and a cached release also wins over a higher-scoring one of the same quality (`debrid.cached_lower_score`). It still never wins over a better quality.
-- **What is sent:** only the info hashes of the torrents in the results, to TorBox's `checkcached` call. Nothing else.
-- **If TorBox is slow or unreachable,** the search carries on without the information, after waiting at most 5 seconds. Mediarium then leaves TorBox alone for a minute before it asks again. A failed check never stops a search or a download.
+- **What is sent:** only the info hashes of the torrents in the results, to TorBox's `checkcached` call or Premiumize's `cache/check` call. Nothing else.
+- **If the service is slow or unreachable,** the search carries on without the information, after waiting at most 5 seconds. Mediarium then leaves it alone for a minute before it asks again. A failed check never stops a search or a download.
 - **Real-Debrid** has no cache check: it turned off its availability endpoint (`instantAvailability`) at the end of 2024, and its API documentation no longer lists it, so nothing is marked or preferred when Real-Debrid is the service.
 - The tag shows in the release lists of movies, shows and books, and in the main search. Music release lists don't show it yet.
 

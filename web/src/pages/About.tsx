@@ -81,7 +81,7 @@ const CREDIT_CELLS: { wide?: boolean; groups: CreditGroup[] }[] = [
           { name: 'Prowlarr/Indexers', href: 'https://github.com/Prowlarr/Indexers', used: t('Torrent site definitions'), desc: t('The community-maintained descriptions of how to search each site, downloaded to your server when you open the site list.') },
           { name: 'Knaben', href: 'https://knaben.org/', used: t('Torrent site (optional)'), desc: t('A public torrent search engine, asked only when you add it from the site list.') },
           { name: 'FlareSolverr', href: 'https://github.com/FlareSolverr/FlareSolverr', used: t('Optional helper'), desc: t('Runs next to Mediarium if you add it, to get past Cloudflare checks on some sites.'), licence: 'MIT' },
-          { name: 'Real-Debrid and TorBox', href: 'https://real-debrid.com/', used: t('Debrid services (optional)'), desc: t('Download torrents on their own servers, so none of that traffic leaves your home. Only when you connect one.') },
+          { name: 'Real-Debrid, TorBox and Premiumize', href: 'https://real-debrid.com/', used: t('Debrid services (optional)'), desc: t('Download torrents on their own servers, so none of that traffic leaves your home. Only when you connect one.') },
           { name: 'Plex', href: 'https://www.plex.tv/', used: t('Sign-in and watchlist (optional)'), desc: t('Sign in with Plex and your Plex watchlist, only when you use them.') },
         ],
       },

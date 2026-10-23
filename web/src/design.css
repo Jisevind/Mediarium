@@ -3324,3 +3324,9 @@ img[data-broken] { visibility: hidden; }
 .file-chips.compact .file-chip { font-size: 0.7rem; padding: 3px 7px; }
 .ep-table td .file-chips { white-space: normal; }
 .file-note { font-size: 0.8rem; color: var(--text-faint); margin: 0 0 12px; }
+
+/* Putting a library folder's .mediarium-root file back (components/RootMarkerFix.tsx). */
+.marker-fix { margin-top: 8px; font-size: 0.85rem; min-width: 0; overflow-wrap: anywhere; }
+.marker-fix p { margin: 0 0 8px; }
+.marker-confirm { display: grid; gap: 4px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--rim); background: color-mix(in srgb, var(--text) 4%, transparent); }
+.marker-confirm.strong { border-color: color-mix(in srgb, var(--danger) 60%, transparent); }

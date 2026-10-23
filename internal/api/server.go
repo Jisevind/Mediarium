@@ -706,6 +706,7 @@ func (s *Server) protectedRoutes() *routeTable {
 	admin.HandleFunc("POST /api/subtitles/addons/{id}/test", s.handleTestSubtitleAddon)
 	admin.HandleFunc("GET /api/settings/folder-check", s.handleFolderCheck)
 	admin.HandleFunc("POST /api/settings/folder-create", s.handleCreateFolder)
+	admin.HandleFunc("POST /api/settings/library-marker", s.handleCreateRootMarker)
 	admin.HandleFunc("GET /api/settings/naming-preview", s.handleNamingPreview)
 	admin.HandleFunc("GET /api/settings/naming-tokens", s.handleNamingTokens)
 

@@ -60,12 +60,12 @@ const (
 	KeyTorrentPortMapping    = "torrent.port_mapping"            // "0" stops the built-in client asking the router (UPnP, NAT-PMP) to open its port; anything else (including unset) leaves it on. Never used with a VPN or proxy
 	KeyTorrentCategories     = "torrent.categories"              // JSON list of {name, subfolder}: categories for built-in torrents; the subfolder is made inside the downloads working folder. Unset = none
 	KeyTorrentCategoryMap    = "torrent.category_map"            // JSON {movie, tv, music, book: category name}: the category each kind of grab gets; "" = no category
-	KeyDebridService         = "debrid.service"                  // "" (off), "realdebrid" or "torbox": torrent releases go to that service instead of the built-in client
+	KeyDebridService         = "debrid.service"                  // "" (off), "realdebrid", "torbox" or "premiumize": torrent releases go to that service instead of the built-in client
 	KeyDebridAPIKey          = "debrid.api_key"                  // encrypted; the debrid service's API key
 	KeyPauseWhileStreaming   = "downloads.pause_while_streaming" // "1" pauses downloads while someone watches on Plex, Jellyfin or Emby
 	KeyResumeInterrupted     = "downloads.resume_interrupted"    // "0" leaves downloads that a restart interrupted paused; unset or "1" lets them carry on by themselves
 	KeyPausedForStreaming    = "downloads.paused_for_streaming"  // the ids of the downloads paused for a stream, as JSON
-	KeyDebridPreferCached    = "debrid.prefer_cached"            // "0" stops asking TorBox which releases it already has (no tag, no ranking); "1" or unset (with TorBox as the service) asks and ranks a cached release ahead of an equal one that is not. Real-Debrid has no such check
+	KeyDebridPreferCached    = "debrid.prefer_cached"            // "0" stops asking TorBox or Premiumize which releases it already has (no tag, no ranking); "1" or unset (with TorBox or Premiumize as the service) asks and ranks a cached release ahead of an equal one that is not. Real-Debrid has no such check
 	KeyDebridCachedLower     = "debrid.cached_lower_score"       // "1" lets a cached release win over an uncached one of the same quality even when the profile's preferred terms score it lower; unset or "0" only breaks ties between equal scores
 
 	// An external download client that speaks the qBittorrent Web API

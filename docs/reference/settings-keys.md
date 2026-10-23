@@ -32,8 +32,8 @@ The keys the app stores in its settings table. You normally change these from th
 | `cleanup.rules` | the cleanup rules (JSON: enabled, moviesWatchedDays, moviesUnwatchedDays, episodesWatchedDays, keepTags); off unless enabled is true |
 | `debrid.api_key` | encrypted; the debrid service's API key |
 | `debrid.cached_lower_score` | "1" lets a cached release win over an uncached one of the same quality even when the profile's preferred terms score it lower; unset or "0" only breaks ties between equal scores |
-| `debrid.prefer_cached` | "0" stops asking TorBox which releases it already has (no tag, no ranking); "1" or unset (with TorBox as the service) asks and ranks a cached release ahead of an equal one that is not. Real-Debrid has no such check |
-| `debrid.service` | "" (off), "realdebrid" or "torbox": torrent releases go to that service instead of the built-in client |
+| `debrid.prefer_cached` | "0" stops asking TorBox or Premiumize which releases it already has (no tag, no ranking); "1" or unset (with TorBox or Premiumize as the service) asks and ranks a cached release ahead of an equal one that is not. Real-Debrid has no such check |
+| `debrid.service` | "" (off), "realdebrid", "torbox" or "premiumize": torrent releases go to that service instead of the built-in client |
 | `downloadclient.category` | the category torrents are added with; unset = "mediarium" (when no kind has a category of its own either) |
 | `downloadclient.category_books` | category for books; unset = the main category |
 | `downloadclient.category_movies` | category for movies; unset = the main category |

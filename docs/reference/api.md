@@ -201,7 +201,7 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | GET | `/api/debrid` | admin | GET /api/debrid |
 | PUT | `/api/debrid` | admin | PUT /api/debrid {"service": "realdebrid", "apiKey": "..."} |
 | POST | `/api/debrid/test` | admin | POST /api/debrid/test {"service": ..., "apiKey": ...}: a blank key tests the saved one. |
-| GET | `/api/debrid/torrents` | admin | is GET /api/debrid/torrents: what is on the Real-Debrid or TorBox account. |
+| GET | `/api/debrid/torrents` | admin | is GET /api/debrid/torrents: what is on the Real-Debrid, TorBox or Premiumize account. |
 | POST | `/api/debrid/torrents/{id}/remove` | admin | is POST /api/debrid/torrents/{id}/remove: delete a torrent from the account. |
 
 ## discover
@@ -599,7 +599,7 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 |---|---|---|---|
 | DELETE | `/api/queue` | admin | empties the list of completed and failed entries. |
 | GET | `/api/queue` | any account |  |
-| POST | `/api/queue/bulk` | admin | does one thing (pause, resume, stop, remove from the list, or send to the front) to several downloads at once. |
+| POST | `/api/queue/bulk` | admin | does one thing (pause, resume, stop, retry, remove from the list, or send to the front) to several downloads at once. |
 | POST | `/api/queue/pause-all` | admin | pauses every download that is running or waiting, or only the Usenet or only the torrent ones with ?protocol=. |
 | POST | `/api/queue/resume-all` | admin | puts every paused download back in the download line (or only the Usenet or only the torrent ones with ?protocol=). |
 | DELETE | `/api/queue/{id}` | admin | removes a finished, failed, stopped, paused or parked entry from the list. |
@@ -697,6 +697,7 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | POST | `/api/settings/folder-create` | admin | makes a missing library folder (administrators), only where creatableParent allows. |
 | GET | `/api/settings/hardcover` | admin | GET /api/settings/hardcover |
 | PUT | `/api/settings/hardcover` | admin | PUT /api/settings/hardcover {"token": "..."}: checks the token with Hardcover and saves it (encrypted). |
+| POST | `/api/settings/library-marker` | admin | POST /api/settings/library-marker: make the .mediarium-root file in a library folder the administrator says is the right one. |
 | GET | `/api/settings/metadata-files` | admin |  |
 | PUT | `/api/settings/metadata-files` | admin |  |
 | GET | `/api/settings/naming-preview` | admin | shows a naming preset or custom format applied to a fixed sample release (kind=movie, the default, or kind=tv), so the page can display the exact file name w... |
@@ -895,4 +896,4 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | PUT | `/api/watched/settings` | admin | PUT /api/watched/settings {"sync": true, "cleanup": {...}} |
 | POST | `/api/watched/sync` | admin | POST /api/watched/sync: read what's been watched now. |
 
-545 routes.
+546 routes.

@@ -132,7 +132,7 @@ Family accounts exist. An administrator can add basic-user and viewer accounts (
 | Peer discovery when tunneled | **Partial** | with a tunnel, DHT, uTP and incoming peers are off (`torrentclient.New`), so magnets rely on trackers; UDP trackers are skipped | qB |
 | Use a torrent client you already run | **Yes** | qBittorrent, Transmission, RDT-Client and Decypharr: downloads and seeds in their own folder, Mediarium imports from there without moving or deleting; category, path mapping, optional remove after import; Decypharr symlinks (`internal/qbit`, `/api/download-client`, [downloads.md](./downloads.md#download-clients-qbittorrent-transmission-rdt-client-decypharr)) | Rad, Son (download clients) |
 | Use SABnzbd or NZBGet you already run | **Yes** | Usenet releases go to it instead of the built-in downloader when you switch that on: category per kind, priority, path mapping, progress, pause, resume and remove from Activity, failures blocklist the release and try the next, optional remove after import (`internal/usenetclient`, `/api/usenet-client`, [downloads.md](./downloads.md#sabnzbd-and-nzbget)). Tested against copies of their APIs only | Rad, Son (download clients) |
-| Debrid services | **Yes** | Real-Debrid and TorBox: the service downloads the torrent, Mediarium fetches the finished files over https; nothing seeded, built-in torrent client can stay off (`internal/debrid`, `/api/debrid`) | Rad, Son (via other tools) |
+| Debrid services | **Yes** | Real-Debrid, TorBox and Premiumize: the service downloads the torrent, Mediarium fetches the finished files over https; nothing seeded, built-in torrent client can stay off (`internal/debrid`, `/api/debrid`) | Rad, Son (via other tools) |
 
 ### 2.4 Subtitles (Bazarr territory)
 
