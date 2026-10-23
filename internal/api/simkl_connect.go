@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/rdborg/mediarium/internal/settings"
@@ -64,6 +65,7 @@ func (s *Server) handleStartSimklPin(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusPreconditionFailed, "Add your Simkl client ID first.")
 		return
 	case err != nil:
+		logSimklRefusal("start the sign-in", "", err)
 		var rl *simkl.RateLimitError
 		if errors.As(err, &rl) {
 			writeError(w, http.StatusTooManyRequests, rl.Error()+".")
@@ -204,6 +206,36 @@ func (s *Server) simklAccessToken(ctx context.Context) (string, error) {
 	}
 	slog.Info("simkl sign-in refreshed")
 	return fresh.Access, nil
+}
+
+// logSimklRefusal writes one warning when Simkl turns down a Client ID test or a
+// sign-in start, so a support report shows what it said. Only the first four
+// characters of the Client ID are logged. key is "" for the saved one.
+func logSimklRefusal(doing, key string, err error) {
+	if errors.Is(err, simkl.ErrNoClientID) {
+		return
+	}
+	attrs := []any{"while", doing, "client_id_start", clientIDStart(key)}
+	var se *simkl.StatusError
+	if errors.As(err, &se) {
+		attrs = append(attrs, "status", se.Status, "reason", se.Message)
+	} else {
+		attrs = append(attrs, "err", err)
+	}
+	slog.Warn("simkl refused the Client ID or could not be asked", attrs...)
+}
+
+// clientIDStart is the first four characters of a Client ID, enough to tell
+// two apart in a report without exposing it.
+func clientIDStart(key string) string {
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return "(saved one)"
+	}
+	if len(key) <= 4 {
+		return "(short)"
+	}
+	return key[:4] + "..."
 }
 
 // writeSimklStatusError shows Simkl's own answer (its status and the reason it

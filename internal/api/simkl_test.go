@@ -1,8 +1,10 @@
 package api_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -576,5 +578,57 @@ func TestSimklTestConnectionWhenTheAccountCallIsRefused(t *testing.T) {
 	res := postJSON[map[string]any](t, admin, base+"/api/settings/simkl/test", nil, http.StatusOK)
 	if res["ok"] != true || strings.Contains(res["message"].(string), "rejected the client ID") {
 		t.Fatalf("account call refused but the sign-in works: %v", res)
+	}
+}
+
+// The Client ID test under the field goes through the same sign-in choice as
+// connecting: an OAuth 2.0 app is accepted through the device flow, an older
+// app through the PIN flow, and neither leaves a sign-in to finish (issue 115).
+func TestSimklClientIDTestFollowsTheSignInFlow(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		oauth2 bool
+	}{{"an OAuth 2.0 app", true}, {"a legacy PIN app", false}} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, base, admin, f := simklServer(t)
+			f.oauth2.Store(tc.oauth2)
+			res := postJSON[map[string]any](t, admin, base+"/api/settings/test-service", map[string]any{"service": "simkl", "key": simklTestClient}, http.StatusOK)
+			if res["ok"] != true || res["message"] != "Simkl accepted this Client ID." {
+				t.Fatalf("test result: %v", res)
+			}
+			// The code the test asked for is not kept, so there is nothing to finish.
+			for _, code := range []string{"AB12C", "QZ7-48K"} {
+				resp, err := admin.Get(base + "/api/settings/simkl/pin/" + code)
+				if err != nil {
+					t.Fatal(err)
+				}
+				_ = resp.Body.Close()
+				if resp.StatusCode != http.StatusGone {
+					t.Fatalf("code %s: status %d, want 410", code, resp.StatusCode)
+				}
+			}
+		})
+	}
+}
+
+func TestSimklClientIDTestKeepsSimklsOwnWordsAndLogsAWarning(t *testing.T) {
+	var logs bytes.Buffer
+	old := slog.Default()
+	slog.SetDefault(slog.New(slog.NewTextHandler(&logs, nil)))
+	t.Cleanup(func() { slog.SetDefault(old) })
+
+	_, base, admin, f := simklServer(t)
+	f.pinCode.Store(http.StatusInternalServerError) // a legacy app and Simkl is failing
+	res := postJSON[map[string]any](t, admin, base+"/api/settings/test-service", map[string]any{"service": "simkl", "key": simklTestClient}, http.StatusOK)
+	msg, _ := res["message"].(string)
+	if res["ok"] == true || !strings.Contains(msg, "500") {
+		t.Fatalf("a refused test: %v", res)
+	}
+	out := logs.String()
+	if !strings.Contains(out, "simkl refused") || !strings.Contains(out, "client_id_start=fixt...") {
+		t.Fatalf("the refusal was not logged: %s", out)
+	}
+	if strings.Contains(out, simklTestClient) {
+		t.Fatalf("the whole Client ID was logged: %s", out)
 	}
 }

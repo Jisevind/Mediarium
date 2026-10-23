@@ -215,9 +215,7 @@ a:hover > .prog-thumb.f-music::before, a:focus-visible > .prog-thumb.f-music::be
 }
 
 /* ---- Agenda: a ticket stub for the date, cards beside it -------------- */
-.prog-agenda { display: none; list-style: none; margin: 0; padding: 0; gap: 14px; }
-.prog[data-view='agenda'] .prog-board { display: none; }
-.prog[data-view='agenda'] .prog-agenda { display: grid; }
+.prog-agenda { display: grid; list-style: none; margin: 0; padding: 0; gap: 14px; }
 .prog-day { display: grid; grid-template-columns: 78px minmax(0, 1fr); align-items: start; }
 .prog-stub {
   position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
@@ -324,10 +322,10 @@ a.prog-card:hover { text-decoration: none; border-color: color-mix(in srgb, var(
   .prog-slot .prog-thumb.f-audiobook { --tw: 38px; --th: 38px; }
   .prog-dows span { padding-left: 8px; padding-right: 4px; letter-spacing: 0.1em; }
 }
-/* Phones and narrow panels: always the list. */
-@container prog (max-width: 640px) {
-  .prog-board, .prog-views { display: none; }
-  .prog-agenda { display: grid; }
+/* Phones and narrow panels: the same four views, drawn to fit (a compact month with dots, posters or stills by day, the list). */
+@container prog (max-width: 688px) {
+  .prog-views { display: flex; width: 100%; }
+  .prog-views button { flex: 1 1 0; min-width: 0; padding-left: 6px; padding-right: 6px; }
   .prog-day { grid-template-columns: 64px minmax(0, 1fr); }
   .prog-stub-num { font-size: 1.9rem; }
   .prog-cards { padding-left: 10px; gap: 8px; }
@@ -385,3 +383,41 @@ a.prog-card:hover { text-decoration: none; border-color: color-mix(in srgb, var(
 .pt img.pt-logo, .pt.s-missing img.pt-logo { inset: auto; left: 50%; top: 42%; transform: translate(-50%, -50%); width: auto; height: auto; max-width: 78%; max-height: 38%; object-fit: contain; opacity: 1; filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.7)); }
 .pt-bubble.has-logo { left: auto; right: 6px; bottom: 6px; padding: 3px 8px; }
 .pt-pop-grid .pt.wide { aspect-ratio: 16 / 9; }
+
+/* ==== Narrow screens ====================================================
+   Month: a compact grid with a dot per release, the picked day's list under it.
+   Posters and Backdrops: one block per day holding posters or wide stills. */
+.prog-dotgrid { margin-top: 1px; }
+.prog-dotcell {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 5px;
+  min-width: 0; min-height: 52px; padding: 7px 2px 6px; border: 0; border-radius: 0; background: var(--cell); color: var(--text);
+}
+.prog-dotcell.wkend { background: var(--cell-wkend); }
+.prog-dotcell.out { opacity: 0.35; }
+.prog-dotcell.past:not(.today) .prog-num { color: var(--text-faint); }
+.prog-dotcell.today .prog-num { color: var(--lamp); font-weight: 700; }
+.prog-dotcell.chosen { z-index: 1; box-shadow: inset 0 0 0 2px var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--cell)); }
+.prog-dotcell:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; z-index: 2; }
+.prog-dots { display: flex; flex-wrap: wrap; justify-content: center; gap: 3px; min-height: 8px; max-width: 100%; }
+.prog-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--kc); }
+.prog-dot.s-missing { background: transparent; box-shadow: inset 0 0 0 1.5px var(--kc); }
+.prog-dot.s-downloading { box-shadow: 0 0 6px var(--kc); }
+.prog-board-dots .prog-dows span { padding: 9px 2px 7px; text-align: center; letter-spacing: 0.04em; }
+.prog-picked { margin-top: 18px; min-width: 0; }
+.prog-picked-title { margin: 0 0 10px; font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; letter-spacing: -0.01em; }
+.prog-picked-title::first-letter { text-transform: uppercase; }
+.prog-cards-flat { padding-left: 0; grid-template-columns: minmax(0, 1fr); }
+.prog-quiet-flat { margin: 0; padding: 0; }
+
+.prog-tiles {
+  list-style: none; margin: 0; padding: 0 0 0 12px; min-width: 0;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 104px), 1fr)); gap: 8px; align-content: start;
+}
+.prog-tiles.wide { grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); }
+.prog-tiles .pt { aspect-ratio: 2 / 3; min-height: 0; flex: none; }
+.prog-tiles.wide .pt { aspect-ratio: 16 / 9; }
+.prog-day.past .prog-tiles { opacity: 0.8; }
+@container prog (max-width: 688px) {
+  .prog-tiles { padding-left: 10px; }
+  .prog-tiles.wide { grid-template-columns: minmax(0, 1fr); }
+}

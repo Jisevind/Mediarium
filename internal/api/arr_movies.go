@@ -117,13 +117,16 @@ func (s *Server) toArrMovie(m library.Movie, c arrMovieContext) arrMovie {
 		out.Path = filepath.Dir(m.FilePath)
 		out.FolderName = filepath.Base(out.Path)
 		var size int64
+		fileAdded := out.Added
 		if fi, err := os.Stat(m.FilePath); err == nil {
 			size = fi.Size()
+			// When the file arrived, so an app sorting by it ("recently downloaded") orders by the file, not by when the movie was added.
+			fileAdded = fi.ModTime().UTC().Format("2006-01-02T15:04:05Z")
 		}
 		out.SizeOnDisk = size
 		out.MovieFile = &arrMovieFile{
 			ID: m.ID, MovieID: m.ID, RelativePath: filepath.Base(m.FilePath), Path: m.FilePath, Size: size,
-			DateAdded: out.Added, Quality: arrQualityModelOf(arrRadarr, quality.Tier(m.Quality)), Languages: []arrLanguage{arrEnglish},
+			DateAdded: fileAdded, Quality: arrQualityModelOf(arrRadarr, quality.Tier(m.Quality)), Languages: []arrLanguage{arrEnglish},
 			MediaInfo: s.arrMediaInfoFor(m.FilePath),
 		}
 	}

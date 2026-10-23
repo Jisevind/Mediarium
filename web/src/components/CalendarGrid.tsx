@@ -7,6 +7,7 @@ import KindGlyph, { type GlyphKind } from './KindGlyph'
 import { locale, plural, t } from '../i18n'
 import { dayInZone, entryTime, groupByDay, readZonePref, resolveZone } from '../airTime'
 import { useUrlState } from '../useUrlState'
+import { VIEW_KEY, layoutFor, parseView, pickDay, type View } from '../calendarView'
 import '../calendar.css'
 
 // The calendar reads like a cinema's programme: the month in big type, a
@@ -18,8 +19,6 @@ import '../calendar.css'
 // The width (in pixels) up to which calendar.css shows only the list of days.
 const NARROW_PANEL = 640
 
-type View = 'month' | 'agenda' | 'posters' | 'backdrops'
-const VIEW_KEY = 'mediarium.calendar.view'
 
 const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 
@@ -191,8 +190,7 @@ function PosterTile({ e, past, wide, zone }: { e: CalendarEntry; past: boolean; 
 
 function storedView(): View {
   try {
-    const v = localStorage.getItem(VIEW_KEY)
-    return v === 'agenda' || v === 'posters' || v === 'backdrops' ? v : 'month'
+    return parseView(localStorage.getItem(VIEW_KEY))
   } catch {
     return 'month'
   }
@@ -217,6 +215,8 @@ export default function CalendarGrid({ entries, compact, zone: zoneProp }: { ent
     return () => watch.disconnect()
   }, [])
   const [openDay, setOpenDay] = useState<string | null>(null)
+  // The day picked on the compact month (a phone's Month view).
+  const [pickedDay, setPickedDay] = useState<string | null>(null)
   const [view, setView] = useState<View>(storedView)
   const [slide, setSlide] = useState<'next' | 'prev' | ''>('')
   // On the Calendar page the month is in the address (?month=2026-10), so Back returns to it; the small
@@ -293,6 +293,9 @@ export default function CalendarGrid({ entries, compact, zone: zoneProp }: { ent
   const Heading = compact ? 'h3' : 'h2'
   const tiles = view === 'posters' || view === 'backdrops' // a big picture for each day
   const fullDate = (d: Date) => d.toLocaleDateString(locale(), { weekday: 'long', day: 'numeric', month: 'long' })
+  const layout = layoutFor(view, narrow)
+  const monthIso = `${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, '0')}`
+  const chosenDay = pickDay(pickedDay, monthIso, today, [...byDay.keys()].filter((k) => (byDay.get(k)?.length ?? 0) > 0))
 
   return (
     <div ref={root} className={`prog${compact ? ' compact' : ''}`} data-view={view}>
@@ -334,6 +337,66 @@ export default function CalendarGrid({ entries, compact, zone: zoneProp }: { ent
         </div>
       </div>
 
+      {layout === 'dots' && (
+        <>
+          <div className="prog-board prog-board-dots">
+            <div className="prog-dows" aria-hidden="true">
+              {weekdays.map((w, i) => (
+                <span key={w} className={i >= 5 ? 'wkend' : ''}>
+                  {w.slice(0, 2)}
+                </span>
+              ))}
+            </div>
+            <div key={monthKey} className={`prog-grid prog-dotgrid${slide ? ` slide-${slide}` : ''}`}>
+              {cells.map((d, i) => {
+                const key = iso(d)
+                const list = byDay.get(key) ?? []
+                const out = d.getMonth() !== cursor.getMonth()
+                const cls = ['prog-dotcell', out && 'out', key < today && 'past', key === today && 'today', i % 7 >= 5 && 'wkend', key === chosenDay && 'chosen'].filter(Boolean).join(' ')
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    className={cls}
+                    disabled={out}
+                    aria-pressed={key === chosenDay}
+                    aria-label={`${fullDate(d)}${key === today ? `, ${t('Today')}` : ''}`}
+                    onClick={() => setPickedDay(key)}
+                  >
+                    <span className="prog-num" aria-hidden="true">
+                      {d.getDate()}
+                    </span>
+                    <span className="prog-dots" aria-hidden="true">
+                      {list.slice(0, 4).map((e) => (
+                        <i key={`${e.kind}-${e.id}-${e.release ?? ''}`} className={`prog-dot k-${glyphOf(e.kind, e.subtitle)} s-${e.status}`} />
+                      ))}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+          <section className="prog-picked" aria-label={fullDate(new Date(Number(chosenDay.slice(0, 4)), Number(chosenDay.slice(5, 7)) - 1, Number(chosenDay.slice(8, 10))))}>
+            <h3 className="prog-picked-title">
+              {fullDate(new Date(Number(chosenDay.slice(0, 4)), Number(chosenDay.slice(5, 7)) - 1, Number(chosenDay.slice(8, 10))))}
+              {chosenDay === today ? ` · ${t('Today')}` : ''}
+            </h3>
+            {(byDay.get(chosenDay) ?? []).length === 0 ? (
+              <p className="prog-quiet prog-quiet-flat">{chosenDay === today ? t('Nothing comes out today.') : t('Nothing comes out this day.')}</p>
+            ) : (
+              <ul className="prog-cards prog-cards-flat">
+                {(byDay.get(chosenDay) ?? []).map((e) => (
+                  <li key={`${e.kind}-${e.id}-${e.release ?? ''}`}>
+                    <Entry e={e} past={chosenDay < today} card zone={zone} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </>
+      )}
+
+      {layout === 'grid' && (
       <div className="prog-board">
         <div className="prog-dows" aria-hidden="true">
           {weekdays.map((w, i) => (
@@ -404,9 +467,10 @@ export default function CalendarGrid({ entries, compact, zone: zoneProp }: { ent
           })}
         </div>
       </div>
+      )}
 
-      {(view === 'agenda' || narrow) && (
-      <ol key={`a-${monthKey}`} className={`prog-agenda${slide ? ` slide-${slide}` : ''}`}>
+      {(layout === 'agenda' || layout === 'day-tiles' || layout === 'day-wide') && (
+      <ol key={`a-${monthKey}-${layout}`} className={`prog-agenda prog-${layout}${slide ? ` slide-${slide}` : ''}`}>
         {agendaDays.map((d) => {
           const key = iso(d)
           const past = key < today
@@ -421,11 +485,19 @@ export default function CalendarGrid({ entries, compact, zone: zoneProp }: { ent
               </div>
               {list.length === 0 ? (
                 <p className="prog-quiet">{t('Nothing comes out today.')}</p>
-              ) : (
+              ) : layout === 'agenda' ? (
                 <ul className="prog-cards">
                   {list.map((e) => (
                     <li key={`${e.kind}-${e.id}-${e.release ?? ''}`}>
                       <Entry e={e} past={past} card zone={zone} />
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <ul className={`prog-tiles${layout === 'day-wide' ? ' wide' : ''}`}>
+                  {list.map((e) => (
+                    <li key={`${e.kind}-${e.id}-${e.release ?? ''}`}>
+                      <PosterTile e={e} past={past} wide={layout === 'day-wide'} zone={zone} />
                     </li>
                   ))}
                 </ul>

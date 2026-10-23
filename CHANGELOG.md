@@ -8,6 +8,25 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.7.1] - 2026-10-23
+
+In short: Premiumize as a third debrid service, a Music tab in the search results, a Retry button for picked downloads, and fixes for the calendar views, the Simkl Client ID test, the nzb360 dashboard and a lost library marker file.
+
+### Added
+
+- Activity's bar for picked downloads has a **Retry** button, next to To the front, Pause, Resume, Stop and Remove. It retries the picked downloads that failed or were stopped and leaves the others alone. Contributed by WassawRoki on GitHub, #118.
+- Premiumize as a third debrid service next to Real-Debrid and TorBox (Settings > Downloading > Torrents > Debrid service). Paste the API key from premiumize.me/account, press Test to see your customer number, when premium ends and how much of the monthly fair-use limit is used. Torrents Premiumize already has are read at once; others become a transfer and the files are brought home like with the other services. Releases Premiumize has cached get the same "Cached" tag and ranking as TorBox. Thanks to Hoopes80 on GitHub, #120.
+- The search results page has a Music tab next to Movies and shows, Books and Releases when music is on. It finds artists the same way the search box does, shows how many it found, and lets you add one from the card (thanks to mirisbowring on GitHub, #112).
+
+### Fixed
+
+- Picking more than 200 downloads in Activity made every action in the bar fail with "Pick at most 200 downloads at a time". The page now sends a bigger pick in batches of 200, and "To the front" keeps the order of the whole pick. Contributed by WassawRoki on GitHub, #118.
+- The calendar's Month, Posters, Backdrops and Agenda tabs now each show something different on a phone. Month is a small grid with a dot for each release and the picked day's list underneath, Posters and Backdrops give each day its own block of posters or wide stills, and Agenda is the plain list. The choice is remembered in the browser. Reported by Bayharbourbutcher1 on GitHub, #119.
+- The Test button next to the Simkl Client ID answered "This client_id is an OAuth 2.0 app: use POST /oauth2/device instead of /oauth/pin" for apps that sign in fine. It now asks the same way Connect does (the newer way first, the older PIN way for older apps) and says "Simkl accepted this Client ID." without starting a sign-in. When Simkl turns a Client ID test or a sign-in start down, a warning line (with only the first four characters of the Client ID) is written to the log. Reported by Bayharbourbutcher1 on GitHub, #115.
+- The nzb360 app's "From Radarr: Recently Downloaded" card showed "No results found". The history now answers every way an app can ask for imports: the event type as a number, a name, a list or repeated, imports as both `downloadFolderImported` (3) and `movieFolderImported` (6) for Radarr, every line with its movie and poster, sorting by title or date, `movieIds` and big pages. A movie that is in the library with a file but never came through a Mediarium download gets one import line, so it shows up too. What the app asks the history for is written to the log at debug level. Reported by Bayharbourbutcher1 on GitHub, #94.
+- A library folder that lost its `.mediarium-root` file (a new drive or volume at the same path, a moved library) refused every import with no way to fix it from the app. Administrators now get **This is the right folder: create the marker** on the failed import and next to the folder in Settings > Library > Folders, with a warning that explains the risk, a stronger one (and a tick to say the drive is connected) when titles are recorded under the folder but none of their folders is there, and **Retry the failed imports** afterwards. It is written to Activity. A network folder that cannot be read for a moment is no longer reported as having lost its file. Reported by Hoopes80 on GitHub, #121 and #45.
+- On a phone, long release and file names without spaces ran off the right edge of a download's row in Activity (the error text, the Details box, the history steps). They now wrap, and the Details box lines up. Reported by Hoopes80 on GitHub, #121 and #45.
+
 ## [3.7.0] - 2026-10-22
 
 In short: the calendar shows episodes on the day and hour they air in your own time zone.
