@@ -55,9 +55,10 @@ type mediaInfoState struct {
 	kicked atomic.Bool // a pass after an import is already waiting to start
 	gen    atomic.Int64
 
-	mu        sync.Mutex
-	summaries *mediaSummaries
-	folders   map[string]folderNames // folder listings, for the subtitle files beside the videos
+	mu         sync.Mutex
+	summaries  *mediaSummaries
+	incomplete *incompleteSet         // the files that look cut off (incomplete_files.go)
+	folders    map[string]folderNames // folder listings, for the subtitle files beside the videos
 }
 
 // folderNames is the files in one folder, valid while the folder's time is
@@ -199,6 +200,7 @@ func (s *Server) mediaInfoJob(ctx context.Context) {
 	defer s.mediaInfo.run.Unlock()
 	until := time.Now().Add(mediaInfoRunFor)
 	n := s.readPendingMediaInfo(ctx, until, true, mediaInfoPause)
+	s.fillRuntimes(ctx, time.Now().Add(2*time.Minute)) // what the Library needs to tell a cut-off file from a real one
 
 	known := mediaRoots{}
 	changed := 0

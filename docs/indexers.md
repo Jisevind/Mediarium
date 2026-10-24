@@ -22,6 +22,11 @@ The list on this page is sorted by that number, lowest first, and by name when t
 
 Under the address, each card says how its last test went ("Last test passed 2 hours ago", or why it failed). **Test all** above the list tests every enabled indexer, one after another, and says which did not answer.
 
+### Why some indexers are missing from a release list
+
+A release list (**Choose a release**) starts with a line like *Searched 8 indexers: 2 had releases, 5 had nothing for this title, 1 did not answer.* Press it to see every indexer in a table: its type, what it found (*12 releases*, *Nothing found*, *Did not answer: daily limit used up*, *Skipped: does not list this kind of release*) and how long it took. Seeing only a few indexers in the **Any indexer** list is normal when the others simply have nothing for that title. A movie site has no shows, and a Usenet indexer may not carry a new or small release. An indexer that did not answer is marked with a warning sign, and the table says why.
+
+
 ## When an indexer keeps failing
 
 An indexer that is down, blocks you or limits your requests would otherwise slow every search and fill the Health page with the same error. After **3 failures in a row** (a site that cannot be reached, an HTTP 5xx error, a Cloudflare page, a refused key) Mediarium leaves it out of searches for a while: 5 minutes first, then 10, 20, 40 and so on, up to 6 hours. An indexer that says you made too many requests is paused at once, for as long as it asks with its `Retry-After` header (and at least 5 minutes, at most 6 hours).

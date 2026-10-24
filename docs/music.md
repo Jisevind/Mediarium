@@ -56,7 +56,7 @@ With the module on, music shows up next to movies and TV. Basic users can browse
 
 ## Adding an artist
 
-Search for the artist by name. A short description ("jazz", "UK rock band") tells artists with the same name apart. When you add one, Mediarium lists its **albums, EPs and singles**. Live albums, compilations, remixes, soundtracks and DJ mixes are left out, so the list is the artist's own studio releases.
+Search for the artist by name. A short description ("jazz", "UK rock band") tells artists with the same name apart. When you add one, Mediarium lists its **albums, EPs and singles**. Live albums, compilations, remixes, soundtracks and DJ mixes are left out unless you change that (see [Choosing what to show](#choosing-what-to-show)), so by default the list is the artist's own studio releases.
 
 The Add dialog is the same everywhere you can add an artist (Discover and the header search), with these choices:
 
@@ -70,6 +70,19 @@ The Add dialog is the same everywhere you can add an artist (Discover and the he
 You can switch any album on or off later. Only albums that are monitored and already released are searched for automatically, and each album has its own switch. Basic users can add artists and albums and grab releases just like movies. Removing an artist is for administrators.
 
 Adding a large discography can take a few seconds, because the music database allows only about one lookup a second. Mediarium remembers answers for a few hours. Where the data comes from is listed under [Sources](#sources).
+
+## Choosing what to show
+
+By default an artist's page lists albums, EPs and singles, and leaves out every release that has a secondary type (live, remix, compilation and so on). You can change that for the whole library under **Settings > Quality**, in the card **Music: what to show**, and for one artist on its own page. Changes are saved as you make them.
+
+- **Release types to show**: Albums, EPs and Singles. At least one has to stay on.
+- **Kinds to hide**: Live, Remix, Compilation, DJ-mix, Soundtrack, Demo, Mixtape/Street, Spokenword, Interview, Audiobook, Audio drama and Other (any kind the music database adds later). A release is hidden when any of its kinds is ticked. Everything is ticked by default, which is what Mediarium always did. Untick **Live** and live albums are listed.
+- **Hide bootleg-only releases**: off by default. The music database has no status for a release group itself, only for the releases inside it, so a group that only exists as a bootleg (an unofficial recording) is listed like any other album. With this on, Mediarium asks about each group once (a single request for an official release, a second one only when there is none) and leaves out the groups whose releases are all bootlegs, promotions or pseudo-releases. A group with no release at all (an announced album) is kept. The questions go out one a second in the background, so the page opens at once and releases that have not been checked yet stay visible until they have. The answers are kept in the database for about six months. Each release it has to check costs one or two requests, so a long discography takes a few minutes the first time.
+- **Official studio releases only** is a one-click preset: albums only, every kind hidden, bootleg-only releases hidden. **Back to the defaults** undoes it.
+
+The choice decides what **following an artist** adds: a new artist gets the releases that pass, and the 12-hourly check only adds new releases that pass. It never removes or unmonitors an album that is already in the library, whatever you change. If you widen the choice (say you allow EPs), the next check adds the EPs that were left out before, and saving an artist's own choice starts that check at once.
+
+On an artist's page, administrators see chips **Show: Albums EPs Singles** and a folded **More filters** with the same checkboxes as the settings card and **Use the library setting** (the default for every artist). Under them a line says what the choice leaves out of the artist's page on the music database, for example "3 hidden: 2 live, 1 bootleg". **Show them** lists those releases for this visit, and **Add to library** adds one by hand. Nothing is hidden without being counted.
 
 ## How albums are found
 
@@ -86,7 +99,7 @@ Wanted albums are searched on the same schedule as movies and shows (see [Automa
 
 An artist is either **followed** or not (`monitored` on the artist). Following decides one thing: whether releases that come out **later** are picked up. Every 12 hours (while the music module is on) Mediarium checks the releases of each followed artist again. A new album is added and monitored, so it's searched for as soon as it's out, and an announced album that now has a release date gets it. Unfollowing an artist stops that. **It never changes the monitored switch of any album already listed.** Those keep deciding, one by one, what is searched for, so an unfollowed artist's monitored albums are still wanted.
 
-Administrators change it, and the quality profile, with `PUT /api/music/artists/{id}` and `{monitored?: bool, profileId?: number}` (`profileId` 0 puts the artist back on the default profile; a field left out changes nothing). The answer is the artist with its albums, like `GET /api/music/artists/{id}`.
+Administrators change it, and the quality profile, with `PUT /api/music/artists/{id}` and `{monitored?: bool, profileId?: number, filter?: {types, hideSecondary, hideBootlegs}, useLibraryFilter?: bool}` (`profileId` 0 puts the artist back on the default profile; a field left out changes nothing). `filter` is this artist's own choice of what to list and add (see [Choosing what to show](#choosing-what-to-show)) and `useLibraryFilter: true` takes it back. The answer is the artist with its albums, like `GET /api/music/artists/{id}`.
 
 ## Quality
 
@@ -308,7 +321,11 @@ Album, artist and release information, cover art and the popular and new-release
 | POST | `/api/music/artists` | `{mbid, monitor?: "all"\|"future"\|"none", profileId?, searchNow?}` | 201 artist with `albums` |
 | GET | `/api/music/artists` | | `[artist]` |
 | GET | `/api/music/artists/{id}` | | artist with `albums` |
-| PUT | `/api/music/artists/{id}` | `{monitored?, profileId?}` | the artist with `albums`; admin only |
+| PUT | `/api/music/artists/{id}` | `{monitored?, profileId?, filter?, useLibraryFilter?}` | the artist with `albums`; admin only |
+| GET | `/api/music/artists/{id}/discography` | | what the artist's filter leaves out and is not in the library: `{filter, hidden: [{mbid, title, type, releaseDate, secondaryTypes, hiddenBy}], counts: {reason: n}, checking}`; `hiddenBy` is `album`, `ep`, `single`, a kind (`live`, `remix`, ...) or `bootleg`; `checking` counts releases the bootleg test has not looked at yet |
+| POST | `/api/music/artists/{id}/albums` | `{mbid}` | 201 album: adds one release the filter left out, monitored; needs the manage permission |
+| GET | `/api/music/filters` | | `{filter: {types, hideSecondary, hideBootlegs}, defaults, studio, secondaryTypes: [{key, name}]}` |
+| PUT | `/api/music/filters` | `{types, hideSecondary, hideBootlegs}` | the same as GET; admin only |
 | DELETE | `/api/music/artists/{id}?deleteFiles=true` | | admin only |
 | GET | `/api/music/albums/{id}` | | album with `artistName` and `tracks` |
 | PUT | `/api/music/albums/{id}/monitored` | `{monitored}` | |
@@ -341,4 +358,4 @@ Album, artist and release information, cover art and the popular and new-release
 | POST | `/api/music/listenbrainz/playing` | `{trackId}` | `{sent}` |
 | POST | `/api/music/listenbrainz/listen` | `{trackId, listenedAt}` | `{sent, submitted, pending}` |
 
-An artist is `{id, mbid, name, sortName, disambiguation, monitored, monitorNew, profileId, profileName, addedAt, addedBy, albumCount, monitoredCount, downloadedCount, coverUrl, imageUrl}`; an album `{id, artistId, mbid, title, type, releaseDate, year, monitored, status, quality, path, coverUrl, coverArchiveUrl}`; a track `{id, disc, position, title, lengthMs, hasFile, filePath}`. A release in the interactive search carries what its name says (`artist, album, year, format, bitrate, bitDepth, source, discography, quality`) beside the usual `title, indexerName, protocol, downloadUrl, sizeBytes, publishDate, seeders, peers, blocklisted, rejections, acceptedBy`. `coverUrl` (and, on artists, `imageUrl`, the same address) point at the cover routes above. `coverArchiveUrl` is the address of the original picture at the cover-art service. Album downloads appear in `GET /api/queue` with `albumId` and the title "Artist – Album".
+An artist is `{id, mbid, name, sortName, disambiguation, monitored, monitorNew, profileId, profileName, addedAt, addedBy, albumCount, monitoredCount, downloadedCount, coverUrl, imageUrl}` (and, on `GET /api/music/artists/{id}`, `filter: {types, hideSecondary, hideBootlegs, useLibrary}`); an album `{id, artistId, mbid, title, type, releaseDate, year, monitored, status, quality, path, coverUrl, coverArchiveUrl}`; a track `{id, disc, position, title, lengthMs, hasFile, filePath}`. A release in the interactive search carries what its name says (`artist, album, year, format, bitrate, bitDepth, source, discography, quality`) beside the usual `title, indexerName, protocol, downloadUrl, sizeBytes, publishDate, seeders, peers, blocklisted, rejections, acceptedBy`. `coverUrl` (and, on artists, `imageUrl`, the same address) point at the cover routes above. `coverArchiveUrl` is the address of the original picture at the cover-art service. Album downloads appear in `GET /api/queue` with `albumId` and the title "Artist – Album".

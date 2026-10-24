@@ -25,6 +25,16 @@ import (
 // file but has no finished download of its own (it came in through a library
 // import) gets one import line dated by when it was added.
 
+// arrRecentImports is how far back the lines for titles that came in without a
+// download of Mediarium's go in a list not about one title (see
+// arrHistoryRecords).
+const arrRecentImports = 7 * 24 * time.Hour
+
+// arrLibraryLineBase starts the ids of those lines. The apps read an id as a
+// 32-bit number (a bigger one makes the whole list unreadable to them), so it
+// stays under 2^31, above the ids of the download lines.
+const arrLibraryLineBase = 1_500_000_000
+
 // The event ids the apps filter history with (eventType=1,3).
 const (
 	arrEventGrabbed  = 1
@@ -179,10 +189,23 @@ func (s *Server) arrHistoryRecords(app arrApp, r *http.Request) ([]arrHistoryRec
 		}
 	}
 	wantDownload := r.URL.Query().Get("downloadId")
-	var since time.Time
-	if v := r.URL.Query().Get("date"); v != "" {
-		since = parseArrStored(v)
+	var since, until time.Time
+	for _, v := range arrQueryValues(r, "date", "since", "start", "startDate", "from") {
+		if t := parseArrStored(v); !t.IsZero() && t.After(since) {
+			since = t
+		}
 	}
+	for _, v := range arrQueryValues(r, "end", "endDate", "until") {
+		if t := parseArrStored(v); !t.IsZero() {
+			until = t
+		}
+	}
+	// A library import is not a download: in a list that is neither about one
+	// title nor limited to a time, only the ones from the last week are lines
+	// of its history, so a "recently downloaded" card is not filled with the
+	// whole library.
+	recentOnly := len(wantMovies) == 0 && len(wantSeries) == 0 && wantEpisode == 0 && since.IsZero()
+	recentFrom := time.Now().Add(-arrRecentImports)
 
 	// The ids an import is answered under: 3 when nothing was asked for, else
 	// each of the import ids that was.
@@ -217,7 +240,8 @@ func (s *Server) arrHistoryRecords(app arrApp, r *http.Request) ([]arrHistoryRec
 		return movies[id]
 	}
 	out := []arrHistoryRecord{}
-	imported := map[int64]bool{} // movies that have a finished download of their own
+	imported := map[int64]bool{}    // movies that have a finished download of their own
+	importedEps := map[int64]bool{} // episodes that have one
 	for _, it := range items {
 		switch {
 		case app == arrRadarr && it.MovieID == 0, app == arrSonarr && it.SeriesID == 0, app == arrLidarr:
@@ -278,7 +302,7 @@ func (s *Server) arrHistoryRecords(app arrApp, r *http.Request) ([]arrHistoryRec
 					data["message"] = it.Error
 				}
 			}
-			if !since.IsZero() && !when.After(since) {
+			if !since.IsZero() && !when.After(since) || !until.IsZero() && when.After(until) {
 				continue
 			}
 			for _, id := range ln.ids {
@@ -288,6 +312,9 @@ func (s *Server) arrHistoryRecords(app arrApp, r *http.Request) ([]arrHistoryRec
 				for j, ep := range eps {
 					if wantEpisode > 0 && ep.ID != wantEpisode {
 						continue
+					}
+					if ln.kind == arrEventImported {
+						importedEps[ep.ID] = true
 					}
 					rec := arrHistoryRecord{
 						ID: (it.ID*1000+int64(j))*10 + int64(id), SourceTitle: it.ReleaseTitle, Languages: []arrLanguage{arrEnglish},
@@ -342,7 +369,7 @@ func (s *Server) arrHistoryRecords(app arrApp, r *http.Request) ([]arrHistoryRec
 			if when.IsZero() {
 				when = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
 			}
-			if !since.IsZero() && !when.After(since) {
+			if !since.IsZero() && !when.After(since) || !until.IsZero() && when.After(until) || recentOnly && when.Before(recentFrom) {
 				continue
 			}
 			ids := importIDs
@@ -356,7 +383,7 @@ func (s *Server) arrHistoryRecords(app arrApp, r *http.Request) ([]arrHistoryRec
 			rel := parser.Parse(title)
 			for _, id := range ids {
 				rec := arrHistoryRecord{
-					ID: 1_000_000_000_000 + m.ID*10 + int64(id), MovieID: m.ID, SourceTitle: title, Languages: []arrLanguage{arrEnglish},
+					ID: arrLibraryLineBase + m.ID*10 + int64(id), MovieID: m.ID, SourceTitle: title, Languages: []arrLanguage{arrEnglish},
 					Quality: arrQualityModelOf(app, quality.Tier(m.Quality)), CustomFormats: []any{}, Date: when.Format("2006-01-02T15:04:05Z"),
 					DownloadID: fmt.Sprintf("mediarium-movie-%d", m.ID), EventType: names[id], when: when, event: id,
 					Data: map[string]any{"droppedPath": m.FilePath, "importedPath": m.FilePath, "indexer": "", "releaseGroup": rel.Group,
@@ -367,6 +394,64 @@ func (s *Server) arrHistoryRecords(app arrApp, r *http.Request) ([]arrHistoryRec
 					rec.sortTitle = rec.Movie.SortTitle
 				}
 				out = append(out, rec)
+			}
+		}
+	}
+
+	// The same for an episode that has its file but never came through a
+	// download of Mediarium's: one import line, dated by when its file arrived.
+	if app == arrSonarr && len(importIDs) > 0 && wantDownload == "" {
+		all, err := s.allShowEpisodes()
+		if err != nil {
+			return nil, err
+		}
+		for _, se := range all {
+			ep := se.ep
+			if ep.Status != library.StatusDownloaded || ep.FilePath == "" || se.series.CopyOf != 0 || importedEps[ep.ID] {
+				continue
+			}
+			if len(wantSeries) > 0 && !wantSeries[se.series.ID] || wantEpisode > 0 && ep.ID != wantEpisode {
+				continue
+			}
+			if wantSeason >= 0 && ep.Season != wantSeason {
+				continue
+			}
+			when := time.Time{}
+			if fi, err := os.Stat(ep.FilePath); err == nil {
+				when = fi.ModTime().UTC()
+			}
+			if when.IsZero() {
+				when = parseArrStored(sc.added[se.series.ID])
+			}
+			if when.IsZero() {
+				when = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+			}
+			if !since.IsZero() && !when.After(since) || !until.IsZero() && when.After(until) || recentOnly && when.Before(recentFrom) {
+				continue
+			}
+			ids := importIDs
+			if events == nil {
+				ids = []int{arrEventImported}
+			}
+			title := ep.ReleaseTitle
+			if title == "" {
+				title = strings.TrimSuffix(filepath.Base(ep.FilePath), filepath.Ext(ep.FilePath))
+			}
+			rel := parser.Parse(title)
+			if shows[se.series.ID] == nil {
+				a := s.toArrSeries(se.series, sc)
+				shows[se.series.ID] = &a
+			}
+			e := toArrEpisode(ep)
+			for _, id := range ids {
+				out = append(out, arrHistoryRecord{
+					ID: arrLibraryLineBase + ep.ID*10 + int64(id), SeriesID: se.series.ID, EpisodeID: ep.ID, SourceTitle: title,
+					Languages: []arrLanguage{arrEnglish}, Quality: arrQualityModelOf(app, quality.Tier(ep.Quality)), CustomFormats: []any{},
+					Date: when.Format("2006-01-02T15:04:05Z"), DownloadID: fmt.Sprintf("mediarium-episode-%d", ep.ID), EventType: names[id],
+					Data: map[string]any{"droppedPath": ep.FilePath, "importedPath": ep.FilePath, "indexer": "", "releaseGroup": rel.Group,
+						"downloadClient": "Mediarium", "downloadClientName": "Mediarium"},
+					Series: shows[se.series.ID], Episode: &e, when: when, event: id, sortTitle: shows[se.series.ID].SortTitle,
+				})
 			}
 		}
 	}
@@ -419,16 +504,17 @@ func copyArrData(m map[string]any) map[string]any {
 	return out
 }
 
-// logArrHistoryAsked writes what an app asked the history for (the names of
+// logArrAsked writes what an app asked the history for (the names of
 // the query values, and the values of the harmless ones; never an API key) at
 // debug level, so a report of an empty card shows what the app wanted.
-func logArrHistoryAsked(app arrApp, r *http.Request, found int) {
+func logArrAsked(app arrApp, r *http.Request, found int) {
 	if !slog.Default().Enabled(r.Context(), slog.LevelDebug) {
 		return
 	}
 	shown := map[string]bool{"eventtype": true, "eventtypes": true, "sortkey": true, "sortdirection": true, "page": true, "pagesize": true,
 		"includemovie": true, "includeseries": true, "includeepisode": true, "movieid": true, "movieids": true, "seriesid": true,
-		"seriesids": true, "episodeid": true, "seasonnumber": true, "date": true, "downloadid": true}
+		"seriesids": true, "episodeid": true, "seasonnumber": true, "date": true, "downloadid": true, "monitored": true, "unmonitored": true,
+		"start": true, "end": true, "since": true, "includeepisodefile": true, "limit": true}
 	var parts []string
 	for k, vals := range r.URL.Query() {
 		lk := strings.ToLower(strings.TrimSuffix(k, "[]"))
@@ -452,7 +538,7 @@ func (s *Server) arrHistory(app arrApp) http.HandlerFunc {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		logArrHistoryAsked(app, r, len(recs))
+		logArrAsked(app, r, len(recs))
 		page, size := paging(r, 10)
 		from, to := pageOf(len(recs), page, size)
 		dir := "descending"
@@ -468,6 +554,17 @@ func (s *Server) arrHistory(app arrApp) http.HandlerFunc {
 	}
 }
 
+// arrListLimit is how many lines an app wants out of a plain list: pageSize,
+// limit or take, when it sends one (0 when not).
+func arrListLimit(r *http.Request) int {
+	for _, v := range arrQueryValues(r, "pageSize", "limit", "take") {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 0
+}
+
 // arrHistoryList answers /history/since, /history/movie and /history/series:
 // the same lines as a plain list.
 func (s *Server) arrHistoryList(app arrApp) http.HandlerFunc {
@@ -477,7 +574,10 @@ func (s *Server) arrHistoryList(app arrApp) http.HandlerFunc {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
-		logArrHistoryAsked(app, r, len(recs))
+		logArrAsked(app, r, len(recs))
+		if n := arrListLimit(r); n > 0 && len(recs) > n {
+			recs = recs[:n] // newest first (or as sortKey says), so the app's card gets the latest
+		}
 		writeJSON(w, http.StatusOK, recs)
 	}
 }

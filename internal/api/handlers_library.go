@@ -221,6 +221,9 @@ type moviePayload struct {
 	// are left out until the file has been read (media_info.go).
 	Media    *mediaSummaryPayload `json:"media,omitempty"`
 	FileInfo *fileInfoPayload     `json:"fileInfo,omitempty"`
+	// ShortFile is set when the file is far shorter than the movie should be
+	// (a fake or cut-off file).
+	ShortFile *shortFileNote `json:"shortFile,omitempty"`
 }
 
 // toMoviePayload builds a library movie's JSON; who resolves the account
@@ -255,8 +258,13 @@ func (s *Server) handleListMovies(w http.ResponseWriter, r *http.Request) {
 	now := time.Now()
 	movieFolders := s.movieFolders()
 	media := s.mediaSummaryNow(true).movies
+	short := s.incompleteNow().movies
 	for i, m := range list {
 		out[i] = toMoviePayload(m, who)
+		if e, ok := short[m.ID]; ok && e.Path == m.FilePath {
+			n := e.note
+			out[i].ShortFile = &n
+		}
 		if ms, ok := media[m.ID]; ok {
 			out[i].Media = mediaSummaryOf(ms)
 		}
@@ -294,6 +302,7 @@ func (s *Server) handleGetMovie(w http.ResponseWriter, r *http.Request) {
 	out.RootPath = folderShown(r, s.movieFolders(), m.RootPath)
 	out.SizeBytes = fileSize(m.FilePath)
 	out.FileInfo = s.movieFileInfo(m.FilePath)
+	out.ShortFile = s.shortFileOf(m.FilePath)
 	if isAdminRequest(r) { // only administrators see where the files lie
 		out.FolderPath = s.movieFolderFor(m)
 	}

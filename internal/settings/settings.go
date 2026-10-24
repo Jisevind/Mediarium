@@ -47,12 +47,12 @@ const (
 	// the download_clients table.
 	KeyTorrentEnabled        = "torrent.enabled"                 // "0" turns torrents off entirely; anything else (including unset) leaves them on
 	KeyTorrentListenPort     = "torrent.listen_port"             // TCP+UDP port for incoming peers; unset or "0" = 58264
-	KeyTorrentSeedRatioLimit = "torrent.seed_ratio_limit"        // e.g. "2.0"; "0" = unlimited
-	KeyTorrentSeedTimeLimitH = "torrent.seed_time_limit_h"       // hours; "0" = unlimited
+	KeyTorrentSeedRatioLimit = "torrent.seed_ratio_limit"        // e.g. "2.0"; empty or unset = unlimited, "0" = do not seed
+	KeyTorrentSeedTimeLimitH = "torrent.seed_time_limit_h"       // hours; empty or unset = unlimited, "0" = do not seed
 	KeyTorrentSequential     = "torrent.sequential_default"      // "1" downloads every new built-in torrent in order (first to last piece) so a video can be previewed while it downloads; unset or "0" = off. A torrent can override it
 	KeyTorrentSkipJunk       = "torrent.skip_junk"               // "0" downloads every file of a torrent; anything else (including unset) skips samples and .nfo, .txt, .exe, .url files
 	KeyTorrentPackOnlyWanted = "torrent.pack_only_wanted"        // "1" downloads only the episodes of the wanted show and season from a pack; unset or "0" = the whole pack
-	KeyTorrentUploadLimitKB  = "torrent.upload_limit_kb"         // upload speed limit of the built-in client in KB/s; unset or "0" = no limit. Applies in the same hours as the download limit
+	KeyTorrentUploadLimitKB  = "torrent.upload_limit_kb"         // upload speed limit of the built-in client in KB/s; empty or unset = no limit, "0" = no uploading at all. Applies in the same hours as the download limit
 	KeyTorrentAllowLocal     = "torrent.allow_local_addresses"   // "1" lets trackers, web seeds and magnet metadata addresses of the built-in client be on the home network or this machine; anything else (including unset) refuses them, because those addresses come from torrents anyone can write. Read when the torrent client starts
 	KeyTorrentPortMapping    = "torrent.port_mapping"            // "0" stops the built-in client asking the router (UPnP, NAT-PMP) to open its port; anything else (including unset) leaves it on. Never used with a VPN or proxy
 	KeyTorrentCategories     = "torrent.categories"              // JSON list of {name, subfolder}: categories for built-in torrents; the subfolder is made inside the downloads working folder. Unset = none
@@ -177,6 +177,7 @@ const (
 	// the historical behavior before this setting existed, so upgrading
 	// doesn't change anyone's existing import behavior underneath them.
 	KeyImportConflictPolicy = "library.import_conflict_policy" // "skip" | "overwrite" | "overwrite_if_better" | "ask"
+	KeyImportCheckDuration  = "import.check_duration"          // "0" turns off the check that a video is about as long as its episode or movie before it is imported (Settings > Library > File names and importing); anything else, including unset, leaves it on
 
 	// Connectivity monitor: minutes between checks of every Usenet server and
 	// indexer. Unset means 30; 0 turns it off; anything under 5 is raised to 5.
@@ -249,6 +250,9 @@ const (
 	KeyMusicDefaultProfileID = "music.default_profile_id" // id of the music profile artists without one of their own use; unset = the first
 	KeyMusicPath             = "music.path"               // music library folder; falls back to the MUSIC_DIR env default (/music) when unset
 	KeyMusicLyricsOnline     = "music.lyrics_online"      // "0" stops the player asking LRCLIB for lyrics a file doesn't have; anything else (including unset) leaves it on
+	KeyMusicShowTypes        = "music.show_types"         // release types the artist pages list and following adds, a comma separated list of album, ep, single; unset = all three
+	KeyMusicHideSecondary    = "music.hide_secondary"     // secondary types (live, remix, compilation...) left out, comma separated keys, "none" = hide none; unset = hide all of them
+	KeyMusicHideBootlegs     = "music.hide_bootlegs"      // "1" also leaves out release groups whose releases are all bootlegs, promotions or pseudo-releases (one MusicBrainz request per group); unset = list them
 
 	// Folders for the ebooks and audiobooks modules.
 	KeyEbooksPath     = "ebooks.path"     // ebooks library folder; falls back to the EBOOKS_DIR env default (/ebooks) when unset

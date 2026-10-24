@@ -86,8 +86,14 @@ type bookAnswer struct {
 		Title       string `json:"title"`
 		IndexerName string `json:"indexerName"`
 	} `json:"results"`
-	Sources    int      `json:"sources"`
-	Skipped    []string `json:"skipped"`
+	Sources  int      `json:"sources"`
+	Skipped  []string `json:"skipped"`
+	Searched []struct {
+		Name   string `json:"name"`
+		Status string `json:"status"`
+		Code   string `json:"code"`
+		Count  int    `json:"count"`
+	} `json:"searched"`
 	Unanswered []struct {
 		Name string `json:"name"`
 	} `json:"unanswered"`
@@ -152,6 +158,14 @@ func TestBookReleasesSkipSitesThatDoNotDoBooks(t *testing.T) {
 	}
 	if got.Sources != 1 || len(got.Skipped) != 2 || len(got.Unanswered) != 0 {
 		t.Errorf("sources %d, skipped %v, unanswered %v; want 1, two skipped, none unanswered", got.Sources, got.Skipped, got.Unanswered)
+	}
+	// Every indexer is listed: the one that answered, and the two left out.
+	lines := map[string]string{}
+	for _, l := range got.Searched {
+		lines[l.Name] = l.Status + "/" + l.Code
+	}
+	if len(lines) != 3 || lines["booksite"] != "found/" || lines["movies-one"] != "skipped/no_category" || lines["movies-two"] != "skipped/no_category" {
+		t.Errorf("searched: %v", lines)
 	}
 	// The plain list still works for scripts.
 	plain := getJSON[[]map[string]any](t, client, bookURL+"/releases?format=ebook")

@@ -15,6 +15,8 @@ import CopiesCard from '../components/CopiesCard'
 import TitleRequestActions from '../components/TitleRequestActions'
 import FilesPanel from '../components/FilesPanel'
 import FileChips from '../components/FileChips'
+import ShortFile from '../components/ShortFile'
+import { redoAnswerText } from '../shortFile'
 import SubtitlesOffNote from '../components/SubtitlesOffNote'
 import SubtitlesPanel from '../components/SubtitlesPanel'
 import Switch from '../components/Switch'
@@ -39,6 +41,7 @@ import { removeOption } from '../diskUsage'
 import ReleaseNotice from '../components/ReleaseNotice'
 import { releaseFacts } from '../releaseDates'
 import type { Unanswered } from '../releaseHint'
+import type { Searched } from '../searched'
 import { useDocumentTitle } from '../documentTitle'
 import { plural, t } from '../i18n'
 
@@ -77,7 +80,7 @@ function MoviePage() {
   useEffect(() => {
     if (hasResults) releasesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [hasResults])
-  const [answered, setAnswered] = useState<{ sources: number; unanswered: Unanswered[]; warnings?: string[] }>({ sources: 0, unanswered: [] })
+  const [answered, setAnswered] = useState<{ sources: number; unanswered: Unanswered[]; warnings?: string[]; searched?: Searched[] }>({ sources: 0, unanswered: [] })
   const [searching, setSearching] = useState(false)
   const [searchingNow, setSearchingNow] = useState(false)
   const [grabbing, setGrabbing] = useState<string | null>(null)
@@ -110,6 +113,24 @@ function MoviePage() {
     if (!answer) return
     try {
       await api.deleteMovieFile(movie.libraryId)
+      reload()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  // A file far shorter than the movie should be: delete it and look for another release.
+  async function redoShortFile() {
+    if (!movie?.libraryId) return
+    const answer = await confirm({
+      title: t('Delete the file of {title} and search again?', { title: movie.title }),
+      body: <p>{t('This file is much shorter than the movie should be, so it is most likely a fake or a cut-off download. It goes to the recycle bin (or is deleted, if that is switched off), the release it came from is blocklisted when Mediarium knows it, and Mediarium searches for another one.')}</p>,
+      confirmLabel: t('Delete and search again'),
+      danger: true,
+    })
+    if (!answer) return
+    try {
+      toast.info(redoAnswerText(await api.redoIncomplete({ movieIds: [movie.libraryId] })))
       reload()
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e))
@@ -202,7 +223,7 @@ function MoviePage() {
     setResults(null)
     try {
       const a = await api.movieSearch(libraryId)
-      setAnswered({ sources: a.sources, unanswered: a.unanswered, warnings: a.warnings })
+      setAnswered({ sources: a.sources, unanswered: a.unanswered, warnings: a.warnings, searched: a.searched })
       setResults(a.results)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e))
@@ -357,6 +378,7 @@ function MoviePage() {
           </div>
         )}
         {inLibrary && movie.status === 'downloaded' && <FileChips info={movie.fileInfo} />}
+        {inLibrary && movie.status === 'downloaded' && <ShortFile note={movie.shortFile} onRedo={admin ? () => void redoShortFile() : undefined} />}
         {inLibrary && admin && movie.folderPath && (
           <FolderLine path={movie.folderPath} kind="movie">
             {movie.libraryId && (
@@ -386,7 +408,7 @@ function MoviePage() {
       {results !== null && (
         <section ref={releasesRef} className="card" style={{ marginBottom: 24, scrollMarginTop: 80 }}>
           <h2>{t('Releases')}</h2>
-          <ReleaseNotice sources={answered.sources} unanswered={answered.unanswered} warnings={answered.warnings} results={results.length} />
+          <ReleaseNotice sources={answered.sources} unanswered={answered.unanswered} warnings={answered.warnings} searched={answered.searched} results={results.length} />
           {results.length === 0 && (
             <button className="btn-sm" onClick={() => setResults(null)}>
               {t('Close')}
@@ -401,7 +423,7 @@ function MoviePage() {
               onDismiss={() => setBlocked(null)}
             />
           )}
-          {results.length > 0 && <ReleaseTable results={results} grabbing={grabbing} onGrab={(r) => void grab(r)} onClose={() => setResults(null)} />}
+          {results.length > 0 && <ReleaseTable results={results} searched={answered.searched} grabbing={grabbing} onGrab={(r) => void grab(r)} onClose={() => setResults(null)} />}
         </section>
       )}
 

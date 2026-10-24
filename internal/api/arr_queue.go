@@ -383,14 +383,18 @@ func (s *Server) arrWantedMissing(app arrApp) http.HandlerFunc {
 				return
 			}
 			c := s.newArrMovieContext()
+			monitoredOnly := true // monitored=false lists the unmonitored ones too
+			if v, ok := arrBoolParam(r, "monitored"); ok {
+				monitoredOnly = v
+			}
 			var list []arrMovie
 			for _, m := range movies {
 				a := s.toArrMovie(m, c)
-				if a.Monitored && !a.HasFile && a.IsAvailable {
+				if (a.Monitored || !monitoredOnly) && !a.HasFile && a.IsAvailable {
 					list = append(list, a)
 				}
 			}
-			sort.Slice(list, func(i, j int) bool { return list[i].SortTitle < list[j].SortTitle })
+			sortArrMovies(list, r.URL.Query().Get("sortKey"), r.URL.Query().Get("sortDirection"))
 			for _, a := range list {
 				records = append(records, a)
 			}
@@ -438,6 +442,7 @@ func (s *Server) arrWantedMissing(app arrApp) http.HandlerFunc {
 				records = append(records, s.toArrAlbum(a, &ar))
 			}
 		}
+		logArrAsked(app, r, len(records))
 		arrWantedPage(w, r, records, map[arrApp]string{arrRadarr: "movieMetadata.sortTitle", arrSonarr: "episodes.airDateUtc", arrLidarr: "albums.releaseDate"}[app])
 	}
 }
@@ -464,6 +469,7 @@ func (s *Server) arrCalendar(app arrApp) http.HandlerFunc {
 				}
 			}
 			sort.Slice(out, func(i, j int) bool { return out[i].InCinemas < out[j].InCinemas })
+			logArrAsked(app, r, len(out))
 			writeJSON(w, http.StatusOK, out)
 		case arrSonarr:
 			all, err := s.allShowEpisodes()
@@ -484,12 +490,13 @@ func (s *Server) arrCalendar(app arrApp) http.HandlerFunc {
 				}
 				e := toArrEpisode(se.ep)
 				e.Series = series[se.series.ID]
-				if queryBool(r, "includeEpisodeFile") {
+				if queryBool(r, "includeEpisodeFile") || e.HasFile {
 					e.EpisodeFile = s.toArrEpisodeFile(se.ep)
 				}
 				out = append(out, e)
 			}
 			sort.Slice(out, func(i, j int) bool { return out[i].AirDate < out[j].AirDate })
+			logArrAsked(app, r, len(out))
 			writeJSON(w, http.StatusOK, out)
 		case arrLidarr:
 			albums, artists, err := s.arrMusic()

@@ -484,7 +484,15 @@ export function installDemo() {
       case /^\/api\/(movies|series)\/\d+\/files$/.test(p):
         return json({ folder: '', files: [] })
       case /^\/api\/movies\/\d+\/search$/.test(p):
-        return json({ results: demoReleases(), sources: 2, unanswered: [] })
+        return json({
+          results: demoReleases(),
+          sources: 2,
+          unanswered: [],
+          searched: [
+            { indexerId: 1, name: 'Indexer One', kind: 'usenet', status: 'found', count: demoReleases().length, ms: 900 },
+            { indexerId: 2, name: 'Indexer Two', kind: 'torrent', status: 'empty', count: 0, ms: 600 },
+          ],
+        })
       case p === '/api/movies':
         return json(movies)
       case /^\/api\/movies\/\d+$/.test(p):

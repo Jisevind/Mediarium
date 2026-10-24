@@ -34,6 +34,7 @@ import { plural, t, tx, st } from '../i18n'
 import { compareTitles } from '../titleSort'
 import { looseIncludes } from '../looseText'
 import { largestFirst, libraryTotalText, sumBytes } from '../diskTotals'
+import { redoAnswerText, redoRequest } from '../shortFile'
 import { fileFilterOptions, fileFiltersActive, langName, matchesFileFilters, NO_FILE_FILTERS, type FileFilters } from '../fileInfo'
 
 type Kind = 'movie' | 'tv'
@@ -69,6 +70,7 @@ interface Item {
   sizeBytes: number // on disk
   showStatus: string // where a show stands (ended, canceled, continuing, upcoming), '' for movies and shows not read yet
   media?: MediaSummary // what the files hold (codecs, HDR, audio and subtitle languages), once they have been read
+  shortFiles: number // files far shorter than the movie or episode should be (fakes, cut-off downloads)
 }
 
 // The most titles one "search now" for a selection looks up (the server enforces it).
@@ -106,6 +108,7 @@ function fromMovie(m: Movie, queue: QueueItem[]): Item {
     sizeBytes: m.sizeBytes ?? 0,
     showStatus: '',
     media: m.media,
+    shortFiles: m.shortFile ? 1 : 0,
   }
 }
 
@@ -121,6 +124,7 @@ function fromSeries(s: Series, queue: QueueItem[]): Item {
     sizeBytes: s.sizeBytes ?? 0,
     showStatus: s.showStatus ?? '',
     media: s.media,
+    shortFiles: s.shortFiles ?? 0,
   }
 }
 
@@ -133,9 +137,10 @@ const STATE_FILTERS: { id: string; label: string; test: (i: Item) => boolean }[]
   { id: 'partial', label: t('Partial'), test: (i) => i.state.key === 'partial' },
   { id: 'added', label: t('Not monitored'), test: (i) => i.state.key === 'added' },
   { id: 'failed', label: t('Failed'), test: (i) => i.state.key === 'failed' },
+  { id: 'incomplete', label: t('Looks incomplete'), test: (i) => i.shortFiles > 0 },
 ]
 // The symbol each state filter wears (the same ones the posters' pills use).
-const FILTER_ICON: Record<string, IconName> = { ended: 'stop', continuing: 'play', all: 'grid', downloaded: 'check', downloading: 'download', pending: 'clock', searching: 'search', partial: 'download', added: 'bookmark', failed: 'warning' }
+const FILTER_ICON: Record<string, IconName> = { ended: 'stop', continuing: 'play', all: 'grid', downloaded: 'check', downloading: 'download', pending: 'clock', searching: 'search', partial: 'download', added: 'bookmark', failed: 'warning', incomplete: 'warning' }
 // Shows can also be told apart by whether more episodes are coming.
 const SHOW_FILTERS = [
   { id: 'ended', label: t('Ended'), test: (i: Item) => isFinishedShow(i.showStatus) },
@@ -529,6 +534,42 @@ export default function Library() {
     }
   }
 
+  // Deletes the files that look incomplete among the chosen titles (only what
+  // the view shows can be chosen) and searches for them again.
+  async function redoIncompleteChosen() {
+    const req = redoRequest(chosen)
+    if (req.files === 0) {
+      toast.info(t('None of the selected titles has a file that looks incomplete. Pick the Looks incomplete filter to find them.'))
+      return
+    }
+    const titles = chosen.filter((i) => i.shortFiles > 0)
+    const answer = await confirm({
+      title: plural(req.files, 'Delete {n} incomplete file and search again?', 'Delete {n} incomplete files and search again?'),
+      body: (
+        <>
+          <p>
+            <strong>{nameList(titles.map((i) => i.title))}</strong>
+          </p>
+          <p>{t('These files are much shorter than the movie or episode should be, so they are most likely fakes or cut-off downloads. Each one is deleted (it goes to the recycle bin if that is on), the release it came from is blocklisted when Mediarium knows it, and Mediarium searches for another.')}</p>
+          <p>{t('A real file that is short for another reason would be deleted too. Open a title first if you are not sure.')}</p>
+        </>
+      ),
+      confirmLabel: t('Delete and search again'),
+      danger: true,
+    })
+    if (!answer) return
+    setBusy(true)
+    setNote(null)
+    try {
+      toast.info(redoAnswerText(await api.redoIncomplete({ movieIds: req.movieIds, seriesIds: req.seriesIds })))
+      load()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function removeChosen() {
     const n = chosen.length
     if (n === 0) return
@@ -705,8 +746,8 @@ export default function Library() {
             'Downloaded: the file is in your library.\nDownloading: coming in now.\nPending: queued and waiting its turn.\nWaiting for a release: monitored, and Mediarium keeps checking.\nPartial: some episodes are downloaded.\nNot monitored: in your library, but nothing downloads by itself.\nFailed: the last attempt failed.',
           )}
         />
-        {FILTERS[kind].map((f) => (
-          <button key={f.id} className={`chip st-${f.id}${filter === f.id ? ' active' : ''}${f.id === 'downloading' && items?.some(f.test) ? ' live' : ''}`} onClick={() => setFilter(f.id)}>
+        {FILTERS[kind].filter((f) => f.id !== 'incomplete' || filter === f.id || items?.some(f.test)).map((f) => (
+          <button key={f.id} className={`chip st-${f.id}${filter === f.id ? ' active' : ''}${f.id === 'downloading' && items?.some(f.test) ? ' live' : ''}`} onClick={() => setFilter(f.id)} title={f.id === 'incomplete' ? t('Files that are much shorter than the movie or episode should be: fakes, samples or cut-off downloads.') : undefined}>
             <Icon name={FILTER_ICON[f.id] ?? 'grid'} size={14} />
             {f.label} {items ? <small>{items.filter(f.test).length}</small> : null}
           </button>
@@ -781,6 +822,14 @@ export default function Library() {
                 <Icon name="download" size={15} /> {t('Replace with smaller')}
               </button>
               <InfoTip text={t('For movies you moved to a lower quality profile. Looks for a smaller release the profile accepts, downloads it, and only then removes the big file. At most 25 at a time.')} />
+            </>
+          )}
+          {shown?.some((i) => i.shortFiles > 0) && (
+            <>
+              <button className="btn-sm btn-danger btn-with-icon" disabled={!chosen.some((i) => i.shortFiles > 0) || busy} onClick={() => void redoIncompleteChosen()}>
+                <Icon name="warning" size={15} /> {t('Delete incomplete files and search again')} <small className="mono">{redoRequest(chosen).files}</small>
+              </button>
+              <InfoTip text={t('For the selected titles that have a file much shorter than the movie or episode should be. Deletes those files, blocklists their releases when known, and searches again. Only the titles you selected are touched.')} />
             </>
           )}
           <button className="btn-sm btn-danger btn-with-icon" disabled={chosen.length === 0 || busy} onClick={() => void removeChosen()}>

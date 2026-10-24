@@ -51,6 +51,9 @@ type seriesPayload struct {
 	Copies int   `json:"copies,omitempty"`
 	// RootPath is the library folder chosen for the show ("" = the main TV folder).
 	RootPath string `json:"rootPath,omitempty"`
+	// ShortFiles is how many of the show's files are far shorter than their
+	// episodes should be (fakes or cut-off files); left out when none.
+	ShortFiles int `json:"shortFiles,omitempty"`
 	// FolderPath is the full folder of the show (as Mediarium sees it): where
 	// its episodes are, or where they go when it has none. Only filled in for
 	// a single show.
@@ -119,6 +122,8 @@ type episodePayload struct {
 	// FileInfo is what the episode's file holds: video, audio and subtitle
 	// tracks. Left out until the file has been read.
 	FileInfo *fileInfoPayload `json:"fileInfo,omitempty"`
+	// ShortFile is set when the file is far shorter than the episode should be.
+	ShortFile *shortFileNote `json:"shortFile,omitempty"`
 }
 
 func toEpisodePayload(e library.Episode) episodePayload {
@@ -186,8 +191,10 @@ func (s *Server) handleListSeries(w http.ResponseWriter, r *http.Request) {
 	tvFolders := s.tvFolders()
 	nameTags := sameNameTags(list)
 	media := s.mediaSummaryNow(true).series
+	short := s.incompleteNow().series
 	for i, sr := range list {
 		out[i] = toSeriesPayload(sr, who)
+		out[i].ShortFiles = len(short[sr.ID])
 		out[i].Media = mediaSummaryOf(media[sr.ID]...)
 		out[i].RootPath = folderShown(r, tvFolders, sr.RootPath)
 		out[i].NameTag = nameTags[sr.ID]
@@ -242,6 +249,7 @@ func (s *Server) handleGetSeries(w http.ResponseWriter, r *http.Request) {
 		out.Episodes[i] = toEpisodePayload(e)
 		if row, ok := fileInfos[e.ID]; ok && e.Status == library.StatusDownloaded {
 			out.Episodes[i].FileInfo = fileInfoOf(row)
+			out.Episodes[i].ShortFile = s.shortFileOf(e.FilePath)
 		}
 		out.Episodes[i].FilePath = fileLabel(r, e.FilePath)
 		if e.Status == library.StatusDownloaded {

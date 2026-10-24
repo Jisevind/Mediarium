@@ -3,7 +3,8 @@ import type { SearchResult } from '../api'
 import { formatBytes, nameParts } from '../format'
 import { locale, st, t } from '../i18n'
 import { loadShowWhy, saveShowWhy, signed, whyOf, type WhyInfo } from '../releaseWhy'
-import { FIRST_DIRECTION, ageOf, defaultOrder, filterReleases, indexersIn, publishedAt, qualitiesIn, scoreOf, sortReleases, type ReleaseSortKey, type SortDir } from '../releaseSort'
+import { indexerChoices, type Searched } from '../searched'
+import { FIRST_DIRECTION, ageOf, defaultOrder, filterReleases, publishedAt, qualitiesIn, scoreOf, sortReleases, type ReleaseSortKey, type SortDir } from '../releaseSort'
 import Dropdown from './Dropdown'
 import Icon from './Icon'
 
@@ -19,6 +20,7 @@ export default function ReleaseTable({
   onClose,
   showPackBadge = false,
   qualityLabel,
+  searched,
 }: {
   results: SearchResult[]
   grabbing: string | null
@@ -28,6 +30,8 @@ export default function ReleaseTable({
   showPackBadge?: boolean
   // What to show in the Quality column when a release has no resolution (music).
   qualityLabel?: (r: SearchResult) => string | undefined
+  // What each indexer did: the indexer filter then lists all of them.
+  searched?: Searched[]
 }) {
   const showLanguage = results.some((r) => r.language)
   const showScore = results.some((r) => scoreOf(r) !== undefined)
@@ -38,7 +42,7 @@ export default function ReleaseTable({
   // "Show why" opens the details of every row; a row's own button overrides it.
   const [showWhy, setShowWhy] = useState(loadShowWhy)
   const [opened, setOpened] = useState<Record<string, boolean>>({})
-  const indexers = useMemo(() => indexersIn(results), [results])
+  const indexers = useMemo(() => indexerChoices(results, searched), [results, searched])
   const qualities = useMemo(() => qualitiesIn(results), [results])
   const shown = useMemo(() => sortReleases(defaultOrder(filterReleases(results, { text: words, indexer, quality })), sort?.key ?? null, sort?.dir ?? 1), [results, words, indexer, quality, sort])
   const filtering = words !== '' || indexer !== '' || quality !== ''
@@ -84,7 +88,14 @@ export default function ReleaseTable({
     <>
       <div className="rel-tools">
         <input type="search" value={words} onChange={(e) => setWords(e.target.value)} placeholder={t('Find in these releases')} aria-label={t('Find in these releases')} />
-        {indexers.length > 1 && <Dropdown label={t('Indexer')} value={indexer} onChange={setIndexer} options={[{ value: '', label: t('Any indexer') }, ...indexers.map((i) => ({ value: i, label: i }))]} />}
+        {indexers.length > 1 && (
+          <Dropdown
+            label={t('Indexer')}
+            value={indexer}
+            onChange={setIndexer}
+            options={[{ value: '', label: t('Any indexer') }, ...indexers.map((i) => ({ value: i.value, label: `${i.label} (${i.count})`, dim: i.count === 0, warn: i.failed }))]}
+          />
+        )}
         {qualities.length > 1 && <Dropdown label={t('Quality')} value={quality} onChange={setQuality} options={[{ value: '', label: t('Any quality') }, ...qualities.map((q) => ({ value: q, label: qualityName(q) }))]} />}
         {anyWhy && (
           <button type="button" className="btn-sm" aria-pressed={showWhy} onClick={toggleAll} title={t('Open the details under every release: where the score comes from and why an automatic search may skip it')}>

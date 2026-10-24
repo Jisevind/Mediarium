@@ -326,9 +326,10 @@ func (s *Server) bookWaitFor() time.Duration {
 // indexers it did not ask.
 type bookSearch struct {
 	Results  []indexers.Result
-	Asked    int                // how many indexers were asked
-	Skipped  []string           // enabled indexers left out because they don't list this kind of release
-	Outcomes []indexers.Outcome // what each indexer said, for both passes
+	Asked    int                 // how many indexers were asked
+	Skipped  []string            // enabled indexers left out because they don't list this kind of release
+	Outcomes []indexers.Outcome  // what each indexer said, for both passes
+	All      []indexers.Instance // every indexer that could have been asked
 }
 
 // bookReleases searches the indexers for one format of a book and returns
@@ -350,6 +351,7 @@ func (s *Server) searchBookReleases(ctx context.Context, b books.Book, f books.F
 		return found, err
 	}
 	cats := categoriesFor(f)
+	found.All = list
 	list, left := indexers.SplitByCategories(ctx, list, cats)
 	for _, inst := range left {
 		if inst.Enabled {
@@ -439,7 +441,7 @@ func (s *Server) handleBookReleases(w http.ResponseWriter, r *http.Request) {
 		out = append(out, p)
 	}
 	s.markCachedPayloads(r.Context(), out)
-	writeSearchSkipping(w, r, out, found.Asked, found.Outcomes, found.Skipped)
+	writeSearchAll(w, r, out, found.Asked, found.Outcomes, found.Skipped, found.All)
 }
 
 type bookGrabRequest struct {

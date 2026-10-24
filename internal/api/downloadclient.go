@@ -350,7 +350,7 @@ func (s *Server) addToClient(ctx context.Context, c qbit.API, cfg downloadClient
 // enforce it: the global limits or the indexer's own rule.
 func (s *Server) clientShareLimits(queueID int64) qbit.ShareLimits {
 	g := s.torrentSeedGoal(queueID)
-	return qbit.ShareLimits{Ratio: g.Ratio, Time: g.Time}
+	return qbit.ShareLimits{Ratio: g.Ratio, Time: g.Time, NoSeed: g.NoSeed}
 }
 
 // clientDone lays out the finished torrent's files in the download's folder.

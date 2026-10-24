@@ -245,6 +245,7 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | Method | Path | Access | What it does |
 |---|---|---|---|
 | DELETE | `/api/episodes/{id}/file` | admin | deletes one episode's file. |
+| POST | `/api/episodes/{id}/locate-file` | admin | points one episode at a video file a person picked in the library folders (in the show's own folder or elsewhere). |
 | PUT | `/api/episodes/{id}/monitored` | any account |  |
 | GET | `/api/episodes/{id}/subtitles` | any account |  |
 | POST | `/api/episodes/{id}/subtitles/download` | any account |  |
@@ -364,6 +365,7 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | GET | `/api/library/import/batches/{id}` | admin |  |
 | POST | `/api/library/import/batches/{id}/dismiss` | admin |  |
 | POST | `/api/library/import/batches/{id}/watch` | admin | switches monitoring on for exactly the titles an import added, once it has finished, so the person can start it with one click on the report. |
+| POST | `/api/library/incomplete/redo` | admin | deletes the library files that look incomplete among the given movies, shows and episodes, blocklists the release each one came from when it is known, and se... |
 | POST | `/api/library/metadata-files/cancel` | admin |  |
 | POST | `/api/library/metadata-files/run` | admin | is POST /api/library/metadata-files/run: writes the files for what is in the library already. |
 | GET | `/api/library/metadata-files/status` | admin |  |
@@ -481,7 +483,9 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | DELETE | `/api/music/artists/{id}` | admin | removes an artist and its albums from the library. |
 | GET | `/api/music/artists/{id}` | any account | returns one artist with its albums, EPs and singles. |
 | PUT | `/api/music/artists/{id}` | admin | changes an artist (administrators): whether it is followed and which quality profile it uses. |
+| POST | `/api/music/artists/{id}/albums` | any account | is POST /api/music/artists/{id}/albums {mbid}: adds one release the filter left out to the library, monitored. |
 | GET | `/api/music/artists/{id}/cover` | any account | serves a picture for an artist (any account): the cover of its first album that has one, studio albums before EPs and singles. |
+| GET | `/api/music/artists/{id}/discography` | any account | is GET /api/music/artists/{id}/discography (any account): what the effective filter leaves out of the artist's page on MusicBrainz, so the page can say what ... |
 | GET | `/api/music/artists/{id}/disk-usage` | admin |  |
 | PUT | `/api/music/bulk/follow` | admin | follows or unfollows the chosen artists. |
 | PUT | `/api/music/bulk/profile` | admin | gives the chosen artists a music quality profile. |
@@ -489,6 +493,8 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | GET | `/api/music/covers/release-group/{mbid}` | any account | serves the front cover of any release group by its MusicBrainz id (any account), for the Discover page: fetched once from the archive and kept, so the browse... |
 | GET | `/api/music/discover` | any account |  |
 | GET | `/api/music/discover/artists` | any account |  |
+| GET | `/api/music/filters` | any account | is GET /api/music/filters (any account). |
+| PUT | `/api/music/filters` | admin | is PUT /api/music/filters (administrators): the library-wide choice, as {types, hideSecondary, hideBootlegs}. |
 | GET | `/api/music/import/scan` | admin | returns the most recent scan job, running or finished, so the page shows it again when it is reopened (administrators). |
 | POST | `/api/music/import/scan` | admin | starts reading the music folder and registering what MusicBrainz recognises (administrators). |
 | DELETE | `/api/music/import/scan/{id}` | admin | stops a running scan (administrators). |
@@ -666,6 +672,8 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | PUT | `/api/series/{id}/monitored` | any account |  |
 | PUT | `/api/series/{id}/no-upgrade` | admin |  |
 | GET | `/api/series/{id}/numbering` | any account | answers GET /api/series/{id}/numbering: the ids and links, and what the numbering services say about the show. |
+| GET | `/api/series/{id}/numbering/custom` | any account | GET /api/series/{id}/numbering/custom |
+| PUT | `/api/series/{id}/numbering/custom` | any account | PUT /api/series/{id}/numbering/custom {"rules": [...], "names": [...]} replaces the show's own numbering; an empty body clears it. |
 | POST | `/api/series/{id}/numbering/refresh` | any account | answers POST /api/series/{id}/numbering/refresh: "Refresh mapping". |
 | PUT | `/api/series/{id}/profile` | admin |  |
 | POST | `/api/series/{id}/refresh` | any account | re-fetches a show's episode list from TMDB — new seasons appear and air dates get announced or moved over a show's life. |
@@ -890,4 +898,4 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | PUT | `/api/watched/settings` | admin | PUT /api/watched/settings {"sync": true, "cleanup": {...}} |
 | POST | `/api/watched/sync` | admin | POST /api/watched/sync: read what's been watched now. |
 
-540 routes.
+548 routes.

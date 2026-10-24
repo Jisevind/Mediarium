@@ -47,10 +47,13 @@ type settingsPayload struct {
 	// KeepOriginalNames keeps the file name an imported video came with
 	// (folders are still named by the preset). A pointer so an omitted field
 	// leaves it alone.
-	KeepOriginalNames *bool  `json:"keepOriginalNames,omitempty"`
-	TMDBAPIKey        string `json:"tmdbApiKey,omitempty"`
-	HasTMDBAPIKey     bool   `json:"hasTmdbApiKey"`
-	OnboardingDone    bool   `json:"onboardingDone"`
+	KeepOriginalNames *bool `json:"keepOriginalNames,omitempty"`
+	// CheckDuration is the check that a video is about as long as its episode
+	// or movie before it is imported (on unless switched off).
+	CheckDuration  *bool  `json:"checkDuration,omitempty"`
+	TMDBAPIKey     string `json:"tmdbApiKey,omitempty"`
+	HasTMDBAPIKey  bool   `json:"hasTmdbApiKey"`
+	OnboardingDone bool   `json:"onboardingDone"`
 
 	// TorrentEnabled is the torrent on/off switch. A pointer so a partial PUT
 	// that leaves it out doesn't switch torrents off (or on).
@@ -75,9 +78,12 @@ type settingsPayload struct {
 	LegalAcknowledged   *bool  `json:"legalAcknowledged,omitempty"`
 
 	// Phase 2 torrent engine settings.
-	TorrentListenPort     string `json:"torrentListenPort,omitempty"`
-	TorrentSeedRatioLimit string `json:"torrentSeedRatioLimit,omitempty"`
-	TorrentSeedTimeLimitH string `json:"torrentSeedTimeLimitH,omitempty"`
+	TorrentListenPort string `json:"torrentListenPort,omitempty"`
+	// The seeding limits are pointers because empty is a value: it means
+	// unlimited ("0" is do not seed). A request that leaves the field out
+	// leaves the limit alone.
+	TorrentSeedRatioLimit *string `json:"torrentSeedRatioLimit,omitempty"`
+	TorrentSeedTimeLimitH *string `json:"torrentSeedTimeLimitH,omitempty"`
 
 	// Phase 2 automation + quality profile settings.
 	// AutomationEnabled is a pointer in requests so "field omitted" (leave
@@ -353,6 +359,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	movieFolderFormat, _ := s.Settings.Get(settings.KeyMovieFolderFormat)
 	seriesFolderFormat, _ := s.Settings.Get(settings.KeySeriesFolderFormat)
 	keepOriginalNames := s.keepOriginalNames()
+	checkDuration := s.checkDurationOn()
 	onboardingDone, _ := s.Settings.GetBool(settings.KeyOnboardingDone)
 	torrentPort := strconv.Itoa(s.torrentListenPort()) // the port in use, 58264 unless changed
 	torrentRatio, _ := s.Settings.Get(settings.KeyTorrentSeedRatioLimit)
@@ -439,11 +446,12 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		MovieFolderFormat:        movieFolderFormat,
 		SeriesFolderFormat:       seriesFolderFormat,
 		KeepOriginalNames:        &keepOriginalNames,
+		CheckDuration:            &checkDuration,
 		HasTMDBAPIKey:            s.TMDB().HasAPIKey(),
 		OnboardingDone:           onboardingDone,
 		TorrentListenPort:        torrentPort,
-		TorrentSeedRatioLimit:    torrentRatio,
-		TorrentSeedTimeLimitH:    torrentTime,
+		TorrentSeedRatioLimit:    &torrentRatio,
+		TorrentSeedTimeLimitH:    &torrentTime,
 		AutomationEnabled:        &automationEnabled,
 		TorrentEnabled:           &torrentEnabled,
 		MonitorIntervalMinutes:   &monitorMinutes,
@@ -729,8 +737,6 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		{settings.KeyMovieFolderFormat, req.MovieFolderFormat},
 		{settings.KeySeriesFolderFormat, req.SeriesFolderFormat},
 		{settings.KeyTorrentListenPort, req.TorrentListenPort},
-		{settings.KeyTorrentSeedRatioLimit, req.TorrentSeedRatioLimit},
-		{settings.KeyTorrentSeedTimeLimitH, req.TorrentSeedTimeLimitH},
 		{settings.KeyIllegalCharMode, req.IllegalCharMode},
 		{settings.KeyIllegalCharReplacement, req.IllegalCharReplacement},
 		{settings.KeyImportConflictPolicy, req.ImportConflictPolicy},
@@ -745,6 +751,22 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if err := tx.Set(set.key, set.value, false); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	// The seeding limits: empty is unlimited, so empty is saved too.
+	for _, lim := range []struct {
+		key   string
+		value *string
+	}{
+		{settings.KeyTorrentSeedRatioLimit, req.TorrentSeedRatioLimit},
+		{settings.KeyTorrentSeedTimeLimitH, req.TorrentSeedTimeLimitH},
+	} {
+		if lim.value == nil {
+			continue
+		}
+		if err := tx.Set(lim.key, *lim.value, false); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
@@ -821,6 +843,12 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.KeepOriginalNames != nil {
 		if err := setBool(tx, settings.KeyKeepOriginalNames, *req.KeepOriginalNames); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+	if req.CheckDuration != nil {
+		if err := setBool(tx, settings.KeyImportCheckDuration, *req.CheckDuration); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}

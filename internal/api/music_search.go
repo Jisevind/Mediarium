@@ -139,7 +139,13 @@ func (s *Server) handleAlbumSearch(w http.ResponseWriter, r *http.Request) {
 	blocked := s.searchSkipKeys()
 	sources := s.sourcesFor("")
 	// A site that lists no audio category is not asked for an album.
-	asked, _ := indexers.SplitByCategories(r.Context(), instances, musicCategories)
+	asked, left := indexers.SplitByCategories(r.Context(), instances, musicCategories)
+	var notAsked []string
+	for _, inst := range left {
+		if inst.Enabled {
+			notAsked = append(notAsked, inst.Name)
+		}
+	}
 	outcomes := indexers.SearchAll(indexers.AsManual(r.Context()), asked, albumQuery(artist, album), musicCategories)
 	for _, res := range indexers.MergeResults(outcomes) {
 		rel := music.ParseRelease(res.Title)
@@ -160,7 +166,7 @@ func (s *Server) handleAlbumSearch(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, p)
 	}
-	writeSearch(w, r, out, len(instances), outcomes)
+	writeSearchAll(w, r, out, len(instances), outcomes, notAsked, instances)
 }
 
 // handleAlbumGrab grabs one release for an album (from the interactive

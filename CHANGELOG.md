@@ -8,6 +8,35 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.7.2] - 2026-10-24
+
+In short: files that are far too short are turned away, a release search shows which indexers it asked, a show can have its own numbering, music filters for the artist pages, and more fixes for the nzb360 dashboard.
+
+### Added
+
+- Choose a release now starts with a short line saying how many indexers were searched and what each did ("Searched 8 indexers: 2 had releases, 5 had nothing for this title, 1 did not answer."). A button opens a table with every indexer, its type, what it found (or why it did not answer or was skipped) and how long it took. The Any indexer list has every indexer that was asked, with the number of releases next to each. Thanks to SanketBaraiya on GitHub, #122.
+- A show's page has a new **Custom numbering and names** section. When the files and releases number a show differently from TMDB (a show listed as season 1 that releases call season 15, or a season that TMDB splits), you can add rules: library season, release season, an episode offset and an optional first and last episode. "This show's releases use season N" makes the common rule in one click, and **Save and rescan** stores the rules and runs Rescan files. The rules are used when files and releases are matched to episodes, for season packs and in Import a file by hand. You can also add extra search names for a show.
+- A **Link a file** button on each episode row (administrators) points the episode at a video file in your library folders and marks it downloaded. Nothing is moved or renamed.
+- Music: a new "Music: what to show" card under Settings > Quality. Pick which release types the artist pages list (albums, EPs, singles) and which kinds to hide (live, remix, compilation, soundtrack, demo and more), with a one-click "Official studio releases only" preset. Following an artist only adds what passes. The defaults are what it always did, so nothing changes until you change it. Idea from u/troelsdk on Reddit.
+- Music: an optional "Hide bootleg-only releases" switch (off by default). It leaves out release groups whose releases are all bootlegs, promotions or pseudo-releases. Each group is checked once in the background and the answer is kept. Reported by u/troelsdk on Reddit.
+- Music: each artist page has "Show: Albums EPs Singles" chips, a "More filters" section and "Use the library setting". A line such as "3 hidden: 2 live, 1 bootleg" says what is left out, with "Show them" and "Add to library". Albums already in the library are never removed by a filter change. Idea from u/troelsdk on Reddit.
+- The Library has a "Looks incomplete" filter chip, a movie's page and an episode's row say "Only 1 min long", and administrators can press "Delete this file and search again" there, or in the Library's select bar for the selected titles. Each deletion asks first and blocklists the release when it is known.
+
+### Changed
+
+- Seeding limits: an empty box now means unlimited and 0 means don't seed, for the seed ratio limit and the seed time limit (global and per indexer). An upload limit of 0 switches uploading off while downloads carry on. Anything you had set to 0 before is changed to empty when you update, so nothing behaves differently. Private trackers may ban accounts that don't seed, so the page says so. Thanks to wivaku on GitHub, discussion #123.
+- The Library and Settings menus on the left open only when you click them, and opening one closes the other. Being on a page inside a group no longer opens it.
+- Choose a release for a movie, a show or an album no longer asks sites that list no movies, no TV or no music. They show as skipped in the table.
+
+### Fixed
+
+- A download whose video is far shorter than its episode or movie (a fake, a sample or a cut-off file, for example a one-minute "2160p episode" of 121 MB) is no longer imported as a success. Mediarium reads the length of the video before filing it, and when it is under half of the runtime TMDB gives, the download fails with a plain reason, the release is blocklisted and the next one is tried. In a season pack only the short files are left out. A file whose length can't be read is imported as before. Switch: Settings > Library > File names and importing > "Check that the video is as long as the episode or movie" (on by default). Thanks to a problem report sent from inside the app.
+- The nzb360 dashboard cards for Radarr and Sonarr: some history ids were bigger than a 32-bit number, which made the movie card's history and the History tab unreadable to the app. They now fit. "Recently downloaded" keeps to the last week for items that came in without a Mediarium download, and missing movies, recommended movies, Radarr's /credit and the poster, fanart and banner pictures are answered. Reported by Bayharbourbutcher1 on GitHub, #94.
+- The calendar's Today button no longer sits between the month arrows. Reported by Bayharbourbutcher1 on GitHub, #119.
+- Adding a download by hand now accepts magnet links that have spaces in the name. Contributed by shinjuku712 on GitHub, #124.
+- The torrents on/off switch could not be clicked once torrents were off, because the card was blurred over it. It now stays clickable.
+- The table of searched indexers fits a phone.
+
 ## [3.7.1] - 2026-10-23
 
 In short: Premiumize as a third debrid service, a Music tab in the search results, a Retry button for picked downloads, and fixes for the calendar views, the Simkl Client ID test, the nzb360 dashboard and a lost library marker file.

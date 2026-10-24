@@ -203,6 +203,16 @@ func (s *Server) handleManualImport(w http.ResponseWriter, r *http.Request) {
 		}
 		ep, err := s.MovieRepo.GetEpisode(sr.ID, req.Season, req.Episode)
 		if err != nil {
+			// The person's own numbering for the show: the season and episode
+			// the file's name carries may be what releases call an episode the
+			// library lists under another number.
+			if ls, le, ok := s.customFor(sr).ToLibrary(req.Season, req.Episode); ok {
+				if mapped, merr := s.MovieRepo.GetEpisode(sr.ID, ls, le); merr == nil {
+					ep, err = mapped, nil
+				}
+			}
+		}
+		if err != nil {
 			// An anime's files are often numbered by TheTVDB's seasons, which
 			// the movie database does not have. The number counted from the
 			// first episode that the file's name carries says which one it is.
