@@ -409,7 +409,8 @@ type addMovieRequest struct {
 	// swapped for a better version later. On when left out: better versions
 	// are something the person asks for.
 	NoUpgrade *bool `json:"noUpgrade"`
-	// RootPath is the movie folder to keep it in; left out = the main one.
+	// RootPath is the movie folder to keep it in; left out = where new movies
+	// go (Settings > Library > Folders).
 	RootPath string `json:"rootPath"`
 }
 
@@ -454,7 +455,7 @@ func (s *Server) handleAddMovie(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	monitored := req.Monitored == nil || *req.Monitored
-	rootPath, problem := s.checkFolderChoice(req.RootPath, s.movieFolders(), "movie")
+	rootPath, problem := s.folderForNewMovie(req.RootPath)
 	if problem != "" {
 		writeError(w, http.StatusBadRequest, problem)
 		return

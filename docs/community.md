@@ -4,7 +4,7 @@ Mediarium gets better because people who use it say what's missing or what broke
 
 | Who | Where | What came of it |
 |---|---|---|
-| [u/troelsdk](https://www.reddit.com/user/troelsdk) | Reddit | Finding that the Sonarr-compatible episode list ignored the season asked for |
+| [u/troelsdk](https://www.reddit.com/user/troelsdk) | Reddit | Finding that the Sonarr-compatible episode list ignored the season asked for; an album import that waits for MusicBrainz instead of failing |
 | [u/Embyverse](https://www.reddit.com/user/Embyverse) | Reddit | Custom formats with TRaSH Guides import; keeping two qualities of one title (second copies) |
 | [u/12_nick_12](https://www.reddit.com/user/12_nick_12) | Reddit | Never download season packs; a webhook for media servers without their own support; the Radarr, Sonarr and Lidarr-compatible API |
 | [u/paulojf](https://www.reddit.com/user/paulojf) | Reddit | Real-Debrid and TorBox |
@@ -33,6 +33,7 @@ Mediarium gets better because people who use it say what's missing or what broke
 | [@varnakube](https://github.com/varnakube) | GitHub | Picking a book by hand when it is not found during an import ([#64](https://github.com/rdborg/Mediarium/issues/64)); setting a book's cover by hand ([#68](https://github.com/rdborg/Mediarium/issues/68)) |
 | [@SanketBaraiya](https://github.com/SanketBaraiya) | GitHub | Importing anime that is numbered by TheTVDB seasons, such as One Piece ([#69](https://github.com/rdborg/Mediarium/issues/69)); Knaben as a built-in site ([#73](https://github.com/rdborg/Mediarium/issues/73)) |
 | [@nexus4004](https://github.com/nexus4004) | GitHub | Subtitles in Croatian and Serbian, rescanning a movie that has no file, Library entries in the left menu and the busy message as a small notice (all from the website idea form); showing the folder where a title's files go ([#71](https://github.com/rdborg/Mediarium/issues/71)); pointing a title at a file or folder you renamed (same issue, reported by dxtrlws); preferring a season pack once a season has ended, and importing your Simkl lists (both from the website idea form) |
+| [@xrandallx1](https://github.com/xrandallx1) | GitHub | A community on Reddit ([discussion #133](https://github.com/rdborg/Mediarium/discussions/133)) |
 | [@Jisevind](https://github.com/Jisevind) | GitHub | Keeping the original file names ([#75](https://github.com/rdborg/Mediarium/issues/75)) |
 | [@franciscojnneto](https://github.com/franciscojnneto) | GitHub | Pages for cast and crew ([discussion #72](https://github.com/rdborg/Mediarium/discussions/72)) |
 | [@Bayharbourbutcher1](https://github.com/Bayharbourbutcher1) | GitHub | Sending the seeding rules to an outside torrent client ([#79](https://github.com/rdborg/Mediarium/issues/79)) |
@@ -50,6 +51,7 @@ Mediarium gets better because people who use it say what's missing or what broke
 
 - **From inside Mediarium:** the bug button at the bottom of the sidebar sends a problem or an idea, privately or as a GitHub issue. See [Report a problem or share an idea](report-a-problem.md).
 - **Questions:** [GitHub Discussions](https://github.com/rdborg/Mediarium/discussions).
+- **Chat and show your setup:** the [Mediarium community on Reddit](https://www.reddit.com/r/Mediarium/). Replies can be slow there, and bugs are fixed fastest when they are also reported on GitHub.
 - **Something broken:** [open an issue](https://github.com/rdborg/Mediarium/issues/new/choose) with the text from **Settings > System > Copy for support**.
 
 When an idea or a fix makes it into a release, the changelog line says who it came from, and you're added here. Rather not be named? Say so in the issue or comment and you'll be left out.

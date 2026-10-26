@@ -34,13 +34,14 @@ import { plural, t, tx, st } from '../i18n'
 import { compareTitles } from '../titleSort'
 import { looseIncludes } from '../looseText'
 import { largestFirst, libraryTotalText, sumBytes } from '../diskTotals'
+import { compareByProfile, matchesProfile, profileFilterOptions, profileName } from '../libraryProfile'
 import { redoAnswerText, redoRequest } from '../shortFile'
 import { fileFilterOptions, fileFiltersActive, langName, matchesFileFilters, NO_FILE_FILTERS, type FileFilters } from '../fileInfo'
 
 type Kind = 'movie' | 'tv'
 type View = 'grid' | 'list'
-type Sort = 'added' | 'title' | 'released' | 'size' | 'status'
-const SORTS: Sort[] = ['added', 'title', 'released', 'size', 'status']
+type Sort = 'added' | 'title' | 'released' | 'size' | 'status' | 'profile'
+const SORTS: Sort[] = ['added', 'title', 'released', 'size', 'status', 'profile']
 
 // One shape for a movie or a show, so filtering, sorting, selecting and the
 // action buttons work the same for both.
@@ -170,7 +171,7 @@ export default function Library() {
   // Searching and monitoring need the "manage" permission; a viewer only looks.
   const canManage = can(me, 'manage')
   // The tab and the filters live in the address, so Back from a title brings the list back as it was.
-  const [ui, patchUi] = useUrlState({ kind: 'movie', st: 'all', q: '', genre: '', tag: '', decade: '', collection: '', ...NO_FILE_FILTERS })
+  const [ui, patchUi] = useUrlState({ kind: 'movie', st: 'all', q: '', genre: '', tag: '', decade: '', collection: '', profile: '', ...NO_FILE_FILTERS })
   const { on } = useModules()
   const musicOn = on('music')
   const booksOn = on('ebooks') || on('audiobooks')
@@ -229,6 +230,8 @@ export default function Library() {
   const setTag = (v: string) => patchUi({ tag: v })
   const decade = ui.decade
   const setDecade = (v: string) => patchUi({ decade: v })
+  const profileFilter = ui.profile
+  const setProfileFilter = (v: string) => patchUi({ profile: v })
   const collection = ui.collection
   // What the files hold: video codec, HDR, resolution, audio and subtitle languages (read from the files' headers).
   const fileFilters: FileFilters = useMemo(() => ({ vc: ui.vc, hdr: ui.hdr, res: ui.res, al: ui.al, ac: ui.ac, sl: ui.sl, nal: ui.nal, nsl: ui.nsl }), [ui.vc, ui.hdr, ui.res, ui.al, ui.ac, ui.sl, ui.nal, ui.nsl])
@@ -311,6 +314,7 @@ export default function Library() {
         (!genre || i.genres.includes(genre)) &&
         (!tag || i.tags.some((t) => t.toLowerCase() === tag.toLowerCase())) &&
         (!decade || (i.year >= Number(decade) && i.year < Number(decade) + 10)) &&
+        matchesProfile(i, profileFilter, defaultProfile, defaultTvProfile) &&
         (!inCollection || inCollection.has(i.id)) &&
         matchesFileFilters(i.media, fileFilters),
     )
@@ -318,15 +322,16 @@ export default function Library() {
     else if (sort === 'released') list.sort((a, b) => b.released.localeCompare(a.released) || compareTitles(a.title, b.title))
     else if (sort === 'size') list.sort((a, b) => largestFirst(a, b, (x, y) => compareTitles(x.title, y.title)))
     else if (sort === 'status') list.sort((a, b) => a.state.key.localeCompare(b.state.key) || compareTitles(a.title, b.title))
+    else if (sort === 'profile') list.sort((a, b) => compareByProfile(a, b, profiles, defaultProfile, defaultTvProfile, (x, y) => compareTitles(x.title, y.title)))
     if (reverse) list.reverse()
     return list
-  }, [items, kind, filter, text, sort, reverse, genre, tag, decade, collection, collections, fileFilters])
+  }, [items, kind, filter, text, sort, reverse, genre, tag, decade, profileFilter, profiles, defaultProfile, defaultTvProfile, collection, collections, fileFilters])
   // Everything that narrows the list (sorting does not), and the way back.
-  const filtersActive =text.trim() !== '' || filter !== 'all' || genre !== '' || tag !== '' || decade !== '' || (kind === 'movie' && collection !== '') || fileFiltersActive(fileFilters)
+  const filtersActive =text.trim() !== '' || filter !== 'all' || genre !== '' || tag !== '' || decade !== '' || profileFilter !== '' || (kind === 'movie' && collection !== '') || fileFiltersActive(fileFilters)
   // What the files of this tab take on disk, for the line at the end of the chips.
   const totalText = useMemo(() => libraryTotalText(sumBytes(items ?? []), sumBytes(shown ?? []), filtersActive, kind), [items, shown, filtersActive, kind])
   function clearFilters() {
-    patchUi({ q: '', st: 'all', genre: '', tag: '', decade: '', collection: '', ...NO_FILE_FILTERS })
+    patchUi({ q: '', st: 'all', genre: '', tag: '', decade: '', collection: '', profile: '', ...NO_FILE_FILTERS })
   }
   const fileOptions = useMemo(() => fileFilterOptions(items ?? []), [items])
   const langOption = (code: string) => ({ value: code, label: `${langName(code)} (${code.toUpperCase()})` })
@@ -345,6 +350,7 @@ export default function Library() {
   }, [onMovies, onTV])
   const genreOptions = useMemo(() => [...new Set((items ?? []).flatMap((i) => i.genres))].sort(), [items])
   const tagOptions = useMemo(() => [...new Set((items ?? []).flatMap((i) => i.tags))].sort((a, b) => a.localeCompare(b)), [items])
+  const profileOptions = useMemo(() => profileFilterOptions(items ?? [], sortProfiles(profiles), defaultProfile, defaultTvProfile), [items, profiles, defaultProfile, defaultTvProfile])
   const decadeOptions = useMemo(() => [...new Set((items ?? []).filter((i) => i.year).map((i) => Math.floor(i.year / 10) * 10))].sort((a, b) => b - a), [items])
 
   function chooseKind(k: Tab) {
@@ -663,6 +669,9 @@ export default function Library() {
           <Dropdown icon="film" label={t('Collection')} value={collection} onChange={setCollection} options={[{ value: '', label: t('All collections') }, ...collections.map((c) => ({ value: String(c.id), label: c.name }))]} />
         )}
         <Dropdown icon="calendar" label={t('Year')} value={decade} onChange={setDecade} options={[{ value: '', label: t('Any year') }, ...decadeOptions.map((d) => ({ value: String(d), label: t('{decade}s', { decade: String(d) }) }))]} />
+        {profileOptions.length > 0 && (
+          <Dropdown icon="sliders" label={t('Quality profile')} value={profileFilter} onChange={setProfileFilter} options={[{ value: '', label: t('All profiles') }, ...profileOptions.map((p) => ({ value: String(p.id), label: `${p.name} (${p.count})` }))]} />
+        )}
         {fileOptions.videoCodecs.length > 0 && (
           <>
             <Dropdown icon="film" label={t('Video codec')} value={ui.vc} onChange={(v) => patchUi({ vc: v })} options={[{ value: '', label: t('Video codec') }, ...fileOptions.videoCodecs.map((c) => ({ value: c, label: c }))]} />
@@ -686,6 +695,7 @@ export default function Library() {
             { value: 'released', label: t('Newest release') },
             { value: 'size', label: t('Largest on disk') },
             { value: 'status', label: t('Status') },
+            { value: 'profile', label: t('Quality profile') },
           ]}
         />
         <button className="icon-btn" onClick={() => setReverse(!reverse)} aria-pressed={reverse} title={reverse ? t('Reversed order. Click for the normal order.') : t('Reverse the order')} aria-label={t('Reverse the order')}>
@@ -957,7 +967,14 @@ export default function Library() {
               <th>{t('Title')}</th>
               <th>{t('Status')}</th>
               <th>{kind === 'movie' ? t('Quality') : t('Episodes')}</th>
-              <th>{t('Profile')}</th>
+              <th aria-sort={sort === 'profile' ? (reverse ? 'descending' : 'ascending') : 'none'}>
+                <button type="button" className="th-sort" onClick={() => (sort === 'profile' ? setReverse(!reverse) : setSort('profile'))} title={t('Sort by quality profile')}>
+                  {t('Profile')}
+                  <span className="th-arrow" aria-hidden="true">
+                    {sort === 'profile' ? (reverse ? '▼' : '▲') : ''}
+                  </span>
+                </button>
+              </th>
               <th />
             </tr>
           </thead>
@@ -1006,7 +1023,7 @@ export default function Library() {
                     </div>
                   )}
                 </td>
-                <td style={{ color: 'var(--text-dim)' }}>{profiles.find((p) => p.id === (i.profileId || (i.kind === 'movie' ? defaultProfile : defaultTvProfile)))?.name ?? '—'}</td>
+                <td style={{ color: 'var(--text-dim)' }}>{profileName(i, profiles, defaultProfile, defaultTvProfile) || '—'}</td>
                 <td>
                   <div className="row-actions">
                     {actionsFor(i).map((a) => (

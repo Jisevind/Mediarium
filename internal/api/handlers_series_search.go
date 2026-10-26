@@ -311,7 +311,7 @@ func (s *Server) grabFromSearchTV(w http.ResponseWriter, r *http.Request, req gr
 			return
 		}
 		userID, byline := requester(r)
-		series, err = s.addSeriesFromTMDB(r.Context(), match.TMDBID, userID, true)
+		series, err = s.addSeriesFromTMDB(r.Context(), match.TMDBID, userID, true, s.newShowFolder())
 		if err != nil {
 			writeUpstreamError(w, "add that show", err)
 			return

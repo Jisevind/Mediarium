@@ -8,6 +8,29 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.7.4] - 2026-10-26
+
+In short: a big library loads faster, a music import waits for MusicBrainz instead of failing, a Detailed logging switch, a Quality profile filter, folders for new titles, and a Reddit community.
+
+### Added
+
+- Settings > Library > Folders has **New movies go to** and **New shows go to** when a kind has more than one folder: the main folder, one of the extra folders, or the folder with the most room (free space is looked at each time a title is added, so two drives fill up side by side). The Add dialog starts on that folder. Titles from a Plex watchlist, an import list, a request, a followed collection, a grabbed release and the Radarr/Sonarr compatible API (which now honours `rootFolderPath`) go there too. Changing the rule later moves nothing. The Dashboard shows a card for every movie and TV folder, with "new titles go here" on the one in use. Contributed by WassawRoki on GitHub, #135.
+- The Library has a **Quality profile** filter on the Movies and TV tabs, with the number of titles per profile, and Quality profile is a sort choice (and the Profile heading in the list view sorts). Idea from mirisbowring on GitHub, #130.
+- The window for adding a movie has a tick box **Add the other films of this collection too** for movies that belong to a collection. It adds them with the same profile, folder and monitoring as the movie. Idea from SanketBaraiya on GitHub, #132.
+- Settings > Logs has a **Detailed logging** switch (off by default) that writes more to the log, for finding a problem with help. It applies at once and is kept after a restart.
+- Mediarium has a community on Reddit, r/Mediarium, linked from the README, the docs, the website and the menu in the app. Idea from xrandallx1 on GitHub, discussion #133.
+
+### Changed
+
+- A music import that cannot reach MusicBrainz (it answers "busy" or too many requests during its long overload) no longer fails the album. The lookups try again after 2, 5, 15 and 45 seconds and 2 minutes, then the album waits ("MusicBrainz is busy. Mediarium will try again later."), keeps its files, and the import is tried again every 15 minutes for up to a day without downloading anything again. **Retry now** and **Retry** repeat only the import. Idea from u/troelsdk on Reddit.
+- The very large movie and show lists load faster. The file details they show (codecs, languages, short files) are no longer rebuilt on every load while files are being read, and the database keeps them in a form the lists read without opening each file's full details. The first start after this release adds an index and fills one column for every scanned file, which takes a few seconds on a very large library. Reported by mirisbowring on GitHub, #52.
+
+### Fixed
+
+- The Radarr "Missing Movies" card in the nzb360 app was empty when the missing movies were still waiting for a release. Monitored movies without a file are listed whether or not they are out yet. Reported by Bayharbourbutcher1 on GitHub, #94.
+- The Server card's storage total counted only one drive on Docker Desktop, where every shared folder reports the same filesystem id. Contributed by WassawRoki on GitHub, #135.
+- The docs say the nzb360 dashboard looks back 30 days (they said one week), and a new section answers whether "All episodes" downloads what you already have (it does not). Asked by mirisbowring on GitHub, #136.
+
 ## [3.7.3] - 2026-10-25
 
 In short: movie releases named with the maker in front of the title are found again, the nzb360 dashboard looks back 30 days, and the episode table fits a tablet.

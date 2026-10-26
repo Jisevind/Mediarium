@@ -294,7 +294,7 @@ function QueueRow({ q, admin, busy, act, stop, remove, picked, onPick }: RowProp
   const link = itemLink(q)
   const running = RUNNING.has(q.status)
   const working = busy !== null || !!q.pending
-  const animated = q.status === 'downloading' || q.status === 'importing'
+  const animated = (q.status === 'downloading' || q.status === 'importing') && !q.waiting
   const showBar = (running && q.status !== 'queued') || q.status === 'conflict' || q.status === 'paused'
   const barTone = q.status === 'failed' ? 'bad' : q.status === 'conflict' ? 'warn' : q.status === 'paused' ? 'paused' : ''
   const note = stateNote(q)
@@ -425,6 +425,11 @@ function QueueRow({ q, admin, busy, act, stop, remove, picked, onPick }: RowProp
               <Icon name="stop" size={15} /> {busy === 'stop' || q.pending === 'stopping' ? t('Stopping…') : t('Stop')}
             </button>
           </>
+        )}
+        {q.status === 'importing' && q.waiting && can(me, 'retry') && (
+          <button className="btn-sm btn-with-icon" disabled={working} title={t('Try the import again now, from the files already downloaded')} onClick={() => void act(q, () => api.retryQueueItem(q.id), t('Trying the import again.'))}>
+            <Icon name="refresh" size={15} /> {t('Retry now')}
+          </button>
         )}
         {(q.status === 'failed' || q.status === 'stopped') && can(me, 'retry') && (
           <button className="btn-sm btn-with-icon" disabled={working} onClick={() => void act(q, () => api.retryQueueItem(q.id), t('Trying that release again.'))}>

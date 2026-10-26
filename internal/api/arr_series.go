@@ -390,6 +390,7 @@ type arrSeriesRequest struct {
 	Seasons          []arrSeason `json:"seasons"`
 	Tags             []int64     `json:"tags"`
 	SeriesType       string      `json:"seriesType"`
+	RootFolderPath   string      `json:"rootFolderPath"`
 	AddOptions       *struct {
 		Monitor                  string `json:"monitor"`
 		SearchForMissingEpisodes bool   `json:"searchForMissingEpisodes"`
@@ -426,7 +427,12 @@ func (s *Server) arrAddSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	userID, byline := requester(r)
-	created, err := s.addSeriesFromTMDB(ctx, tmdbID, userID, true)
+	// The app's root folder when it is one of ours; else where new shows go.
+	rootPath, problem := s.folderForNewShow(req.RootFolderPath)
+	if problem != "" {
+		rootPath = s.newShowFolder()
+	}
+	created, err := s.addSeriesFromTMDB(ctx, tmdbID, userID, true, rootPath)
 	if err != nil {
 		writeUpstreamError(w, "add that show", err)
 		return

@@ -371,6 +371,11 @@ func (s *Server) allShowEpisodes() ([]showEpisode, error) {
 	return out, nil
 }
 
+// arrWantedMissing answers GET /wanted/missing. Radarr lists every monitored
+// movie that has no file, whether or not it has been released yet (the app
+// shows the unreleased ones as waiting), so a title that is "Waiting for a
+// release" here must be on the list too. Sonarr lists the episodes that have
+// aired.
 func (s *Server) arrWantedMissing(app arrApp) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		desc := !strings.EqualFold(r.URL.Query().Get("sortDirection"), "ascending")
@@ -390,7 +395,7 @@ func (s *Server) arrWantedMissing(app arrApp) http.HandlerFunc {
 			var list []arrMovie
 			for _, m := range movies {
 				a := s.toArrMovie(m, c)
-				if (a.Monitored || !monitoredOnly) && !a.HasFile && a.IsAvailable {
+				if (a.Monitored || !monitoredOnly) && !a.HasFile {
 					list = append(list, a)
 				}
 			}

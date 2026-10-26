@@ -359,7 +359,7 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | PUT | `/api/library/bulk/tags` | admin | adds and removes tags on the chosen titles (administrators). |
 | GET | `/api/library/counts` | any account | answers how many movies and shows the library has, for the Library's tabs, so a tab does not have to load the other tab's whole list just to show its number. |
 | GET | `/api/library/file-details` | any account | says how far the reading of the files has got, for the note in the Library. |
-| GET | `/api/library/folders` | any account | is GET /api/library/folders (any account): the folders a movie or a show can be kept in, the main one first. |
+| GET | `/api/library/folders` | any account | is GET /api/library/folders (any account): the folders a movie or a show can be kept in, the main one first, and under newTitles where a title added without ... |
 | POST | `/api/library/import` | admin | registers the reviewed selections. |
 | GET | `/api/library/import/active` | admin | lists what is going on: scans waiting to be reviewed or still running, imports still filling in details, and finished imports whose banner has not been dismi... |
 | GET | `/api/library/import/batches/{id}` | admin |  |
@@ -763,6 +763,7 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | GET | `/api/system/options` | admin | reports the switches for checking for updates, installing them, pushed updates and restarting when stuck. |
 | PUT | `/api/system/options` | admin | changes the switches named in the body and leaves the rest. |
 | GET | `/api/system/problems` | admin | lists the problems that match the filters, with the counts for the cards at the top of the page. |
+| PUT | `/api/system/problems/debug` | admin | switches detailed logging on or off. |
 | GET | `/api/system/problems/export` | admin | sends the problems that match the filters as a plain text file, newest first, to attach to a support request. |
 | PUT | `/api/system/problems/notify` | admin | switches the notification for new errors on or off. |
 | POST | `/api/system/problems/read` | admin | marks problems as read: the ones listed, or with "all" every problem that matches the filters in the query string (all of them when there are none). |
@@ -898,4 +899,4 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | PUT | `/api/watched/settings` | admin | PUT /api/watched/settings {"sync": true, "cleanup": {...}} |
 | POST | `/api/watched/sync` | admin | POST /api/watched/sync: read what's been watched now. |
 
-548 routes.
+549 routes.

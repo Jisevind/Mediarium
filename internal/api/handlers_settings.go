@@ -30,9 +30,14 @@ type settingsPayload struct {
 	// list replaces the saved one.
 	MoviesExtraPaths *[]string `json:"moviesExtraPaths,omitempty"`
 	TVExtraPaths     *[]string `json:"tvExtraPaths,omitempty"`
-	MovieCopiesPath  *string   `json:"movieCopiesPath,omitempty"`
-	TVCopiesPath     *string   `json:"tvCopiesPath,omitempty"`
-	DownloadsPath    string    `json:"downloadsPath"`
+	// MoviesNewFolder and TVNewFolder say where a title added without a
+	// folder choice goes: "" the main folder, a path one of the extra folders,
+	// or "most-room" whichever folder has the most free space at the time.
+	MoviesNewFolder *string `json:"moviesNewFolder,omitempty"`
+	TVNewFolder     *string `json:"tvNewFolder,omitempty"`
+	MovieCopiesPath *string `json:"movieCopiesPath,omitempty"`
+	TVCopiesPath    *string `json:"tvCopiesPath,omitempty"`
+	DownloadsPath   string  `json:"downloadsPath"`
 	// DownloadsTempPath is the temporary download folder ("" clears it, so it
 	// is a pointer): where the unfinished part of downloads is worked on.
 	DownloadsTempPath *string `json:"downloadsTempPath,omitempty"`
@@ -436,6 +441,8 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		TVPath:                   s.tvRoot(),
 		MoviesExtraPaths:         ptr(nonNil(s.extraFolders(settings.KeyMoviesExtraPaths, moviesPath))),
 		TVExtraPaths:             ptr(nonNil(s.extraFolders(settings.KeyTVExtraPaths, s.tvRoot()))),
+		MoviesNewFolder:          ptr(s.newTitleRule(settings.KeyMoviesNewFolder, s.movieFolders())),
+		TVNewFolder:              ptr(s.newTitleRule(settings.KeyTVNewFolder, s.tvFolders())),
 		MovieCopiesPath:          ptr(s.movieCopiesRoot()),
 		TVCopiesPath:             ptr(s.tvCopiesRoot()),
 		DownloadsPath:            downloadsPath,
@@ -587,8 +594,10 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		what string
 	}{{settings.KeyMoviesExtraPaths, req.MoviesExtraPaths, moviesMain, "movies"}, {settings.KeyTVExtraPaths, req.TVExtraPaths, tvMain, "TV"}}
 	type pendingSet struct{ key, value string }
-	var folderSets []pendingSet // checked now, written below with the rest
+	var folderSets []pendingSet         // checked now, written below with the rest
+	extraAfter := map[string][]string{} // the extra folders once this save is done, by key
 	for _, l := range extraLists {
+		extraAfter[l.key] = s.extraFolders(l.key, l.main)
 		if l.val == nil {
 			continue
 		}
@@ -602,6 +611,24 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 			raw = nil
 		}
 		folderSets = append(folderSets, pendingSet{l.key, string(raw)})
+		extraAfter[l.key] = clean
+	}
+	// Where new titles go: the main folder, one of the extra folders, or the
+	// one with the most room (see folders_new.go).
+	for _, n := range []struct {
+		key, extraKey string
+		val           *string
+		what          string
+	}{{settings.KeyMoviesNewFolder, settings.KeyMoviesExtraPaths, req.MoviesNewFolder, "movies"}, {settings.KeyTVNewFolder, settings.KeyTVExtraPaths, req.TVNewFolder, "shows"}} {
+		if n.val == nil {
+			continue
+		}
+		rule, problem := checkNewTitleRule(*n.val, extraAfter[n.extraKey], n.what)
+		if problem != "" {
+			writeError(w, http.StatusBadRequest, problem)
+			return
+		}
+		folderSets = append(folderSets, pendingSet{n.key, rule})
 	}
 	for _, c := range []struct {
 		key string
@@ -686,7 +713,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	for _, f := range folderSets {
-		if f.value == "" {
+		if f.value == "" || f.key == settings.KeyMoviesNewFolder || f.key == settings.KeyTVNewFolder {
 			continue
 		}
 		var list []string

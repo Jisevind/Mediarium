@@ -28,6 +28,8 @@ const (
 	KeyRootsConfirmed      = "library.roots_confirmed"          // library folders Mediarium has seen with their .mediarium-root marker (a JSON list); one that loses its marker is refused until it is back
 	KeyMoviesExtraPaths    = "library.movies_extra_paths"       // more movie folders next to the main one (a JSON list of paths); each movie says which one its files go to
 	KeyTVExtraPaths        = "library.tv_extra_paths"           // the same for shows
+	KeyMoviesNewFolder     = "library.movies_new_folder"        // where a movie added without a folder choice is kept: unset = the main folder, a path = that one of the extra folders, "most-room" = whichever movie folder has the most free space at the time
+	KeyTVNewFolder         = "library.tv_new_folder"            // the same for shows
 	KeyMovieCopiesPath     = "library.movie_copies_path"        // where second copies of movies go (a 4K copy next to the 1080p one); unset = second copies of movies are off
 	KeyTVCopiesPath        = "library.tv_copies_path"           // the same for shows
 	KeyDownloadsPath       = "library.downloads_path"
@@ -190,6 +192,8 @@ const (
 	KeyPublicURL = "server.public_url" // the address you open Mediarium at from your own devices (like https://mediarium.example.com); links in notification messages use it; unset = no links
 
 	KeyNotifyOnProblems = "notify.on_problems" // "1" sends a notification (to the targets that listen for Health) when a new error is added to the problem log; unset or "0" sends none
+
+	KeyDebugLogging = "log.debug" // "1" writes the extra detail (debug lines) to the log, taking effect at once and after a restart; unset or "0" keeps the log to normal detail
 
 	// A download keeps its place until it has been repaired, unpacked and
 	// imported; the others wait in line.

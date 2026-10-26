@@ -259,6 +259,7 @@ func New(db *sql.DB, cfg config.Config, box *crypto.Box, defaultTMDBAPIKey, vers
 	}
 	s.QueueRepo.SetBox(box) // download addresses carry indexer keys: kept encrypted
 	s.startProblems()
+	s.applyDebugLogging()
 	s.Definitions = indexers.NewDefinitionStore(filepath.Join(cfg.ConfigDir, "indexer-definitions"))
 	s.Definitions.CustomDir = filepath.Join(cfg.ConfigDir, "indexer-definitions-custom")
 	s.Cardigann = indexers.NewCardigannManager(s.Definitions, s.flareSolverrURL)
@@ -937,6 +938,7 @@ func (s *Server) protectedRoutes() *routeTable {
 	admin.HandleFunc("POST /api/system/problems/read", s.handleProblemsRead)
 	admin.HandleFunc("GET /api/system/problems/export", s.handleProblemsExport)
 	admin.HandleFunc("PUT /api/system/problems/notify", s.handleProblemsNotify)
+	admin.HandleFunc("PUT /api/system/problems/debug", s.handleDebugLogging)
 	admin.HandleFunc("GET /api/system/update", s.handleUpdateState)
 	admin.HandleFunc("POST /api/system/update", s.handlePushUpdate)
 	admin.HandleFunc("DELETE /api/system/update", s.handleRemoveUpdate)

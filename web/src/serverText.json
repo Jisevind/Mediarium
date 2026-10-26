@@ -596,6 +596,8 @@
  "Movies in the library by status.",
  "Movies kept in that folder can't be imported because Mediarium can't write there. Check the folder's permissions, or the PUID and PGID.",
  "Movies kept in that folder can't be imported until this folder exists. In Docker, map a host folder to this path.",
+ "MusicBrainz is busy. Mediarium will try again later.",
+ "MusicBrainz stayed busy, so this album wasn't imported. The downloaded files are kept. Press Retry to try the import again.",
  "Needed only for importing Trakt lists on Discover.",
  "New book by {0} added: {1}",
  "New books may not show up there until it rescans on its own, and the links to it on book pages can be missing. The last check said: {0}. Test it again once it is fixed.",

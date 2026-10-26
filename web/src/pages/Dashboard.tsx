@@ -160,9 +160,15 @@ function Health({ items, showOptional, errors = 0, onChanged }: { items: HealthI
   )
 }
 
+// A card's media kind: "movies" for the main movies folder and for every
+// extra movie folder (movies-extra-1 and so on).
+const folderKind = (f: DashFolder) => f.key.split('-')[0]
+const isExtraFolder = (f: DashFolder) => f.key.includes('-extra-')
+
 // A folder's name and what it holds, in the language in use. A folder the
 // page doesn't know keeps what the server calls it.
 function folderLabel(f: DashFolder): string {
+  if (isExtraFolder(f)) return folderKind(f) === 'movies' ? t('More movies') : t('More TV shows')
   switch (f.key) {
     case 'movies':
       return t('Movies')
@@ -181,7 +187,7 @@ function folderLabel(f: DashFolder): string {
 }
 
 function folderItems(f: DashFolder): string {
-  switch (f.key) {
+  switch (folderKind(f)) {
     case 'movies':
       return plural(f.items, '{n} movie', '{n} movies')
     case 'tv':
@@ -198,7 +204,8 @@ function folderItems(f: DashFolder): string {
 function FolderCard({ f }: { f: DashFolder }) {
   const used = f.totalBytes > 0 ? 1 - f.freeBytes / f.totalBytes : 0
   const tone = !f.exists || !f.writable ? 'bad' : used > 0.95 ? 'bad' : used > 0.85 ? 'warn' : ''
-  const icon: IconName = f.key === 'movies' ? 'film' : f.key === 'tv' ? 'tv' : f.key === 'music' ? 'music' : f.key === 'ebooks' ? 'book' : f.key === 'audiobooks' ? 'headphones' : 'download'
+  const kind = folderKind(f)
+  const icon: IconName = kind === 'movies' ? 'film' : kind === 'tv' ? 'tv' : kind === 'music' ? 'music' : kind === 'ebooks' ? 'book' : kind === 'audiobooks' ? 'headphones' : 'download'
   return (
     <div className={`folder-card${!f.exists || !f.writable ? ' broken' : ''}`}>
       <div className="folder-head">
@@ -223,6 +230,11 @@ function FolderCard({ f }: { f: DashFolder }) {
               </span>
             )}
           </>
+        )}
+        {f.newTitles && (
+          <span className="badge downloading" title={t('A title added without a folder choice goes here (Settings > Library > Folders).')}>
+            {t('new titles go here')}
+          </span>
         )}
       </div>
       {f.exists && f.totalBytes > 0 && (
