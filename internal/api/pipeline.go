@@ -34,6 +34,7 @@ import (
 	"github.com/rdborg/mediarium/internal/queue"
 	"github.com/rdborg/mediarium/internal/settings"
 	"github.com/rdborg/mediarium/internal/torrentclient"
+	"github.com/rdborg/mediarium/internal/torrentopts"
 	"github.com/rdborg/mediarium/internal/vpn"
 )
 
@@ -105,6 +106,12 @@ func (s *Server) runPipeline(queueID, movieID int64, movieTitle string, movieYea
 	videoFile, err := largestVideoFile(incompleteDir)
 	if err != nil {
 		return fail(badRelease(fmt.Errorf("couldn't find the movie file in the finished download: %w", err)))
+	}
+	if err := s.checkMovieLength(ctx, tmdbID, videoFile); err != nil {
+		// A fake, a sample or a cut-off file: nothing is imported, and the bad
+		// download is cleared away before the next release is tried.
+		s.discardWorkDir(incompleteDir, protocol)
+		return fail(err)
 	}
 
 	root := s.moviesRoot()
@@ -631,16 +638,18 @@ func (s *Server) torrentListenPort() int {
 	return torrentclient.DefaultListenPort
 }
 
+// torrentSeedRatioLimit is the global seed ratio limit: torrentopts.Unlimited
+// (negative) when empty, 0 for "do not seed".
 func (s *Server) torrentSeedRatioLimit() float64 {
 	v, _ := s.Settings.Get(settings.KeyTorrentSeedRatioLimit)
-	f, _ := strconv.ParseFloat(v, 64)
-	return f
+	return torrentopts.ParseLimit(v)
 }
 
-func (s *Server) torrentSeedTimeLimit() time.Duration {
+// torrentSeedHoursLimit is the global seed time limit in hours, read the same
+// way.
+func (s *Server) torrentSeedHoursLimit() float64 {
 	v, _ := s.Settings.Get(settings.KeyTorrentSeedTimeLimitH)
-	h, _ := strconv.ParseFloat(v, 64)
-	return time.Duration(h * float64(time.Hour))
+	return torrentopts.ParseLimit(v)
 }
 
 // torrentTunnel picks the connection torrent traffic uses. A connected VPN is

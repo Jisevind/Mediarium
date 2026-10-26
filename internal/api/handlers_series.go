@@ -51,6 +51,9 @@ type seriesPayload struct {
 	Copies int   `json:"copies,omitempty"`
 	// RootPath is the library folder chosen for the show ("" = the main TV folder).
 	RootPath string `json:"rootPath,omitempty"`
+	// ShortFiles is how many of the show's files are far shorter than their
+	// episodes should be (fakes or cut-off files); left out when none.
+	ShortFiles int `json:"shortFiles,omitempty"`
 	// FolderPath is the full folder of the show (as Mediarium sees it): where
 	// its episodes are, or where they go when it has none. Only filled in for
 	// a single show.
@@ -119,6 +122,8 @@ type episodePayload struct {
 	// FileInfo is what the episode's file holds: video, audio and subtitle
 	// tracks. Left out until the file has been read.
 	FileInfo *fileInfoPayload `json:"fileInfo,omitempty"`
+	// ShortFile is set when the file is far shorter than the episode should be.
+	ShortFile *shortFileNote `json:"shortFile,omitempty"`
 }
 
 func toEpisodePayload(e library.Episode) episodePayload {
@@ -186,8 +191,10 @@ func (s *Server) handleListSeries(w http.ResponseWriter, r *http.Request) {
 	tvFolders := s.tvFolders()
 	nameTags := sameNameTags(list)
 	media := s.mediaSummaryNow(true).series
+	short := s.incompleteNow().series
 	for i, sr := range list {
 		out[i] = toSeriesPayload(sr, who)
+		out[i].ShortFiles = len(short[sr.ID])
 		out[i].Media = mediaSummaryOf(media[sr.ID]...)
 		out[i].RootPath = folderShown(r, tvFolders, sr.RootPath)
 		out[i].NameTag = nameTags[sr.ID]
@@ -242,6 +249,7 @@ func (s *Server) handleGetSeries(w http.ResponseWriter, r *http.Request) {
 		out.Episodes[i] = toEpisodePayload(e)
 		if row, ok := fileInfos[e.ID]; ok && e.Status == library.StatusDownloaded {
 			out.Episodes[i].FileInfo = fileInfoOf(row)
+			out.Episodes[i].ShortFile = s.shortFileOf(e.FilePath)
 		}
 		out.Episodes[i].FilePath = fileLabel(r, e.FilePath)
 		if e.Status == library.StatusDownloaded {
@@ -269,7 +277,8 @@ type addSeriesRequest struct {
 	// NoUpgrade leaves the episodes alone once they are downloaded. On when
 	// left out: better versions are something the person asks for.
 	NoUpgrade *bool `json:"noUpgrade"`
-	// RootPath is the TV folder to keep it in; left out = the main one.
+	// RootPath is the TV folder to keep it in; left out = where new shows go
+	// (Settings > Library > Folders).
 	RootPath string `json:"rootPath"`
 }
 
@@ -313,22 +322,17 @@ func (s *Server) handleAddSeries(w http.ResponseWriter, r *http.Request) {
 		writeProfileError(w, err)
 		return
 	}
-	rootPath, problem := s.checkFolderChoice(req.RootPath, s.tvFolders(), "show")
+	rootPath, problem := s.folderForNewShow(req.RootPath)
 	if problem != "" {
 		writeError(w, http.StatusBadRequest, problem)
 		return
 	}
 
 	userID, byline := requester(r)
-	created, err := s.addSeriesFromTMDB(r.Context(), req.TMDBID, userID, boolOr(req.NoUpgrade, true))
+	created, err := s.addSeriesFromTMDB(r.Context(), req.TMDBID, userID, boolOr(req.NoUpgrade, true), rootPath)
 	if err != nil {
 		writeUpstreamError(w, "add that show", err)
 		return
-	}
-	if rootPath != "" {
-		if err := s.MovieRepo.SetSeriesRoot(created.ID, rootPath); err == nil {
-			created.RootPath = rootPath
-		}
 	}
 	if req.Monitor == library.MonitorFuture || req.Monitor == library.MonitorNone {
 		_, _ = s.MovieRepo.ApplyMonitorMode(created.ID, req.Monitor, todayUTC(), false)
@@ -361,7 +365,7 @@ func (s *Server) handleAddSeries(w http.ResponseWriter, r *http.Request) {
 // addSeriesFromTMDB adds a show with its episode list and genres, recording
 // userID (0 = unknown) as the account that added it. noUpgrade leaves the
 // episodes alone once they are downloaded.
-func (s *Server) addSeriesFromTMDB(ctx context.Context, tmdbID int, userID int64, noUpgrade bool) (library.Series, error) {
+func (s *Server) addSeriesFromTMDB(ctx context.Context, tmdbID int, userID int64, noUpgrade bool, rootPath string) (library.Series, error) {
 	detail, infos, err := s.TMDB().GetShowEpisodes(ctx, tmdbID)
 	if err != nil {
 		return library.Series{}, err
@@ -370,7 +374,7 @@ func (s *Server) addSeriesFromTMDB(ctx context.Context, tmdbID int, userID int64
 		TMDBID: detail.TMDBID, Title: detail.Name, Year: detail.Year(), Overview: detail.Overview,
 		PosterPath: detail.PosterPath, FirstAirDate: detail.FirstAirDate, Monitored: true,
 		NoUpgrade: noUpgrade, AddedBy: userID, Genres: s.TMDB().ShowGenres(ctx, detail.Show),
-		SeriesType: guessSeriesType(detail.Show),
+		SeriesType: guessSeriesType(detail.Show), RootPath: rootPath,
 	}, toLibraryEpisodes(infos))
 	if err != nil {
 		return sr, err

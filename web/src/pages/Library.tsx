@@ -34,12 +34,14 @@ import { plural, t, tx, st } from '../i18n'
 import { compareTitles } from '../titleSort'
 import { looseIncludes } from '../looseText'
 import { largestFirst, libraryTotalText, sumBytes } from '../diskTotals'
+import { compareByProfile, matchesProfile, profileFilterOptions, profileName } from '../libraryProfile'
+import { redoAnswerText, redoRequest } from '../shortFile'
 import { fileFilterOptions, fileFiltersActive, langName, matchesFileFilters, NO_FILE_FILTERS, type FileFilters } from '../fileInfo'
 
 type Kind = 'movie' | 'tv'
 type View = 'grid' | 'list'
-type Sort = 'added' | 'title' | 'released' | 'size' | 'status'
-const SORTS: Sort[] = ['added', 'title', 'released', 'size', 'status']
+type Sort = 'added' | 'title' | 'released' | 'size' | 'status' | 'profile'
+const SORTS: Sort[] = ['added', 'title', 'released', 'size', 'status', 'profile']
 
 // One shape for a movie or a show, so filtering, sorting, selecting and the
 // action buttons work the same for both.
@@ -69,6 +71,7 @@ interface Item {
   sizeBytes: number // on disk
   showStatus: string // where a show stands (ended, canceled, continuing, upcoming), '' for movies and shows not read yet
   media?: MediaSummary // what the files hold (codecs, HDR, audio and subtitle languages), once they have been read
+  shortFiles: number // files far shorter than the movie or episode should be (fakes, cut-off downloads)
 }
 
 // The most titles one "search now" for a selection looks up (the server enforces it).
@@ -106,6 +109,7 @@ function fromMovie(m: Movie, queue: QueueItem[]): Item {
     sizeBytes: m.sizeBytes ?? 0,
     showStatus: '',
     media: m.media,
+    shortFiles: m.shortFile ? 1 : 0,
   }
 }
 
@@ -121,6 +125,7 @@ function fromSeries(s: Series, queue: QueueItem[]): Item {
     sizeBytes: s.sizeBytes ?? 0,
     showStatus: s.showStatus ?? '',
     media: s.media,
+    shortFiles: s.shortFiles ?? 0,
   }
 }
 
@@ -133,9 +138,10 @@ const STATE_FILTERS: { id: string; label: string; test: (i: Item) => boolean }[]
   { id: 'partial', label: t('Partial'), test: (i) => i.state.key === 'partial' },
   { id: 'added', label: t('Not monitored'), test: (i) => i.state.key === 'added' },
   { id: 'failed', label: t('Failed'), test: (i) => i.state.key === 'failed' },
+  { id: 'incomplete', label: t('Looks incomplete'), test: (i) => i.shortFiles > 0 },
 ]
 // The symbol each state filter wears (the same ones the posters' pills use).
-const FILTER_ICON: Record<string, IconName> = { ended: 'stop', continuing: 'play', all: 'grid', downloaded: 'check', downloading: 'download', pending: 'clock', searching: 'search', partial: 'download', added: 'bookmark', failed: 'warning' }
+const FILTER_ICON: Record<string, IconName> = { ended: 'stop', continuing: 'play', all: 'grid', downloaded: 'check', downloading: 'download', pending: 'clock', searching: 'search', partial: 'download', added: 'bookmark', failed: 'warning', incomplete: 'warning' }
 // Shows can also be told apart by whether more episodes are coming.
 const SHOW_FILTERS = [
   { id: 'ended', label: t('Ended'), test: (i: Item) => isFinishedShow(i.showStatus) },
@@ -165,7 +171,7 @@ export default function Library() {
   // Searching and monitoring need the "manage" permission; a viewer only looks.
   const canManage = can(me, 'manage')
   // The tab and the filters live in the address, so Back from a title brings the list back as it was.
-  const [ui, patchUi] = useUrlState({ kind: 'movie', st: 'all', q: '', genre: '', tag: '', decade: '', collection: '', ...NO_FILE_FILTERS })
+  const [ui, patchUi] = useUrlState({ kind: 'movie', st: 'all', q: '', genre: '', tag: '', decade: '', collection: '', profile: '', ...NO_FILE_FILTERS })
   const { on } = useModules()
   const musicOn = on('music')
   const booksOn = on('ebooks') || on('audiobooks')
@@ -224,6 +230,8 @@ export default function Library() {
   const setTag = (v: string) => patchUi({ tag: v })
   const decade = ui.decade
   const setDecade = (v: string) => patchUi({ decade: v })
+  const profileFilter = ui.profile
+  const setProfileFilter = (v: string) => patchUi({ profile: v })
   const collection = ui.collection
   // What the files hold: video codec, HDR, resolution, audio and subtitle languages (read from the files' headers).
   const fileFilters: FileFilters = useMemo(() => ({ vc: ui.vc, hdr: ui.hdr, res: ui.res, al: ui.al, ac: ui.ac, sl: ui.sl, nal: ui.nal, nsl: ui.nsl }), [ui.vc, ui.hdr, ui.res, ui.al, ui.ac, ui.sl, ui.nal, ui.nsl])
@@ -306,6 +314,7 @@ export default function Library() {
         (!genre || i.genres.includes(genre)) &&
         (!tag || i.tags.some((t) => t.toLowerCase() === tag.toLowerCase())) &&
         (!decade || (i.year >= Number(decade) && i.year < Number(decade) + 10)) &&
+        matchesProfile(i, profileFilter, defaultProfile, defaultTvProfile) &&
         (!inCollection || inCollection.has(i.id)) &&
         matchesFileFilters(i.media, fileFilters),
     )
@@ -313,15 +322,16 @@ export default function Library() {
     else if (sort === 'released') list.sort((a, b) => b.released.localeCompare(a.released) || compareTitles(a.title, b.title))
     else if (sort === 'size') list.sort((a, b) => largestFirst(a, b, (x, y) => compareTitles(x.title, y.title)))
     else if (sort === 'status') list.sort((a, b) => a.state.key.localeCompare(b.state.key) || compareTitles(a.title, b.title))
+    else if (sort === 'profile') list.sort((a, b) => compareByProfile(a, b, profiles, defaultProfile, defaultTvProfile, (x, y) => compareTitles(x.title, y.title)))
     if (reverse) list.reverse()
     return list
-  }, [items, kind, filter, text, sort, reverse, genre, tag, decade, collection, collections, fileFilters])
+  }, [items, kind, filter, text, sort, reverse, genre, tag, decade, profileFilter, profiles, defaultProfile, defaultTvProfile, collection, collections, fileFilters])
   // Everything that narrows the list (sorting does not), and the way back.
-  const filtersActive =text.trim() !== '' || filter !== 'all' || genre !== '' || tag !== '' || decade !== '' || (kind === 'movie' && collection !== '') || fileFiltersActive(fileFilters)
+  const filtersActive =text.trim() !== '' || filter !== 'all' || genre !== '' || tag !== '' || decade !== '' || profileFilter !== '' || (kind === 'movie' && collection !== '') || fileFiltersActive(fileFilters)
   // What the files of this tab take on disk, for the line at the end of the chips.
   const totalText = useMemo(() => libraryTotalText(sumBytes(items ?? []), sumBytes(shown ?? []), filtersActive, kind), [items, shown, filtersActive, kind])
   function clearFilters() {
-    patchUi({ q: '', st: 'all', genre: '', tag: '', decade: '', collection: '', ...NO_FILE_FILTERS })
+    patchUi({ q: '', st: 'all', genre: '', tag: '', decade: '', collection: '', profile: '', ...NO_FILE_FILTERS })
   }
   const fileOptions = useMemo(() => fileFilterOptions(items ?? []), [items])
   const langOption = (code: string) => ({ value: code, label: `${langName(code)} (${code.toUpperCase()})` })
@@ -340,6 +350,7 @@ export default function Library() {
   }, [onMovies, onTV])
   const genreOptions = useMemo(() => [...new Set((items ?? []).flatMap((i) => i.genres))].sort(), [items])
   const tagOptions = useMemo(() => [...new Set((items ?? []).flatMap((i) => i.tags))].sort((a, b) => a.localeCompare(b)), [items])
+  const profileOptions = useMemo(() => profileFilterOptions(items ?? [], sortProfiles(profiles), defaultProfile, defaultTvProfile), [items, profiles, defaultProfile, defaultTvProfile])
   const decadeOptions = useMemo(() => [...new Set((items ?? []).filter((i) => i.year).map((i) => Math.floor(i.year / 10) * 10))].sort((a, b) => b - a), [items])
 
   function chooseKind(k: Tab) {
@@ -529,6 +540,42 @@ export default function Library() {
     }
   }
 
+  // Deletes the files that look incomplete among the chosen titles (only what
+  // the view shows can be chosen) and searches for them again.
+  async function redoIncompleteChosen() {
+    const req = redoRequest(chosen)
+    if (req.files === 0) {
+      toast.info(t('None of the selected titles has a file that looks incomplete. Pick the Looks incomplete filter to find them.'))
+      return
+    }
+    const titles = chosen.filter((i) => i.shortFiles > 0)
+    const answer = await confirm({
+      title: plural(req.files, 'Delete {n} incomplete file and search again?', 'Delete {n} incomplete files and search again?'),
+      body: (
+        <>
+          <p>
+            <strong>{nameList(titles.map((i) => i.title))}</strong>
+          </p>
+          <p>{t('These files are much shorter than the movie or episode should be, so they are most likely fakes or cut-off downloads. Each one is deleted (it goes to the recycle bin if that is on), the release it came from is blocklisted when Mediarium knows it, and Mediarium searches for another.')}</p>
+          <p>{t('A real file that is short for another reason would be deleted too. Open a title first if you are not sure.')}</p>
+        </>
+      ),
+      confirmLabel: t('Delete and search again'),
+      danger: true,
+    })
+    if (!answer) return
+    setBusy(true)
+    setNote(null)
+    try {
+      toast.info(redoAnswerText(await api.redoIncomplete({ movieIds: req.movieIds, seriesIds: req.seriesIds })))
+      load()
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function removeChosen() {
     const n = chosen.length
     if (n === 0) return
@@ -622,6 +669,9 @@ export default function Library() {
           <Dropdown icon="film" label={t('Collection')} value={collection} onChange={setCollection} options={[{ value: '', label: t('All collections') }, ...collections.map((c) => ({ value: String(c.id), label: c.name }))]} />
         )}
         <Dropdown icon="calendar" label={t('Year')} value={decade} onChange={setDecade} options={[{ value: '', label: t('Any year') }, ...decadeOptions.map((d) => ({ value: String(d), label: t('{decade}s', { decade: String(d) }) }))]} />
+        {profileOptions.length > 0 && (
+          <Dropdown icon="sliders" label={t('Quality profile')} value={profileFilter} onChange={setProfileFilter} options={[{ value: '', label: t('All profiles') }, ...profileOptions.map((p) => ({ value: String(p.id), label: `${p.name} (${p.count})` }))]} />
+        )}
         {fileOptions.videoCodecs.length > 0 && (
           <>
             <Dropdown icon="film" label={t('Video codec')} value={ui.vc} onChange={(v) => patchUi({ vc: v })} options={[{ value: '', label: t('Video codec') }, ...fileOptions.videoCodecs.map((c) => ({ value: c, label: c }))]} />
@@ -645,6 +695,7 @@ export default function Library() {
             { value: 'released', label: t('Newest release') },
             { value: 'size', label: t('Largest on disk') },
             { value: 'status', label: t('Status') },
+            { value: 'profile', label: t('Quality profile') },
           ]}
         />
         <button className="icon-btn" onClick={() => setReverse(!reverse)} aria-pressed={reverse} title={reverse ? t('Reversed order. Click for the normal order.') : t('Reverse the order')} aria-label={t('Reverse the order')}>
@@ -705,8 +756,8 @@ export default function Library() {
             'Downloaded: the file is in your library.\nDownloading: coming in now.\nPending: queued and waiting its turn.\nWaiting for a release: monitored, and Mediarium keeps checking.\nPartial: some episodes are downloaded.\nNot monitored: in your library, but nothing downloads by itself.\nFailed: the last attempt failed.',
           )}
         />
-        {FILTERS[kind].map((f) => (
-          <button key={f.id} className={`chip st-${f.id}${filter === f.id ? ' active' : ''}${f.id === 'downloading' && items?.some(f.test) ? ' live' : ''}`} onClick={() => setFilter(f.id)}>
+        {FILTERS[kind].filter((f) => f.id !== 'incomplete' || filter === f.id || items?.some(f.test)).map((f) => (
+          <button key={f.id} className={`chip st-${f.id}${filter === f.id ? ' active' : ''}${f.id === 'downloading' && items?.some(f.test) ? ' live' : ''}`} onClick={() => setFilter(f.id)} title={f.id === 'incomplete' ? t('Files that are much shorter than the movie or episode should be: fakes, samples or cut-off downloads.') : undefined}>
             <Icon name={FILTER_ICON[f.id] ?? 'grid'} size={14} />
             {f.label} {items ? <small>{items.filter(f.test).length}</small> : null}
           </button>
@@ -781,6 +832,14 @@ export default function Library() {
                 <Icon name="download" size={15} /> {t('Replace with smaller')}
               </button>
               <InfoTip text={t('For movies you moved to a lower quality profile. Looks for a smaller release the profile accepts, downloads it, and only then removes the big file. At most 25 at a time.')} />
+            </>
+          )}
+          {shown?.some((i) => i.shortFiles > 0) && (
+            <>
+              <button className="btn-sm btn-danger btn-with-icon" disabled={!chosen.some((i) => i.shortFiles > 0) || busy} onClick={() => void redoIncompleteChosen()}>
+                <Icon name="warning" size={15} /> {t('Delete incomplete files and search again')} <small className="mono">{redoRequest(chosen).files}</small>
+              </button>
+              <InfoTip text={t('For the selected titles that have a file much shorter than the movie or episode should be. Deletes those files, blocklists their releases when known, and searches again. Only the titles you selected are touched.')} />
             </>
           )}
           <button className="btn-sm btn-danger btn-with-icon" disabled={chosen.length === 0 || busy} onClick={() => void removeChosen()}>
@@ -908,7 +967,14 @@ export default function Library() {
               <th>{t('Title')}</th>
               <th>{t('Status')}</th>
               <th>{kind === 'movie' ? t('Quality') : t('Episodes')}</th>
-              <th>{t('Profile')}</th>
+              <th aria-sort={sort === 'profile' ? (reverse ? 'descending' : 'ascending') : 'none'}>
+                <button type="button" className="th-sort" onClick={() => (sort === 'profile' ? setReverse(!reverse) : setSort('profile'))} title={t('Sort by quality profile')}>
+                  {t('Profile')}
+                  <span className="th-arrow" aria-hidden="true">
+                    {sort === 'profile' ? (reverse ? '▼' : '▲') : ''}
+                  </span>
+                </button>
+              </th>
               <th />
             </tr>
           </thead>
@@ -957,7 +1023,7 @@ export default function Library() {
                     </div>
                   )}
                 </td>
-                <td style={{ color: 'var(--text-dim)' }}>{profiles.find((p) => p.id === (i.profileId || (i.kind === 'movie' ? defaultProfile : defaultTvProfile)))?.name ?? '—'}</td>
+                <td style={{ color: 'var(--text-dim)' }}>{profileName(i, profiles, defaultProfile, defaultTvProfile) || '—'}</td>
                 <td>
                   <div className="row-actions">
                     {actionsFor(i).map((a) => (

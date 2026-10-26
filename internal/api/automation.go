@@ -40,6 +40,7 @@ func (s *Server) StartAutomation() *automation.Scheduler {
 		// for example once the download hours begin) and the speed schedule.
 		sched := automation.NewScheduler(
 			automation.Job{Name: "download-line", Interval: downloadLineCheck, Run: func(context.Context) { s.kickDownloads() }},
+			automation.Job{Name: "music-import-wait", Interval: musicWaitJobTick, Run: s.retryMusicWaits}, // tries the imports that were waiting for MusicBrainz
 			automation.Job{Name: "speed-limit", Interval: speedCheck, Run: s.speedJob},
 		)
 		sched.Start()
@@ -50,6 +51,7 @@ func (s *Server) StartAutomation() *automation.Scheduler {
 		automation.Job{Name: "rss-sync", Interval: s.releaseCheckInterval(), IntervalFunc: s.releaseCheckInterval, Run: s.heavy(s.rssSync)},
 		automation.Job{Name: "delayed-grabs", Interval: time.Minute, Run: s.delayedGrabsJob}, // searches again when a held release has waited long enough
 		automation.Job{Name: "download-line", Interval: downloadLineCheck, Run: func(context.Context) { s.kickDownloads() }},
+		automation.Job{Name: "music-import-wait", Interval: musicWaitJobTick, Run: s.retryMusicWaits}, // tries the imports that were waiting for MusicBrainz
 		automation.Job{Name: "series-refresh", Interval: seriesRefreshInterval, Run: s.heavy(s.refreshAllSeries)},
 		automation.Job{Name: "music-refresh", Interval: musicRefreshInterval, Run: s.heavy(s.refreshMusicArtists)},
 		automation.Job{Name: "subtitle-sweep", Interval: subtitleSweepInterval, Run: s.heavy(s.subtitleSweepJob)},
@@ -462,6 +464,56 @@ func pickUpgradeResult(results []indexers.Result, profile quality.Profile, curre
 	return best
 }
 
+// notPossessive are short words ending in "s" that are not the name of a
+// maker, so "This Alien" is not "Alien".
+var notPossessive = map[string]bool{"this": true, "was": true, "his": true, "its": true, "has": true, "does": true, "plus": true, "yes": true, "less": true, "thus": true, "versus": true,
+	// Plural words that end the first part of many titles ("Star Wars Bad Boys" is not "Bad Boys").
+	"wars": true, "boys": true, "girls": true, "kings": true, "queens": true, "days": true, "nights": true, "lords": true, "dogs": true, "cats": true,
+	"things": true, "years": true, "games": true, "tales": true, "stories": true, "friends": true, "brothers": true, "sisters": true, "gods": true,
+	"heroes": true, "rings": true, "monsters": true, "kids": true, "guys": true, "ladies": true, "rules": true, "lies": true, "dreams": true,
+	"hearts": true, "secrets": true, "spies": true, "pirates": true, "knights": true, "wolves": true, "angels": true, "devils": true}
+
+// possessiveLead reports whether a release is the movie with a maker's name in
+// front, the way "Tim.Burtons.The.Nightmare.Before.Christmas.1993" is (the
+// parser drops the apostrophe). The movie's year must be known and the same as
+// the release's, the movie's title must be the end of the release title with
+// one to three words before it, and the last of those (the one next to the
+// title) must be a possessive: it ends in "s", has at least four letters and is
+// not a plain word like "this". "Bad Boys for Life" is not "Bad Boys" and
+// neither is "Star Wars Bad Boys".
+func possessiveLead(release parser.Release, movie library.Movie) bool {
+	if release.Year == 0 || release.Year != movie.Year {
+		return false
+	}
+	want := strings.Fields(metadata.TitleKey(movie.Title))
+	got := strings.Fields(metadata.TitleKey(release.Title))
+	if len(want) == 0 || len(got) <= len(want) {
+		return false
+	}
+	if strings.Join(got[len(got)-len(want):], " ") != strings.Join(want, " ") {
+		return false
+	}
+	// The movie's key leaves off a leading "The", "A" or "An"; the release may
+	// carry it between the maker and the title.
+	for _, article := range []string{"", "the", "a", "an"} {
+		lead := len(got) - len(want)
+		if article != "" {
+			lead--
+			if lead < 1 || got[lead] != article {
+				continue
+			}
+		}
+		if lead < 1 || lead > 3 {
+			continue
+		}
+		last := got[lead-1]
+		if len([]rune(last)) >= 4 && strings.HasSuffix(last, "s") && !strings.HasSuffix(last, "ss") && !notPossessive[last] {
+			return true
+		}
+	}
+	return false
+}
+
 // matchesMovie does a normalized (lowercased, punctuation-stripped) title
 // comparison plus a year check when both sides have one. This is a
 // simplification, not fuzzy/edit-distance matching — a known
@@ -480,7 +532,7 @@ func matchesMovieRel(release parser.Release, movie library.Movie) bool {
 	if release.Year != 0 && movie.Year != 0 && release.Year != movie.Year {
 		return false
 	}
-	if sameTitle(release.Title, movie.Title) {
+	if sameTitle(release.Title, movie.Title) || possessiveLead(release, movie) {
 		return true
 	}
 	// A release named by another title has to say its year when the movie has

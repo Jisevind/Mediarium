@@ -115,7 +115,15 @@ func (s *Server) handleMovieSearch(w http.ResponseWriter, r *http.Request) {
 	_, beforeHome := s.homeReleaseHold(r.Context(), m, profile)
 	sizeReasons := s.movieSizeRejections(r.Context(), m, profile)
 	m = s.movieWithAltTitles(r.Context(), m)
-	outcomes := s.searchMovieTitles(r.Context(), instances, m, nil)
+	// A site that lists no movie category is not asked, and is shown as left out.
+	asked, left := indexers.SplitByCategories(r.Context(), instances, movieCategory)
+	var notAsked []string
+	for _, inst := range left {
+		if inst.Enabled {
+			notAsked = append(notAsked, inst.Name)
+		}
+	}
+	outcomes := s.searchMovieTitles(r.Context(), asked, m, nil)
 	merged := indexers.MergeResults(outcomes)
 	out := []searchResultPayload{}
 	var found []indexers.Result
@@ -139,7 +147,7 @@ func (s *Server) handleMovieSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	markBestMatch(out, found, profile)
 	s.markCachedPayloads(r.Context(), out)
-	writeSearch(w, r, out, len(instances), outcomes)
+	writeSearchAll(w, r, out, len(instances), outcomes, notAsked, instances)
 }
 
 type searchNowResponse struct {

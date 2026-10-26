@@ -72,6 +72,7 @@ The keys the app stores in its settings table. You normally change these from th
 | `formats.trash_every_days` | how often the daily update reads the guides: "1" every day (the default) or "7" every week |
 | `formats.trash_last_check` | what the last check of the TRaSH Guides found, as JSON (shown under the switch on the Custom formats card) |
 | `formats.trash_last_update` | when the TRaSH Guides were last read for the daily update (RFC 3339) |
+| `import.check_duration` | "0" turns off the check that a video is about as long as its episode or movie before it is imported (Settings > Library > File names and importing); anything else, including unset, leaves it on |
 | `info.language` | the language titles, plots, genres and posters are read in, as a TMDB tag like "de-DE" (en-US when unset); file and folder names always use the English title |
 | `info.release_country` | the country release dates are read for, as a code like "IN"; unset = the country of the info language |
 | `legal.acknowledged_at` |  |
@@ -93,6 +94,7 @@ The keys the app stores in its settings table. You normally change these from th
 | `library.movie_folder_format` | token string; unset = "{Movie Title} ({Year})" |
 | `library.movie_name_format` | token string, used when preset=custom |
 | `library.movies_extra_paths` | more movie folders next to the main one (a JSON list of paths); each movie says which one its files go to |
+| `library.movies_new_folder` | where a movie added without a folder choice is kept: unset = the main folder, a path = that one of the extra folders, "most-room" = whichever movie folder has the most free space at the time |
 | `library.movies_path` |  |
 | `library.naming_preset` | plex\|jellyfin\|kodi\|minimal\|custom |
 | `library.presets_version` | revision of the built-in quality presets last applied; unset means never (set at start, not user-editable) |
@@ -103,9 +105,11 @@ The keys the app stores in its settings table. You normally change these from th
 | `library.trash_days` | days removed titles' files stay in the recycle bin (.mediarium-trash in the library folder); unset = 7, "0" = delete straight away |
 | `library.tv_copies_path` | the same for shows |
 | `library.tv_extra_paths` | the same for shows |
+| `library.tv_new_folder` | the same for shows |
 | `library.tv_path` | falls back to the TV_DIR env default when unset |
 | `library.unmonitor_downloaded` | "1" stops monitoring a movie once it is downloaded; unset or "0" keeps it monitored |
 | `library.unmonitor_finished_shows` | "1" stops monitoring a show once it has ended and every monitored episode is in; unset or "0" keeps it monitored |
+| `log.debug` | "1" writes the extra detail (debug lines) to the log, taking effect at once and after a restart; unset or "0" keeps the log to normal detail |
 | `mcp.enabled` | "1" lets AI assistants connect to the MCP address (POST /mcp) with an administrator's API key; unset or "0" keeps it off. Only a signed-in browser session can switch it on, not an API key |
 | `mediaservers.client_id` | set by the app, not user-editable |
 | `metadata.simkl_client_id` | encrypted; the Client ID of a Simkl app (own, or the one a release ships with) |
@@ -123,8 +127,11 @@ The keys the app stores in its settings table. You normally change these from th
 | `monitor.interval_minutes` | minutes between connection checks of your Usenet providers and indexers; unset = 30, "0" = off, under 5 is raised to 5 |
 | `music.default_profile_id` | id of the music profile artists without one of their own use; unset = the first |
 | `music.enabled` | older name of modules.music; still honoured while modules.music is unset, and kept in step with it |
+| `music.hide_bootlegs` | "1" also leaves out release groups whose releases are all bootlegs, promotions or pseudo-releases (one MusicBrainz request per group); unset = list them |
+| `music.hide_secondary` | secondary types (live, remix, compilation...) left out, comma separated keys, "none" = hide none; unset = hide all of them |
 | `music.lyrics_online` | "0" stops the player asking LRCLIB for lyrics a file doesn't have; anything else (including unset) leaves it on |
 | `music.path` | music library folder; falls back to the MUSIC_DIR env default (/music) when unset |
+| `music.show_types` | release types the artist pages list and following adds, a comma separated list of album, ep, single; unset = all three |
 | `network.proxy` | e.g. "socks5://user:pass@10.0.0.2:1080" |
 | `network.proxy_for` | e.g. "torrents,indexers" |
 | `notify.digest_day` | the day of the weekly summary, "0" (Sunday) to "6"; unset = no summary |
@@ -175,11 +182,11 @@ The keys the app stores in its settings table. You normally change these from th
 | `torrent.listen_port` | TCP+UDP port for incoming peers; unset or "0" = 58264 |
 | `torrent.pack_only_wanted` | "1" downloads only the episodes of the wanted show and season from a pack; unset or "0" = the whole pack |
 | `torrent.port_mapping` | "0" stops the built-in client asking the router (UPnP, NAT-PMP) to open its port; anything else (including unset) leaves it on. Never used with a VPN or proxy |
-| `torrent.seed_ratio_limit` | e.g. "2.0"; "0" = unlimited |
-| `torrent.seed_time_limit_h` | hours; "0" = unlimited |
+| `torrent.seed_ratio_limit` | e.g. "2.0"; empty or unset = unlimited, "0" = do not seed |
+| `torrent.seed_time_limit_h` | hours; empty or unset = unlimited, "0" = do not seed |
 | `torrent.sequential_default` | "1" downloads every new built-in torrent in order (first to last piece) so a video can be previewed while it downloads; unset or "0" = off. A torrent can override it |
 | `torrent.skip_junk` | "0" downloads every file of a torrent; anything else (including unset) skips samples and .nfo, .txt, .exe, .url files |
-| `torrent.upload_limit_kb` | upload speed limit of the built-in client in KB/s; unset or "0" = no limit. Applies in the same hours as the download limit |
+| `torrent.upload_limit_kb` | upload speed limit of the built-in client in KB/s; empty or unset = no limit, "0" = no uploading at all. Applies in the same hours as the download limit |
 | `ui.show_advanced` | "1" shows custom formats and format scores on the Quality page; unset follows whether any custom format exists |
 | `ui.trailer_background` | unset or "1" plays the trailer behind movie and show pages for everyone, unless a browser chose otherwise; "0" switches it off for everyone |
 | `ui.trailer_sound` | "1" starts the trailer behind a title page with its sound on, where the browser allows it; unset or "0" starts it muted |

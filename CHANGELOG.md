@@ -12,6 +12,68 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 - **The built-in player now plays videos the browser cannot play on its own.** Before playback, Mediarium probes the file with ffprobe. MP4/MOV and WebM files with browser-friendly streams are still sent directly, unchanged. Other containers, and files whose audio codec browsers do not support (AC-3, EAC-3, DTS, TrueHD), are converted on demand to H.264 and AAC in HLS segments. An MP4 with H.264 video keeps its video stream when only the audio needs converting; MKV is re-encoded so seeking and sound stay in step. Playback starts after the first segment and seeking converts only the part you jump to. Hardware VAAPI, Intel Quick Sync and NVIDIA NVENC are detected and tested, with libx264 as the fallback; a missing or broken ffmpeg falls back to the old direct-play path. Text subtitle tracks inside MKV/MP4 files (SubRip, ASS/SSA, WebVTT and MP4 text tracks) now appear in the player's subtitle menu, extracted as WebVTT, with language, SDH and forced labels; bitmap tracks such as PGS and VobSub are left out. Settings > General > Playback has the on/off switch, an ffmpeg path for your own build and the hardware picker ([playback.md](docs/playback.md)).
 - **Settings > General has a Reduce effects switch.** It stops the decorative background motion (the drifting shapes, the moving grain and the film-strip edge) in this browser, while loading spinners and progress bars keep moving. It helps on low-powered devices where the constant movement keeps the browser busy.
 
+## [3.7.4] - 2026-10-26
+
+In short: a big library loads faster, a music import waits for MusicBrainz instead of failing, a Detailed logging switch, a Quality profile filter, folders for new titles, and a Reddit community.
+
+### Added
+
+- Settings > Library > Folders has **New movies go to** and **New shows go to** when a kind has more than one folder: the main folder, one of the extra folders, or the folder with the most room (free space is looked at each time a title is added, so two drives fill up side by side). The Add dialog starts on that folder. Titles from a Plex watchlist, an import list, a request, a followed collection, a grabbed release and the Radarr/Sonarr compatible API (which now honours `rootFolderPath`) go there too. Changing the rule later moves nothing. The Dashboard shows a card for every movie and TV folder, with "new titles go here" on the one in use. Contributed by WassawRoki on GitHub, #135.
+- The Library has a **Quality profile** filter on the Movies and TV tabs, with the number of titles per profile, and Quality profile is a sort choice (and the Profile heading in the list view sorts). Idea from mirisbowring on GitHub, #130.
+- The window for adding a movie has a tick box **Add the other films of this collection too** for movies that belong to a collection. It adds them with the same profile, folder and monitoring as the movie. Idea from SanketBaraiya on GitHub, #132.
+- Settings > Logs has a **Detailed logging** switch (off by default) that writes more to the log, for finding a problem with help. It applies at once and is kept after a restart.
+- Mediarium has a community on Reddit, r/Mediarium, linked from the README, the docs, the website and the menu in the app. Idea from xrandallx1 on GitHub, discussion #133.
+
+### Changed
+
+- A music import that cannot reach MusicBrainz (it answers "busy" or too many requests during its long overload) no longer fails the album. The lookups try again after 2, 5, 15 and 45 seconds and 2 minutes, then the album waits ("MusicBrainz is busy. Mediarium will try again later."), keeps its files, and the import is tried again every 15 minutes for up to a day without downloading anything again. **Retry now** and **Retry** repeat only the import. Idea from u/troelsdk on Reddit.
+- The very large movie and show lists load faster. The file details they show (codecs, languages, short files) are no longer rebuilt on every load while files are being read, and the database keeps them in a form the lists read without opening each file's full details. The first start after this release adds an index and fills one column for every scanned file, which takes a few seconds on a very large library. Reported by mirisbowring on GitHub, #52.
+
+### Fixed
+
+- The Radarr "Missing Movies" card in the nzb360 app was empty when the missing movies were still waiting for a release. Monitored movies without a file are listed whether or not they are out yet. Reported by Bayharbourbutcher1 on GitHub, #94.
+- The Server card's storage total counted only one drive on Docker Desktop, where every shared folder reports the same filesystem id. Contributed by WassawRoki on GitHub, #135.
+- The docs say the nzb360 dashboard looks back 30 days (they said one week), and a new section answers whether "All episodes" downloads what you already have (it does not). Asked by mirisbowring on GitHub, #136.
+
+## [3.7.3] - 2026-10-25
+
+In short: movie releases named with the maker in front of the title are found again, the nzb360 dashboard looks back 30 days, and the episode table fits a tablet.
+
+### Fixed
+
+- A movie release named with the maker in front of the title, such as `Tim.Burtons.The.Nightmare.Before.Christmas.1993`, was dropped from the release list and from automatic searches because the name did not equal the movie's title. It is now taken for that movie when the year is the same and the maker's name ends in an "s" (Tim Burtons, Disneys). Names like "Bad Boys for Life" still don't match "Bad Boys". Reported by Hoopes80 on GitHub, #121.
+- The nzb360 dashboard cards look back 30 days instead of 7 for movies and episodes that came in without a Mediarium download, and a movie whose file arrived after the movie was added is dated by its file. Reported by Bayharbourbutcher1 on GitHub, #94.
+- On a show's page the episode table scrolled sideways on a tablet in some languages. Its buttons now wrap and the cells are a little narrower.
+
+## [3.7.2] - 2026-10-24
+
+In short: files that are far too short are turned away, a release search shows which indexers it asked, a show can have its own numbering, music filters for the artist pages, and more fixes for the nzb360 dashboard.
+
+### Added
+
+- Choose a release now starts with a short line saying how many indexers were searched and what each did ("Searched 8 indexers: 2 had releases, 5 had nothing for this title, 1 did not answer."). A button opens a table with every indexer, its type, what it found (or why it did not answer or was skipped) and how long it took. The Any indexer list has every indexer that was asked, with the number of releases next to each. Thanks to SanketBaraiya on GitHub, #122.
+- A show's page has a new **Custom numbering and names** section. When the files and releases number a show differently from TMDB (a show listed as season 1 that releases call season 15, or a season that TMDB splits), you can add rules: library season, release season, an episode offset and an optional first and last episode. "This show's releases use season N" makes the common rule in one click, and **Save and rescan** stores the rules and runs Rescan files. The rules are used when files and releases are matched to episodes, for season packs and in Import a file by hand. You can also add extra search names for a show.
+- A **Link a file** button on each episode row (administrators) points the episode at a video file in your library folders and marks it downloaded. Nothing is moved or renamed.
+- Music: a new "Music: what to show" card under Settings > Quality. Pick which release types the artist pages list (albums, EPs, singles) and which kinds to hide (live, remix, compilation, soundtrack, demo and more), with a one-click "Official studio releases only" preset. Following an artist only adds what passes. The defaults are what it always did, so nothing changes until you change it. Idea from u/troelsdk on Reddit.
+- Music: an optional "Hide bootleg-only releases" switch (off by default). It leaves out release groups whose releases are all bootlegs, promotions or pseudo-releases. Each group is checked once in the background and the answer is kept. Reported by u/troelsdk on Reddit.
+- Music: each artist page has "Show: Albums EPs Singles" chips, a "More filters" section and "Use the library setting". A line such as "3 hidden: 2 live, 1 bootleg" says what is left out, with "Show them" and "Add to library". Albums already in the library are never removed by a filter change. Idea from u/troelsdk on Reddit.
+- The Library has a "Looks incomplete" filter chip, a movie's page and an episode's row say "Only 1 min long", and administrators can press "Delete this file and search again" there, or in the Library's select bar for the selected titles. Each deletion asks first and blocklists the release when it is known.
+
+### Changed
+
+- Seeding limits: an empty box now means unlimited and 0 means don't seed, for the seed ratio limit and the seed time limit (global and per indexer). An upload limit of 0 switches uploading off while downloads carry on. Anything you had set to 0 before is changed to empty when you update, so nothing behaves differently. Private trackers may ban accounts that don't seed, so the page says so. Thanks to wivaku on GitHub, discussion #123.
+- The Library and Settings menus on the left open only when you click them, and opening one closes the other. Being on a page inside a group no longer opens it.
+- Choose a release for a movie, a show or an album no longer asks sites that list no movies, no TV or no music. They show as skipped in the table.
+
+### Fixed
+
+- A download whose video is far shorter than its episode or movie (a fake, a sample or a cut-off file, for example a one-minute "2160p episode" of 121 MB) is no longer imported as a success. Mediarium reads the length of the video before filing it, and when it is under half of the runtime TMDB gives, the download fails with a plain reason, the release is blocklisted and the next one is tried. In a season pack only the short files are left out. A file whose length can't be read is imported as before. Switch: Settings > Library > File names and importing > "Check that the video is as long as the episode or movie" (on by default). Thanks to a problem report sent from inside the app.
+- The nzb360 dashboard cards for Radarr and Sonarr: some history ids were bigger than a 32-bit number, which made the movie card's history and the History tab unreadable to the app. They now fit. "Recently downloaded" keeps to the last week for items that came in without a Mediarium download, and missing movies, recommended movies, Radarr's /credit and the poster, fanart and banner pictures are answered. Reported by Bayharbourbutcher1 on GitHub, #94.
+- The calendar's Today button no longer sits between the month arrows. Reported by Bayharbourbutcher1 on GitHub, #119.
+- Adding a download by hand now accepts magnet links that have spaces in the name. Contributed by shinjuku712 on GitHub, #124.
+- The torrents on/off switch could not be clicked once torrents were off, because the card was blurred over it. It now stays clickable.
+- The table of searched indexers fits a phone.
+
 ## [3.7.1] - 2026-10-23
 
 In short: Premiumize as a third debrid service, a Music tab in the search results, a Retry button for picked downloads, and fixes for the calendar views, the Simkl Client ID test, the nzb360 dashboard and a lost library marker file.

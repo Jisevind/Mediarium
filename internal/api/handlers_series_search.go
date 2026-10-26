@@ -207,9 +207,17 @@ func (s *Server) handleSeriesSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	series = s.seriesWithAltTitles(r.Context(), series)
-	outcomes := indexers.SearchAll(indexers.AsManual(r.Context()), instances, tvSearchQuery(series.Title, season, episode), tvCategory)
+	// A site that lists no TV category is not asked, and is shown as left out.
+	asked, left := indexers.SplitByCategories(r.Context(), instances, tvCategory)
+	var notAsked []string
+	for _, inst := range left {
+		if inst.Enabled {
+			notAsked = append(notAsked, inst.Name)
+		}
+	}
+	outcomes := indexers.SearchAll(indexers.AsManual(r.Context()), asked, tvSearchQuery(series.Title, season, episode), tvCategory)
 	for _, q := range s.extraTVQueries(series, season, episode) {
-		outcomes = append(outcomes, indexers.SearchAll(indexers.AsManual(r.Context()), instances, q, tvCategory)...)
+		outcomes = append(outcomes, indexers.SearchAll(indexers.AsManual(r.Context()), asked, q, tvCategory)...)
 	}
 	merged := indexers.MergeResults(outcomes)
 	mapper := s.releaseMapper(series)
@@ -242,7 +250,7 @@ func (s *Server) handleSeriesSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	markBestMatch(out, found, profile)
 	s.markCachedPayloads(r.Context(), out)
-	writeSearch(w, r, out, len(instances), outcomes)
+	writeSearchAll(w, r, out, len(instances), outcomes, notAsked, instances)
 }
 
 // coversTarget reports whether a parsed release satisfies a season/episode
@@ -303,7 +311,7 @@ func (s *Server) grabFromSearchTV(w http.ResponseWriter, r *http.Request, req gr
 			return
 		}
 		userID, byline := requester(r)
-		series, err = s.addSeriesFromTMDB(r.Context(), match.TMDBID, userID, true)
+		series, err = s.addSeriesFromTMDB(r.Context(), match.TMDBID, userID, true, s.newShowFolder())
 		if err != nil {
 			writeUpstreamError(w, "add that show", err)
 			return

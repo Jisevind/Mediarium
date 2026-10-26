@@ -267,8 +267,9 @@ export default function CalendarGrid({ entries, compact, zone: zoneProp }: { ent
     setOpenDay(null)
     setCursor(new Date(cursor.getFullYear(), cursor.getMonth() + n, 1))
   }
+  const currentMonth = new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1, 1)
   const goToday = () => {
-    const target = new Date(Number(today.slice(0, 4)), Number(today.slice(5, 7)) - 1, 1)
+    const target = currentMonth
     if (target.getTime() === cursor.getTime()) return
     setSlide(target > cursor ? 'next' : 'prev')
     setOpenDay(null)
@@ -307,17 +308,22 @@ export default function CalendarGrid({ entries, compact, zone: zoneProp }: { ent
           <p className="prog-count">{monthCount === 0 ? t('Nothing scheduled this month.') : plural(monthCount, '{n} release this month', '{n} releases this month')}</p>
         </div>
         <div className="prog-controls">
-          <div className="prog-console">
-            <button type="button" className="prog-round" onClick={() => shift(-1)} aria-label={t('Previous month')}>
-              <span className="prog-back">
-                <Icon name="open" size={16} />
+          <div className="prog-nav">
+            <div className="prog-console">
+              <button type="button" className="prog-round" onClick={() => shift(-1)} aria-label={t('Previous month')}>
+                <span className="prog-back">
+                  <Icon name="open" size={16} />
+                </span>
+              </button>
+              <span className="prog-label" aria-live="polite">
+                {cursor.toLocaleString(locale(), { month: 'short', year: 'numeric' })}
               </span>
-            </button>
-            <button type="button" className="prog-today" onClick={goToday}>
+              <button type="button" className="prog-round" onClick={() => shift(1)} aria-label={t('Next month')}>
+                <Icon name="open" size={16} />
+              </button>
+            </div>
+            <button type="button" className="prog-today" onClick={goToday} disabled={cursor.getTime() === currentMonth.getTime()}>
               {t('Today')}
-            </button>
-            <button type="button" className="prog-round" onClick={() => shift(1)} aria-label={t('Next month')}>
-              <Icon name="open" size={16} />
             </button>
           </div>
           <div className="seg prog-views" role="group" aria-label={t('Calendar view')}>

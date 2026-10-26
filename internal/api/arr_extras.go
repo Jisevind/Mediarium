@@ -22,6 +22,17 @@ type arrRecommended struct {
 	fetched bool
 }
 
+// arrRecommendedMovie is a movie of /importlist/movie: the full lookup
+// resource with the flags the apps read to tell a recommendation from a movie
+// of the library.
+type arrRecommendedMovie struct {
+	arrMovie
+	IsRecommendation bool  `json:"isRecommendation"`
+	IsExisting       bool  `json:"isExisting"`
+	IsExcluded       bool  `json:"isExcluded"`
+	Lists            []int `json:"lists"`
+}
+
 // arrImportListMovies answers GET /importlist/movie, the movies Radarr
 // recommends from its import lists and TMDB. Here that is what's trending on
 // TMDB, minus what the library already has, at most 20, kept for an hour.
@@ -44,7 +55,7 @@ func (s *Server) arrImportListMovies(w http.ResponseWriter, r *http.Request) {
 		s.arrRecs.movies, s.arrRecs.at, s.arrRecs.fetched = fresh, time.Now(), true
 	}
 	// Owned movies are left out each time, so adding one drops it at once.
-	out := []arrMovie{}
+	out := []arrRecommendedMovie{}
 	for _, m := range s.arrRecs.movies {
 		if len(out) >= 20 {
 			break
@@ -52,7 +63,7 @@ func (s *Server) arrImportListMovies(w http.ResponseWriter, r *http.Request) {
 		if _, ok, _ := s.MovieRepo.GetByTMDBID(m.TMDBID); ok {
 			continue
 		}
-		out = append(out, m)
+		out = append(out, arrRecommendedMovie{arrMovie: m, IsRecommendation: true, Lists: []int{}})
 	}
 	writeJSON(w, http.StatusOK, out)
 }

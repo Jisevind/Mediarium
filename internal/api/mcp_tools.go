@@ -459,12 +459,13 @@ func yearOf(y int) any {
 func mcpReadTools() []*mcpTool {
 	return []*mcpTool{
 		readTool("library_search",
-			"Search the library and filter it. kind is movies (default), tv, music or books. Filters: query (part of the title; movies and TV also match the genre names and the description, so \"action\" finds action films), genre (a genre name such as Action, Comedy, Horror, Sci-Fi; movies and TV), quality (such as 1080p, 2160p, 4k, remux, bluray), min_size_gb and max_size_gb (size of the file; for TV the total of the show), release_group (part of the group name, movies and TV), audio_language (movies and TV: has an audio track in this language, such as German or de), missing_subtitle_language (movies and TV: no subtitles in this language, inside the video or as a file beside it) and video_codec (movies and TV: h264, hevc, av1, vp9, mpeg2), has_file, monitored. Returns total (all matches) and one page of results (limit up to 100, offset to page). To count, ask with limit 1 and read total. Sizes are in GB (1024 MB steps).",
+			"Search the library and filter it. kind is movies (default), tv, music or books. Filters: query (part of the title; movies and TV also match the genre names and the description, so \"action\" finds action films), genre (a genre name such as Action, Comedy, Horror, Sci-Fi; movies and TV), quality (such as 1080p, 2160p, 4k, remux, bluray), min_size_gb and max_size_gb (size of the file; for TV the total of the show), release_group (part of the group name, movies and TV), audio_language (movies and TV: has an audio track in this language, such as German or de), missing_subtitle_language (movies and TV: no subtitles in this language, inside the video or as a file beside it) video_codec (movies and TV: h264, hevc, av1, vp9, mpeg2), incomplete (movies and TV: true keeps only titles with a file far shorter than the movie or episode should be, a fake or cut-off download), has_file, monitored. Returns total (all matches) and one page of results (limit up to 100, offset to page). To count, ask with limit 1 and read total. Sizes are in GB (1024 MB steps).",
 			schemaOf(props{
 				"query": pStr("Part of the title, a genre name or a word from the description (title matches come first)."), "genre": pStr("A genre name such as Action, Comedy, Horror or Sci-Fi (movies and TV)."),
 				"kind":    pEnum("Which part of the library. Default movies.", "movies", "tv", "music", "books"),
 				"quality": pStr("Quality text such as 1080p, 2160p, 4k, bluray, remux."), "min_size_gb": pNum("Smallest size in GB."), "max_size_gb": pNum("Largest size in GB."),
 				"release_group": pStr("Part of the release group's name."), "audio_language": pStr("Only titles with an audio track in this language, for example German, de or ger."),
+				"incomplete":                pBool("True: only titles that have a file far shorter than the movie or episode should be (under half of its runtime). False: only titles without such a file."),
 				"missing_subtitle_language": pStr("Only titles whose files have no subtitles in this language (inside the video or beside it), for example Dutch or nl."),
 				"video_codec":               pStr("Only titles with this video codec: h264, hevc, av1, vp9, mpeg2."), "has_file": pBool("true: only titles with a file. false: only titles without one."),
 				"monitored": pBool("true: only monitored. false: only unmonitored."), "limit": pInt("How many to return, 1 to 100. Default 25."), "offset": pInt("Skip this many results."),
@@ -520,6 +521,9 @@ type librarySearchArgs struct {
 	// MissingSubtitleLanguage keeps the titles whose files have no subtitles in
 	// this language, neither inside the video nor as a file beside it.
 	MissingSubtitleLanguage string `json:"missing_subtitle_language"`
+	// Incomplete keeps (true) or leaves out (false) the titles with a file far
+	// shorter than the movie or episode should be.
+	Incomplete *bool `json:"incomplete"`
 }
 
 // mediaWanted says whether any of a title's file summaries satisfies the
@@ -579,7 +583,7 @@ func mediaText(sums []library.MediaSummary) (video, audio string) {
 // withMediaNote says, when the answer was filtered on what the files hold,
 // how many files have been read so far: the others cannot match yet.
 func (c *mcpCtx) withMediaNote(a librarySearchArgs, out map[string]any) map[string]any {
-	if a.AudioLanguage == "" && a.VideoCodec == "" && a.MissingSubtitleLanguage == "" {
+	if a.AudioLanguage == "" && a.VideoCodec == "" && a.MissingSubtitleLanguage == "" && a.Incomplete == nil {
 		return out
 	}
 	if done, total, err := c.s.MovieRepo.MediaInfoCounts(); err == nil && done < total {
@@ -702,11 +706,13 @@ func (c *mcpCtx) searchMovies(a librarySearchArgs, limit int) (any, error) {
 		Video        string  `json:"video_codec,omitempty"`
 		AudioLangs   string  `json:"audio_languages,omitempty"`
 		Genres       string  `json:"genres,omitempty"`
+		Incomplete   bool    `json:"looks_incomplete,omitempty"`
 		rank         int
 		path         string
 	}
 	rows := []row{}
 	media := c.s.mediaSummaryNow(a.MissingSubtitleLanguage != "").movies
+	short := c.s.incompleteNow().movies
 	noGenres := 0
 	sizeFilter := a.MinSizeGB != nil || a.MaxSizeGB != nil
 	for _, m := range list {
@@ -722,6 +728,10 @@ func (c *mcpCtx) searchMovies(a librarySearchArgs, limit int) (any, error) {
 			continue
 		}
 		if a.Monitored != nil && *a.Monitored != m.Monitored {
+			continue
+		}
+		_, isShort := short[m.ID]
+		if a.Incomplete != nil && *a.Incomplete != isShort {
 			continue
 		}
 		var gb float64
@@ -745,7 +755,7 @@ func (c *mcpCtx) searchMovies(a librarySearchArgs, limit int) (any, error) {
 		video, audio := mediaText(sums)
 		rows = append(rows, row{ID: m.ID, TMDBID: m.TMDBID, Title: m.Title, Year: yearOf(m.Year), Status: string(m.Status), HasFile: hasFile,
 			Quality: m.Quality, SizeGB: gb, ReleaseGroup: group, Profile: names[m.ProfileID], Monitored: m.Monitored, Video: video, AudioLangs: audio,
-			Genres: strings.Join(m.Genres, ", "), rank: rank, path: m.FilePath})
+			Genres: strings.Join(m.Genres, ", "), Incomplete: isShort, rank: rank, path: m.FilePath})
 	}
 	sort.SliceStable(rows, func(i, j int) bool {
 		if rows[i].rank != rows[j].rank {
@@ -786,10 +796,12 @@ func (c *mcpCtx) searchSeries(a librarySearchArgs, limit int) (any, error) {
 		Video      string  `json:"video_codec,omitempty"`
 		AudioLangs string  `json:"audio_languages,omitempty"`
 		Genres     string  `json:"genres,omitempty"`
+		ShortFiles int     `json:"incomplete_files,omitempty"`
 		rank       int
 	}
 	rows := []row{}
 	media := c.s.mediaSummaryNow(a.MissingSubtitleLanguage != "").series
+	short := c.s.incompleteNow().series
 	noGenres := 0
 	for _, sr := range data.list {
 		if sr.Genres == nil {
@@ -800,6 +812,9 @@ func (c *mcpCtx) searchSeries(a librarySearchArgs, limit int) (any, error) {
 			continue
 		}
 		if a.Monitored != nil && *a.Monitored != sr.Monitored {
+			continue
+		}
+		if a.Incomplete != nil && *a.Incomplete != (len(short[sr.ID]) > 0) {
 			continue
 		}
 		have := sr.DownloadedCount
@@ -835,7 +850,7 @@ func (c *mcpCtx) searchSeries(a librarySearchArgs, limit int) (any, error) {
 		video, audio := mediaText(media[sr.ID])
 		rows = append(rows, row{ID: sr.ID, TMDBID: sr.TMDBID, Title: sr.Title, Year: yearOf(sr.Year), Episodes: sr.EpisodeCount, WithFile: have,
 			Missing: max(sr.EpisodeCount-have, 0), SizeGB: gb, Profile: names[sr.ProfileID], Monitored: sr.Monitored, Video: video, AudioLangs: audio,
-			Genres: strings.Join(sr.Genres, ", "), rank: rank})
+			Genres: strings.Join(sr.Genres, ", "), ShortFiles: len(short[sr.ID]), rank: rank})
 	}
 	sort.SliceStable(rows, func(i, j int) bool {
 		if rows[i].rank != rows[j].rank {

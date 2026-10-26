@@ -72,6 +72,9 @@ type queueItemPayload struct {
 	// waiting download does not start (the disk is nearly full), or that a
 	// failed release is held back from searches for now.
 	Note string `json:"note,omitempty"`
+	// Waiting says an album's files are downloaded and its import is waiting
+	// for MusicBrainz; Note says so and the page offers Retry now.
+	Waiting bool `json:"waiting,omitempty"`
 	// Unpack is how far the unpacking of an archive has come, while a download
 	// is being unpacked: the page shows it instead of a bar stuck at 100%.
 	Unpack *queueUnpack `json:"unpack,omitempty"`
@@ -228,7 +231,11 @@ func (s *Server) handleListQueue(w http.ResponseWriter, r *http.Request) {
 			p.Resolution, p.Source, p.Codec = rel.Resolution, rel.Source, rel.Codec
 			p.Language = quality.FitLanguage(rel, preferred).Label
 		}
+		if s.musicWaitingNow(it) {
+			p.Waiting, p.Note = true, musicWaitNote
+		}
 		switch {
+		case p.Waiting:
 		case it.Status == queue.StatusQueued && diskNote != "-":
 			p.Note = diskNote
 		case it.Status == queue.StatusFailed && held[nzbLinkHoldKey(it.NZBURL, it.ReleaseTitle)]:
@@ -349,6 +356,11 @@ var errNotRetryable = errors.New("Only a failed or stopped download can be retri
 // retryQueueItem is Retry on one download (see handleRetryQueueItem), shared
 // with the bulk action. It answers the new queue item.
 func (s *Server) retryQueueItem(item queue.Item) (int64, error) {
+	// An album that is only waiting for MusicBrainz keeps its files: Retry
+	// repeats the import from them, it does not download again.
+	if s.retryMusicImport(item) {
+		return item.ID, nil
+	}
 	if item.Status != queue.StatusFailed && item.Status != queue.StatusStopped {
 		return 0, errNotRetryable
 	}

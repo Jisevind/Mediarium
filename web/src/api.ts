@@ -7,6 +7,8 @@ import { outsideService, slowServiceMessage } from './outsideService'
 import { signalFor } from './requestSignal'
 import { st, t } from './i18n.ts'
 import type { AlbumRescanReport } from './albumRescan'
+import type { MusicFilter } from './musicFilter'
+import type { Searched } from './searched'
 import type { Diagnostics } from './supportReport'
 import type { ProfileScoreChange } from './formatChanges'
 import type { ProblemCounts, ProblemList } from './problemsView'
@@ -277,6 +279,18 @@ export interface SeriesNumberingEntry {
   season: number // the season of the show it sits in (0: specials, -1: not placed)
   offset?: number // added to its episode numbers to get the episode in that season
   name?: string
+}
+
+export interface CustomNumberingRule {
+  librarySeason: number
+  releaseSeason: number
+  offset?: number
+  from?: number
+  to?: number
+}
+export interface CustomNumberingBody {
+  rules: CustomNumberingRule[]
+  names: string[]
 }
 
 export interface SeriesNumbering {
@@ -672,6 +686,7 @@ export interface Settings {
   seriesFolderFormat?: string
   // Imported videos keep the file name they came with (folders are named as usual).
   keepOriginalNames?: boolean
+  checkDuration?: boolean // turn away a download whose video is far shorter than its episode or movie
   hasTmdbApiKey: boolean
   traktClientId?: string
   hasTraktClientId: boolean
@@ -765,6 +780,10 @@ export interface Settings {
   minFreeGB?: number
   moviesExtraPaths?: string[] // more movie folders next to the main one
   tvExtraPaths?: string[] // more TV folders next to the main one
+  // Where a title added without a folder choice goes: "" the main folder, an
+  // extra folder's path, or "most-room" for whichever has the most free space.
+  moviesNewFolder?: string
+  tvNewFolder?: string
   torrentStallHours?: number // hours a torrent may get no data before it is given up on; 0 = never; -1 or absent = each client's own default
   notifyQuietHours?: string
   digestDay?: number // the day of the weekly summary, 0 is Sunday; -1 = none
@@ -1103,14 +1122,14 @@ export interface TorrentOptions {
   sequentialDefault: boolean
   skipJunk: boolean
   packOnlyWanted: boolean
-  uploadLimitKB: number
+  uploadLimitKB: number | null // KB/s; null = no limit, 0 = no uploading at all
   portMapping: { enabled: boolean; state: PortMapState; method?: string; port?: number; externalIp?: string }
   allowLocalAddresses: boolean // trackers, web seeds and magnet metadata may be on the home network (read when the client starts)
   categories: TorrentCategory[]
   categoryByKind: Partial<Record<'movie' | 'tv' | 'music' | 'book', string>>
 }
 
-// A torrent indexer's own seeding rule. null follows the global limit; 0 means no limit.
+// A torrent indexer's own seeding rule. null follows the global limit; 0 means don't seed; -1 means no limit, even when the global one has a limit.
 export interface SeedRule {
   ratio: number | null
   hours: number | null
@@ -1470,6 +1489,7 @@ export interface Series {
   originCountry?: string[] // where it comes from ("US", "GB"); empty until the show is refreshed
   nameTag?: string // tells it from another show of the same name in the library ("US", "UK" or the year)
   media?: MediaSummary // what the downloaded episodes' files hold, once they have been read
+  shortFiles?: number // how many of its files are far shorter than their episodes should be
 }
 
 // What a video file holds, read from its headers (see fileInfo.ts).
@@ -1497,6 +1517,11 @@ export interface FileSubtitle {
   title?: string
   default?: boolean
   forced?: boolean
+}
+// A file far shorter than its movie or episode should be: its length and the one it should have.
+export interface ShortFileNote {
+  minutes: number
+  expected?: number
 }
 export interface FileInfo {
   container: string
@@ -1532,6 +1557,7 @@ export interface Episode {
   monitored: boolean
   sizeBytes?: number // the file on disk (downloaded episodes)
   fileInfo?: FileInfo // what the file holds, once it has been read
+  shortFile?: ShortFileNote // the file is far shorter than the episode should be
 }
 
 // A second copy of a movie or show, kept in another quality in the copies folder.
@@ -1623,6 +1649,7 @@ export interface Movie {
   releaseDate?: string // "2024-03-01", for sorting
   sizeBytes?: number // the file on disk
   media?: MediaSummary // what the file holds, once it has been read
+  shortFile?: ShortFileNote // the file is far shorter than the movie should be
 }
 
 export interface QueueItem {
@@ -1647,6 +1674,7 @@ export interface QueueItem {
   destPath?: string
   interrupted?: boolean // paused, but not by a person: Mediarium was restarted while it downloaded
   pending?: 'pausing' | 'stopping' // still winding down
+  waiting?: boolean // an album whose files are downloaded and whose import waits for MusicBrainz
   keptFiles?: boolean // the partly downloaded files are still in the downloads folder
   queuePosition?: number // waiting in line: 1 is next
   indexerName?: string
@@ -2136,6 +2164,7 @@ export interface MovieDetail extends TitleDetails {
   filePath?: string
   folderPath?: string // the full folder of its files, as Mediarium sees it
   fileInfo?: FileInfo // what the file holds, once it has been read
+  shortFile?: ShortFileNote // the file is far shorter than the movie should be
   // The series of films this one is part of, when it is.
   collection?: CollectionRef
   releaseDates?: MovieReleaseDates
@@ -2434,13 +2463,31 @@ export interface DiskUsage {
 }
 
 export interface DashFolder extends FolderCheck {
-  key: 'movies' | 'tv' | 'music' | 'ebooks' | 'audiobooks' | 'downloads'
+  // movies, tv, music, ebooks, audiobooks or downloads; an extra movie or TV
+  // folder is movies-extra-1, tv-extra-1 and so on.
+  key: string
   label: string
   libraryBytes: number
   items: number
   itemsLabel: string
   hardlinks?: boolean
   off?: boolean // that media type is switched off
+  newTitles?: boolean // titles added without a folder choice go here right now
+}
+
+// Where a title added without a folder choice goes right now: a path for
+// administrators, a label for everyone else. mostRoom: the rule is "the
+// folder with the most room", so the folder can change from day to day.
+export interface NewTitleFolder {
+  folder: string
+  mostRoom: boolean
+}
+
+// The folders a movie or a show can be kept in, the main one first.
+export interface LibraryFolders {
+  movies: string[]
+  tv: string[]
+  newTitles: { movies: NewTitleFolder; tv: NewTitleFolder }
 }
 
 export interface DashActive {
@@ -2778,6 +2825,35 @@ export interface MusicArtist {
   monitoredCount: number
   downloadedCount: number
   albums?: MusicAlbum[]
+  // What this artist's page lists and following adds (only on GET /music/artists/{id}).
+  filter?: MusicFilter & { useLibrary: boolean }
+}
+
+// The library-wide choice of what the music pages list, with the defaults, the
+// "Official studio releases only" preset and the secondary types that can be hidden.
+export interface MusicFilterChoices {
+  filter: MusicFilter
+  defaults: MusicFilter
+  studio: MusicFilter
+  secondaryTypes: { key: string; name: string }[]
+}
+
+// A release the filter leaves out of an artist's page.
+export interface MusicHiddenGroup {
+  mbid: string
+  title: string
+  type: string
+  releaseDate: string
+  secondaryTypes: string[]
+  hiddenBy: string
+}
+
+export interface MusicDiscography {
+  filter: MusicFilter & { useLibrary: boolean }
+  hidden: MusicHiddenGroup[]
+  counts: Record<string, number>
+  // Releases still being looked at for the bootleg test (shown until known).
+  checking: number
 }
 
 // A release list with what the indexers said: how many were asked and
@@ -2790,6 +2866,8 @@ export interface SearchAnswer<T> {
   warnings?: string[]
   // Indexers that were not asked because they don't list this kind of release.
   skipped?: string[]
+  // Every indexer the search had to do with, and what became of each.
+  searched?: Searched[]
 }
 
 export interface MusicRelease extends SearchResult {
@@ -3427,7 +3505,7 @@ export const api = {
   probeUsenetServer: (id: number) => post<{ accepted: number; requested: number; refused: boolean; message: string }>(`/usenet-servers/${id}/probe`),
   downloadsStatus: () => get<DownloadsStatus>('/downloads/status'),
   torrentOptions: () => get<TorrentOptions>('/downloads/torrent-options'),
-  setTorrentOptions: (patch: Partial<Omit<TorrentOptions, 'portMapping'>> & { portMapping?: boolean }) => put<TorrentOptions>('/downloads/torrent-options', patch),
+  setTorrentOptions: (patch: Partial<Omit<TorrentOptions, 'portMapping' | 'uploadLimitKB'>> & { portMapping?: boolean; uploadLimitKB?: number }) => put<TorrentOptions>('/downloads/torrent-options', patch),
   torrentDetail: (id: number) => get<TorrentDetail>(`/queue/${id}/torrent`),
   setTorrentDetail: (id: number, patch: { sequential?: TorrentDetail['sequential']; downLimitKB?: number; upLimitKB?: number }) => put<TorrentDetail>(`/queue/${id}/torrent`, patch),
   setTorrentFiles: (id: number, skip: string[]) => put<TorrentDetail>(`/queue/${id}/torrent/files`, { skip }),
@@ -3536,7 +3614,7 @@ export const api = {
   searchNowSeries: (id: number, scope: { season?: number; episode?: number } = {}) =>
     post<{ grabbed: number; message: string }>(`/series/${id}/search-now`, scope),
   movieSearch: (id: number) => get<SearchAnswer<SearchResult>>(`/movies/${id}/search?detail=1`),
-  libraryFolders: () => get<{ movies: string[]; tv: string[] }>('/library/folders'),
+  libraryFolders: () => get<LibraryFolders>('/library/folders'),
   setMovieFolder: (id: number, rootPath: string) => put<{ rootPath: string }>(`/movies/${id}/folder`, { rootPath }),
   setSeriesFolder: (id: number, rootPath: string) => put<{ rootPath: string }>(`/series/${id}/folder`, { rootPath }),
   setMovieMonitored: (id: number, monitored: boolean) => put<null>(`/movies/${id}/monitored`, { monitored }),
@@ -3546,6 +3624,8 @@ export const api = {
   setSeriesType: (id: number, type: SeriesType) => put<{ type: SeriesType }>(`/series/${id}/type`, { type }),
   seriesNumbering: (id: number) => get<SeriesNumbering>(`/series/${id}/numbering`),
   refreshSeriesNumbering: (id: number) => post<SeriesNumbering>(`/series/${id}/numbering/refresh`),
+  customNumbering: (id: number) => get<CustomNumberingBody>(`/series/${id}/numbering/custom`),
+  saveCustomNumbering: (id: number, body: CustomNumberingBody) => put<CustomNumberingBody>(`/series/${id}/numbering/custom`, body),
   setSeasonMonitored: (id: number, season: number, monitored: boolean) =>
     put<null>(`/series/${id}/seasons/${season}/monitored`, { monitored }),
   setEpisodeMonitored: (id: number, monitored: boolean) => put<null>(`/episodes/${id}/monitored`, { monitored }),
@@ -3674,7 +3754,11 @@ export const api = {
   listArtists: () => request<MusicArtist[]>('/music/artists', { revalidate: true }),
   getArtist: (id: number) => get<MusicArtist>(`/music/artists/${id}`),
   addArtist: (data: { mbid: string; monitor?: MusicMonitor; profileId?: number; searchNow?: boolean; albumMbid?: string; albumTitle?: string }) => post<MusicArtist | Requested>('/music/artists', data),
-  updateArtist: (id: number, changes: { monitored?: boolean; profileId?: number }) => put<MusicArtist>(`/music/artists/${id}`, changes),
+  updateArtist: (id: number, changes: { monitored?: boolean; profileId?: number; filter?: MusicFilter; useLibraryFilter?: boolean }) => put<MusicArtist>(`/music/artists/${id}`, changes),
+  musicFilters: () => get<MusicFilterChoices>('/music/filters'),
+  setMusicFilters: (filter: MusicFilter) => put<MusicFilterChoices>('/music/filters', filter),
+  artistDiscography: (id: number) => get<MusicDiscography>(`/music/artists/${id}/discography`),
+  addArtistAlbum: (id: number, mbid: string) => post<MusicAlbum>(`/music/artists/${id}/albums`, { mbid }),
   deleteArtist: (id: number, deleteFiles: boolean) => del<null>(`/music/artists/${id}?deleteFiles=${deleteFiles}`),
   getAlbum: (id: number) => get<MusicAlbum>(`/music/albums/${id}`),
   setAlbumMonitored: (id: number, monitored: boolean) => put<null>(`/music/albums/${id}/monitored`, { monitored }),
@@ -3722,10 +3806,13 @@ export const api = {
   rescanSeries: (id: number) => post<RescanReport>(`/series/${id}/rescan`),
   browseLibrary: (path = '') => get<BrowseAnswer>(`/library/browse?path=${encodeURIComponent(path)}`),
   locateMovieFile: (id: number, path: string) => post<RescanReport>(`/movies/${id}/locate-file`, { path }),
+  locateEpisodeFile: (id: number, path: string) => post<RescanReport>(`/episodes/${id}/locate-file`, { path }),
   locateMovieFolder: (id: number, path: string) => post<RescanReport>(`/movies/${id}/locate-folder`, { path }),
   changeSeriesFolder: (id: number, path: string) => post<SeriesFolderReport>(`/series/${id}/change-folder`, { path }),
   deleteMovieFile: (id: number) => del<{ files: number; episodes: number; trashed: boolean }>(`/movies/${id}/file`),
   deleteEpisodeFile: (id: number) => del<{ files: number; episodes: number; trashed: boolean }>(`/episodes/${id}/file`),
+  redoIncomplete: (req: { movieIds?: number[]; seriesIds?: number[]; episodeIds?: number[] }) =>
+    post<{ files: number; titles: number; searching: number; skipped: number }>('/library/incomplete/redo', req),
   deleteSeasonFiles: (seriesId: number, season: number) => del<{ files: number; episodes: number; trashed: boolean }>(`/series/${seriesId}/seasons/${season}/files`),
   deleteSeries: (id: number, deleteFiles = false) => del<null>(`/series/${id}?deleteFiles=${deleteFiles}`),
   titleCopies: (kind: 'movie' | 'series', id: number) => get<TitleCopies>(`/${kind === 'movie' ? 'movies' : 'series'}/${id}/copies`),
@@ -3788,6 +3875,7 @@ export const api = {
   // With all: true, `query` (the page's filters, as problemQuery makes them) limits it to what matches; without one it is every problem.
   markProblemsRead: (req: { ids?: number[]; all?: boolean }, query = '') => post<{ marked: number; counts: ProblemCounts }>(`/system/problems/read${query}`, req),
   setNotifyOnProblems: (enabled: boolean) => put<{ notifyOnProblems: boolean }>('/system/problems/notify', { enabled }),
+  setDebugLogging: (enabled: boolean) => put<{ debugLogging: boolean }>('/system/problems/debug', { enabled }),
   flareSolverrStatus: () => get<FlareSolverrStatus>('/flaresolverr/status'),
   cleanupReport: () => get<CleanupReport>('/system/cleanup'),
   runCleanup: () => post<{ removedBytes: number; removed?: unknown[]; prunedQueueItems?: number; prunedActivity?: number; errors?: unknown }>('/system/cleanup'),

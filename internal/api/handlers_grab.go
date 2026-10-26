@@ -273,5 +273,6 @@ func (s *Server) findOrAddMovie(match metadata.Movie, userID int64) (library.Mov
 	return s.MovieRepo.Add(library.Movie{
 		TMDBID: match.TMDBID, Title: match.Title, Year: match.Year(), Overview: match.Overview,
 		PosterPath: match.PosterPath, Monitored: true, ReleaseDate: match.ReleaseDate, NoUpgrade: true, AddedBy: userID,
+		RootPath: s.newMovieFolder(),
 	})
 }

@@ -244,6 +244,7 @@ func (s *Server) runTVPipeline(queueID int64, series library.Series, season int,
 	var importedFiles []string // for the media server refresh
 	var importedEps []library.Episode
 	var subtitleItems []subtitleItem
+	var tooShort error // the first file that was far shorter than its episode
 	for _, file := range files {
 		fileSeason, fileEpisodes := s.tvFileEpisodes(file, season, fileTargets, mapper)
 		if len(fileEpisodes) == 0 {
@@ -261,6 +262,18 @@ func (s *Server) runTVPipeline(queueID int64, series library.Series, season int,
 			continue
 		}
 
+		if err := s.checkEpisodeLength(ctx, series.TMDBID, eps[0].Season, file); err != nil {
+			// Not filed: this file is a fake, a sample or cut off. The rest of a
+			// pack is imported as usual.
+			slog.Warn("import: a file is far shorter than its episode, left out", "file", filepath.Base(file))
+			if tooShort == nil {
+				tooShort = err
+			}
+			if seconds, ok := videoSeconds(file); ok {
+				_ = s.QueueRepo.LogSeriesActivity(series.ID, "skipped", fmt.Sprintf("%s: the file %s was left out because it looks like a fake or broken release (it is only %d min long).", series.Title, filepath.Base(file), lengthMinutes(seconds)))
+			}
+			continue
+		}
 		destPath, err := s.buildTVDestPath(series, eps[0], release, releaseTitle, file)
 		if err != nil {
 			return fail(err)
@@ -353,6 +366,11 @@ func (s *Server) runTVPipeline(queueID int64, series library.Series, season int,
 	releaseTargets()
 
 	if imported == 0 {
+		if tooShort != nil && skipped == 0 {
+			// Nothing in the download was long enough: it is a bad release.
+			s.discardWorkDir(dir, protocol)
+			return fail(tooShort)
+		}
 		if skipped > 0 {
 			// "If a file already exists" said to keep what is there: a decision,
 			// not a failure (no "failed" notification, nothing in Logs and errors).

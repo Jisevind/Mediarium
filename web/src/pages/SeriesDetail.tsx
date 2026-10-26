@@ -8,6 +8,8 @@ import WatchedLine from '../components/WatchedLine'
 import NumberingCard from '../components/NumberingCard'
 import SeriesTypePicker from '../components/SeriesTypePicker'
 import FileChips from '../components/FileChips'
+import ShortFile from '../components/ShortFile'
+import { redoAnswerText } from '../shortFile'
 import Switch from '../components/Switch'
 import MonitorModePicker from '../components/MonitorModePicker'
 import TitleHero from '../components/TitleHero'
@@ -37,6 +39,7 @@ import { useConfirm } from '../components/ConfirmProvider'
 import { removeOption } from '../diskUsage'
 import ReleaseNotice from '../components/ReleaseNotice'
 import type { Unanswered } from '../releaseHint'
+import type { Searched } from '../searched'
 import { useDocumentTitle } from '../documentTitle'
 import { localDate } from '../bookSeries'
 import { entryDay, entryTime, readZonePref, resolveZone } from '../airTime'
@@ -89,7 +92,7 @@ function SeriesPage() {
   const [message, setMessage] = useState('')
   const [target, setTarget] = useState<SearchTarget | null>(null)
   const [results, setResults] = useState<SearchResult[] | null>(null)
-  const [answered, setAnswered] = useState<{ sources: number; unanswered: Unanswered[]; warnings?: string[] }>({ sources: 0, unanswered: [] })
+  const [answered, setAnswered] = useState<{ sources: number; unanswered: Unanswered[]; warnings?: string[]; searched?: Searched[] }>({ sources: 0, unanswered: [] })
   const [searching, setSearching] = useState(false)
   const [grabbing, setGrabbing] = useState<string | null>(null)
   const [searchingNow, setSearchingNow] = useState(false)
@@ -153,7 +156,7 @@ function SeriesPage() {
     try {
       const a = await api.seriesSearch(seriesId, st.season, st.episode)
       if (mine !== searchId.current) return
-      setAnswered({ sources: a.sources, unanswered: a.unanswered, warnings: a.warnings })
+      setAnswered({ sources: a.sources, unanswered: a.unanswered, warnings: a.warnings, searched: a.searched })
       setResults(a.results)
     } catch (e) {
       if (mine === searchId.current) setError(e instanceof Error ? e.message : String(e))
@@ -239,6 +242,7 @@ function SeriesPage() {
   const [refreshing, setRefreshing] = useState(false)
   const [rescanning, setRescanning] = useState(false)
   const [changingFolder, setChangingFolder] = useState(false)
+  const [linking, setLinking] = useState<Episode | null>(null)
   async function rescan() {
     setError('')
     setRescanning(true)
@@ -284,6 +288,24 @@ function SeriesPage() {
       load()
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
+    }
+  }
+
+  // An episode file far shorter than the episode should be: delete it and look for another release.
+  async function redoShortFile(e: Episode) {
+    const label = `S${String(e.season).padStart(2, '0')}E${String(e.episode).padStart(2, '0')}`
+    const answer = await confirm({
+      title: t('Delete the file of {name} and search again?', { name: label }),
+      body: <p>{t('This file is much shorter than the episode should be, so it is most likely a fake or a cut-off download. It goes to the recycle bin (or is deleted, if that is switched off), the release it came from is blocklisted when Mediarium knows it, and Mediarium searches for another one.')}</p>,
+      confirmLabel: t('Delete and search again'),
+      danger: true,
+    })
+    if (!answer) return
+    try {
+      setMessage(redoAnswerText(await api.redoIncomplete({ episodeIds: [e.id] })))
+      load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
     }
   }
 
@@ -419,6 +441,16 @@ function SeriesPage() {
           </FolderLine>
         )}
         {changingFolder && <LocateDialog kind="series" id={seriesId} start={series.folderPath} onClose={() => setChangingFolder(false)} onDone={load} />}
+        {linking && (
+          <LocateDialog
+            kind="episode"
+            id={linking.id}
+            label={linking.season === 0 ? t('Special {n}', { n: linking.episode }) : `S${String(linking.season).padStart(2, '0')}E${String(linking.episode).padStart(2, '0')}`}
+            start={series.folderPath}
+            onClose={() => setLinking(null)}
+            onDone={load}
+          />
+        )}
         <WatchedLine kind="tv" id={seriesId} />
       </TitleHero>
 
@@ -429,7 +461,7 @@ function SeriesPage() {
         <section ref={releasesRef} className="card" style={{ marginBottom: 24, scrollMarginTop: 80 }}>
           <h2>{t('Releases for {target}', { target: target.label })}</h2>
           {searching && <p>{t('Looking for releases…')}</p>}
-          {results !== null && <ReleaseNotice sources={answered.sources} unanswered={answered.unanswered} warnings={answered.warnings} results={results.length} />}
+          {results !== null && <ReleaseNotice sources={answered.sources} unanswered={answered.unanswered} warnings={answered.warnings} searched={answered.searched} results={results.length} />}
           {!searching && (results === null || results.length === 0) && (
             <button className="btn-sm" onClick={() => setTarget(null)}>
               {t('Close')}
@@ -445,12 +477,12 @@ function SeriesPage() {
             />
           )}
           {results !== null && results.length > 0 && (
-            <ReleaseTable results={results} grabbing={grabbing} onGrab={(r) => void grab(r)} showPackBadge onClose={() => setTarget(null)} />
+            <ReleaseTable results={results} searched={answered.searched} grabbing={grabbing} onGrab={(r) => void grab(r)} showPackBadge onClose={() => setTarget(null)} />
           )}
         </section>
       )}
 
-      {canManage && <NumberingCard id={seriesId} seriesType={series.seriesType ?? 'standard'} />}
+      {canManage && <NumberingCard id={seriesId} seriesType={series.seriesType ?? 'standard'} seasons={seasons.map(([s]) => s).filter((s) => s > 0)} monitored={series.monitored} onRescanned={load} />}
 
       {seasons.length > 0 && (
         <div className="season-bar">
@@ -575,6 +607,7 @@ function SeriesPage() {
                       <td>
                         {e.title || <span style={{ color: 'var(--text-dim)' }}>{t('TBA')}</span>}
                         {e.status === 'downloaded' && <FileChips info={e.fileInfo} className="compact" />}
+                        {e.status === 'downloaded' && <ShortFile compact note={e.shortFile} onRedo={admin ? () => void redoShortFile(e) : undefined} />}
                       </td>
                       <td style={{ color: 'var(--text-dim)' }}>{e.airDate || '—'}</td>
                       <td>
@@ -599,6 +632,13 @@ function SeriesPage() {
                           <>
                             <button className="danger-ghost" onClick={() => void deleteFiles({ episode: e })} title={t('Delete this episode’s file and keep the show')}>
                               {t('Delete file')}
+                            </button>{' '}
+                          </>
+                        )}
+                        {admin && e.status !== 'downloading' && (
+                          <>
+                            <button className="btn-sm" onClick={() => setLinking(e)} title={t('Point this episode at a video file you choose')}>
+                              {t('Link a file')}
                             </button>{' '}
                           </>
                         )}

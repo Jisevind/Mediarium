@@ -21,6 +21,7 @@ import { useLive } from '../useLive'
 import { bookState } from './BookLibrary'
 import { listenPath, openBookApp, readPath } from '../bookshelf/open'
 import type { Unanswered } from '../releaseHint'
+import type { Searched } from '../searched'
 
 const FORMAT_TITLE: Record<BookFormat, string> = { ebook: t('Ebook'), audiobook: t('Audiobook') }
 
@@ -163,7 +164,7 @@ function FormatPanel({ book, format, queue, onChanged }: { book: Book; format: B
   const state = bookState(book, format, queue)
   const [searching, setSearching] = useState(false)
   const [releases, setReleases] = useState<SearchResult[] | null>(null)
-  const [answered, setAnswered] = useState<{ sources: number; unanswered: Unanswered[]; warnings?: string[]; skipped: string[] }>({ sources: 0, unanswered: [], skipped: [] })
+  const [answered, setAnswered] = useState<{ sources: number; unanswered: Unanswered[]; warnings?: string[]; skipped: string[]; searched?: Searched[] }>({ sources: 0, unanswered: [], skipped: [] })
   const [open, setOpen] = useState(false)
   const [releaseError, setReleaseError] = useState('')
   const [grabbing, setGrabbing] = useState<string | null>(null)
@@ -198,7 +199,7 @@ function FormatPanel({ book, format, queue, onChanged }: { book: Book; format: B
     api
       .bookReleases(book.id, format)
       .then((a) => {
-        setAnswered({ sources: a.sources, unanswered: a.unanswered, warnings: a.warnings, skipped: a.skipped ?? [] })
+        setAnswered({ sources: a.sources, unanswered: a.unanswered, warnings: a.warnings, skipped: a.skipped ?? [], searched: a.searched })
         setReleases(a.results)
       })
       .catch((e) => setReleaseError(e instanceof Error ? e.message : String(e)))
@@ -269,10 +270,10 @@ function FormatPanel({ book, format, queue, onChanged }: { book: Book; format: B
           {!releaseError && releases === null && <div className="skeleton" style={{ height: 120 }} />}
           {releases && releases.length > 0 && (
             <div className="table-scroll">
-              <ReleaseTable results={releases} grabbing={grabbing} onGrab={grab} onClose={() => setOpen(false)} />
+              <ReleaseTable results={releases} searched={answered.searched} grabbing={grabbing} onGrab={grab} onClose={() => setOpen(false)} />
             </div>
           )}
-          {releases && <ReleaseNotice sources={answered.sources} unanswered={answered.unanswered} warnings={answered.warnings} skipped={answered.skipped} results={releases.length} />}
+          {releases && <ReleaseNotice sources={answered.sources} unanswered={answered.unanswered} warnings={answered.warnings} skipped={answered.skipped} searched={answered.searched} results={releases.length} />}
         </div>
       )}
     </section>
