@@ -17,6 +17,8 @@
   <a href="https://www.reddit.com/r/Mediarium/">Reddit</a>
 </p>
 
+> **This is a fork.** It adds on-demand transcoding for videos the browser cannot play, subtitle tracks embedded in video files, and a Reduce effects setting. A prebuilt multi-arch image (`linux/amd64` and `linux/arm64`) is published at **`ghcr.io/jisevind/mediarium:latest`** — put that on the `image:` line in the compose file from the [install guide](docs/INSTALL.md). It is not an official Mediarium release; the upstream project is [rdborg/Mediarium](https://github.com/rdborg/Mediarium).
+
 # Mediarium
 
 Mediarium is a self-hosted media manager. Find a movie or show, and it searches your Usenet and torrent indexers, downloads the best release, unpacks it, names it and puts it in your library, ready for Plex, Jellyfin or Emby.

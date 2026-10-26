@@ -6,6 +6,10 @@
 set -euo pipefail
 
 version="${1:?usage: tools/release-notes.sh <version>}"
+# GITHUB_REPOSITORY is set by the release workflow ("owner/repo"); fall back to
+# the upstream repository when the script is run by hand.
+repo="${GITHUB_REPOSITORY:-rdborg/Mediarium}"
+image="ghcr.io/${repo,,}"
 cd "$(dirname "$0")/.."
 
 section="$(awk -v v="${version}" '
@@ -20,7 +24,7 @@ if [ -z "${section}" ]; then
 fi
 
 cat <<EOF
-**Install or update:** the Docker image is \`ghcr.io/rdborg/mediarium:${version}\` (also \`:latest\`), for \`linux/amd64\` and \`linux/arm64\`. A running Mediarium offers this version under Settings > System, where **Update now** installs it. New here? Start with the [install guide](https://github.com/rdborg/Mediarium/blob/main/docs/INSTALL.md) or [mediarium.app](https://mediarium.app).
+**Install or update:** the Docker image is \`${image}:${version}\` (also \`:latest\`), for \`linux/amd64\` and \`linux/arm64\`. In the compose file, put \`${image}:latest\` on the \`image:\` line. A running Mediarium offers this version under Settings > System, where **Update now** installs it. New here? Start with the [install guide](https://github.com/${repo}/blob/main/docs/INSTALL.md) or [mediarium.app](https://mediarium.app).
 
 ${section}
 EOF

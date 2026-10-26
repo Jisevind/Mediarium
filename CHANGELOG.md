@@ -8,6 +8,10 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.7.4-jisevind.1] - 2026-10-26
+
+A fork release based on upstream 3.7.4, with the changes below. Published as `ghcr.io/jisevind/mediarium:latest` (also `3.7.4-jisevind.1`) for `linux/amd64` and `linux/arm64`. This is not an official Mediarium release.
+
 ### Added
 - **The built-in player now plays videos the browser cannot play on its own.** Before playback, Mediarium probes the file with ffprobe. MP4/MOV and WebM files with browser-friendly streams are still sent directly, unchanged. Other containers, and files whose audio codec browsers do not support (AC-3, EAC-3, DTS, TrueHD), are converted on demand to H.264 and AAC in HLS segments. An MP4 with H.264 video keeps its video stream when only the audio needs converting; MKV is re-encoded so seeking and sound stay in step. Playback starts after the first segment and seeking converts only the part you jump to. Hardware VAAPI, Intel Quick Sync and NVIDIA NVENC are detected and tested, with libx264 as the fallback; a missing or broken ffmpeg falls back to the old direct-play path. Text subtitle tracks inside MKV/MP4 files (SubRip, ASS/SSA, WebVTT and MP4 text tracks) now appear in the player's subtitle menu, extracted as WebVTT, with language, SDH and forced labels; bitmap tracks such as PGS and VobSub are left out. Settings > General > Playback has the on/off switch, an ffmpeg path for your own build and the hardware picker ([playback.md](docs/playback.md)).
 - **Settings > General has a Reduce effects switch.** It stops the decorative background motion (the drifting shapes, the moving grain and the film-strip edge) in this browser, while loading spinners and progress bars keep moving. It helps on low-powered devices where the constant movement keeps the browser busy.

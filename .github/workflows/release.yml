@@ -341,7 +341,7 @@ jobs:
           tags: |
             type=raw,value=${{ needs.version.outputs.version }}
             type=raw,value=${{ needs.version.outputs.major_minor }},enable=${{ needs.version.outputs.prerelease != 'true' }}
-            type=raw,value=latest,enable=${{ needs.version.outputs.prerelease != 'true' }}
+            type=raw,value=latest
 
       - name: Build and push
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7
@@ -376,7 +376,7 @@ jobs:
           tags: |
             type=raw,value=${{ needs.version.outputs.version }}
             type=raw,value=${{ needs.version.outputs.major_minor }},enable=${{ needs.version.outputs.prerelease != 'true' }}
-            type=raw,value=latest,enable=${{ needs.version.outputs.prerelease != 'true' }}
+            type=raw,value=latest
 
       # Build for this runner (amd64) only, keep it local and prove it starts.
       - name: Build full image for a smoke test
