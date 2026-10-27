@@ -8,6 +8,10 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.8.0-jisevind.1] - 2026-10-27
+
+A fork release based on upstream 3.8.0, with the fork's own changes listed under 3.7.4-jisevind.2. Published as `ghcr.io/jisevind/mediarium:latest` (also `3.8.0-jisevind.1`) for `linux/amd64` and `linux/arm64`. This is not an official Mediarium release.
+
 ## [3.8.0] - 2026-10-27
 
 In short: big libraries load much faster, music covers are small thumbnails, a title's files can move with its folder, a hand-picked release can replace a file, a Viewer group for single sign-on, and clearer help when torrents are off.
