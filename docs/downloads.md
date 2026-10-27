@@ -34,6 +34,14 @@ All torrents run in one built-in engine that listens on **port 58264, TCP and UD
 - **Is it working?** The Client card says so in plain words: whether the port is open right now, and whether another peer has connected to you yet. The same facts are in `GET /api/downloads/status` (`torrent.listenPort`, `torrent.listening`, `torrent.activePort`, `torrent.activeTorrents`, `torrent.incomingSeen` and `torrent.lastIncomingAt`). The engine only listens while a torrent is downloading or seeding, and a peer only connects when it wants a torrent you have. So "not seen yet" right after starting is normal. If it still says that after a while of seeding, the port is probably not reachable: it isn't published, it isn't forwarded, or a firewall is blocking it.
 - **While a VPN is connected** (Settings > Downloading > VPN and proxy; see [vpn.md](./vpn.md)), torrent traffic only goes out through the tunnel and nothing listens on the host at all, so no incoming connection is ever seen. That's expected, and the port card says "Not used while your VPN is on".
 
+### When torrents are switched off
+
+Torrents are on unless you switch them off (or choose **Usenet only**). While they are off, a torrent release can't be downloaded, and Mediarium says so before you try. A release list (**Choose a release**, or Search > Releases) that holds torrent releases starts with a line: *Torrents are switched off, so torrent releases can't be downloaded.* An administrator sees a **Switch on torrents** button next to it, which does the same as turning on **Download from torrents** on the Torrents page (and leaves **Usenet only**). Everyone else sees *Ask an administrator to switch torrents on.* After switching on, the line tells you to press the release's **Grab** button again.
+
+If you grab a torrent release anyway, the message *Torrents are switched off. Switch them on in Settings > Downloading > Torrents to download torrent releases.* comes up with the same button (administrators get a **Grab now** button once torrents are on). A download that failed for this reason shows the same line in Activity, with the button, and the row's **Retry** works once torrents are on. A torrent release found on an IRC announce is skipped while torrents are off, and the announce log says why.
+
+For scripts: that refusal is HTTP 409 with `{"error": "...", "code": "torrents_off"}`. `GET /api/modules` has `torrentsOn`, true when torrent releases can be downloaded at all (the built-in client, a debrid service or a download client).
+
 ## Controls of the built-in torrent client
 
 These are for the built-in torrent client only. Torrents that go to a debrid service or a download client are steered there. Everything below is off, or the same as before, until you change it. The options for all torrents are on **Activity > Download clients**, in the torrent client card, under **Torrent client options**. The choices for one torrent are under **Details** on its row in Activity. Only administrators see them.
@@ -288,7 +296,7 @@ Tick **Resume interrupted downloads after a restart** (Settings > Downloading > 
 
 ### Limits on the automatic searches
 
-The automatic search and the RSS check only add to the line, so a big library can't fill it in a minute. They add at most **ten downloads in any hour**, and none while **ten** downloads are already waiting or running. What's left waits for a later run, so it's slower, never lost. Downloads you start yourself are never held back and don't count toward these limits. The automatic loops also wait a minute after Mediarium starts. To start with all of them switched off, see safe mode in the [troubleshooting section](./INSTALL.md#troubleshooting).
+The automatic search and the RSS check only add to the line, so a big library can't fill it in a minute. They add at most **ten downloads in any hour**, and none while **ten** downloads are already waiting or running. What's left waits for a later run, so it's slower, never lost. Downloads you start yourself are never held back and don't count toward these limits. The automatic loops also wait a minute after Mediarium starts, and then start one after another over the next few minutes so a restart is not a rush of work. To start with all of them switched off, see safe mode in the [troubleshooting section](./INSTALL.md#troubleshooting).
 
 ## Checks on releases
 

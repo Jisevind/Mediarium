@@ -251,9 +251,8 @@ func SetDebridPollForTest(d time.Duration) func() {
 
 // SetDownloadClientPollForTest makes the download client status checks quick.
 func SetDownloadClientPollForTest(d time.Duration) func() {
-	old := downloadClientPoll
-	downloadClientPoll = d
-	return func() { downloadClientPoll = old }
+	old := downloadClientPoll.Swap(int64(d))
+	return func() { downloadClientPoll.Store(old) }
 }
 
 // TestAddonRoundTrip searches the subtitle add-ons for a movie by its TMDB id

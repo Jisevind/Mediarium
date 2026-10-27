@@ -27,11 +27,15 @@ export class ApiError extends Error {
   busy: boolean
   // A grab refused because another download is in the way: which one.
   blocking?: BlockingDownload
-  constructor(status: number, message: string, busy = false, blocking?: BlockingDownload) {
+  // A stable word for the few errors the page does more with than show, such
+  // as "torrents_off" (a torrent grab refused because torrents are switched off).
+  code?: string
+  constructor(status: number, message: string, busy = false, blocking?: BlockingDownload, code?: string) {
     super(message)
     this.status = status
     this.busy = busy
     this.blocking = blocking
+    this.code = code
   }
 }
 
@@ -104,7 +108,7 @@ async function send<T>(path: string, init?: ReadOptions): Promise<T> {
   }
   noteEndReason(res.status, text)
   if (sessionEnded(path, res.status, text)) noteSessionEnded()
-  let data: { error?: string; busy?: boolean; blocking?: BlockingDownload } | null = null
+  let data: { error?: string; busy?: boolean; blocking?: BlockingDownload; code?: string } | null = null
   try {
     data = text ? JSON.parse(text) : null
   } catch {
@@ -117,7 +121,7 @@ async function send<T>(path: string, init?: ReadOptions): Promise<T> {
     throw new ApiError(503, st(data.error) || SLOW_MESSAGE, true)
   }
   if (!res.ok) {
-    throw new ApiError(res.status, st(data?.error) || t('Something went wrong on the server (error {status}).', { status: String(res.status) }), false, data?.blocking)
+    throw new ApiError(res.status, st(data?.error) || t('Something went wrong on the server (error {status}).', { status: String(res.status) }), false, data?.blocking, typeof data?.code === 'string' ? data.code : undefined)
   }
   noteFine()
   // Covers Mediarium serves itself come as "/api/...": under a URL base they
@@ -1652,6 +1656,15 @@ export interface Movie {
   shortFile?: ShortFileNote // the file is far shorter than the movie should be
 }
 
+// What GET /api/library/owned answers (see useOwned).
+export interface OwnedAnswer {
+  movieCount: number
+  showCount: number
+  movies: { id: number; tmdbId: number; status: string; monitored: boolean }[]
+  shows: { id: number; tmdbId: number; monitored: boolean; episodeCount: number; downloadedCount: number }[]
+  queue: { movieId: number; seriesId: number; status: QueueItem['status']; progressPct: number }[]
+}
+
 export interface QueueItem {
   id: number
   movieId: number
@@ -1672,6 +1685,8 @@ export interface QueueItem {
   progressPct: number
   error?: string
   destPath?: string
+  keptFile?: string // a finished download that was not imported because this file was kept
+  keptData?: 'deleted' | 'seeding' | 'client' // what became of its downloaded files
   interrupted?: boolean // paused, but not by a person: Mediarium was restarted while it downloaded
   pending?: 'pausing' | 'stopping' // still winding down
   waiting?: boolean // an album whose files are downloaded and whose import waits for MusicBrainz
@@ -2702,7 +2717,7 @@ export interface ModuleState {
 }
 export type Modules = Record<ModuleKey, ModuleState>
 // What GET /modules answers: the media types plus whether subtitles are switched on.
-export type ModulesAnswer = Modules & { subtitlesEnabled?: boolean; trailerBackground?: boolean; trailerSound?: boolean }
+export type ModulesAnswer = Modules & { subtitlesEnabled?: boolean; trailerBackground?: boolean; trailerSound?: boolean; torrentsOn?: boolean }
 
 export interface MusicArtistResult {
   mbid: string
@@ -2848,9 +2863,19 @@ export interface MusicHiddenGroup {
   hiddenBy: string
 }
 
+// An album already in the library that the filter leaves out of the list
+// (only ever one without files).
+export interface MusicHiddenAlbum {
+  albumId: number
+  mbid: string
+  hiddenBy: string
+}
+
 export interface MusicDiscography {
   filter: MusicFilter & { useLibrary: boolean }
   hidden: MusicHiddenGroup[]
+  // Albums in the library the list leaves out because of the filter.
+  library: MusicHiddenAlbum[]
   counts: Record<string, number>
   // Releases still being looked at for the bootleg test (shown until known).
   checking: number
@@ -2868,6 +2893,10 @@ export interface SearchAnswer<T> {
   skipped?: string[]
   // Every indexer the search had to do with, and what became of each.
   searched?: Searched[]
+  // Releases that came back but were left out because they are not this title
+  // (a movie search): how many, and the names of a few.
+  ignored?: number
+  ignoredSamples?: string[]
 }
 
 export interface MusicRelease extends SearchResult {
@@ -3165,6 +3194,7 @@ export interface OidcSettings {
   autoCreate: boolean
   defaultRole: 'member' | 'viewer'
   adminGroup: string
+  viewerGroup: string
   allowedGroup: string
   allowedDomains: string
   linkByEmail: boolean
@@ -3202,6 +3232,7 @@ export interface LdapSettings {
   emailAttr: string
   idAttr: string
   adminGroupFilter: string
+  viewerGroupFilter: string
   groupBaseDn: string
   autoCreate: boolean
   defaultRole: 'member' | 'viewer'
@@ -3217,6 +3248,7 @@ export interface LdapReport {
   id?: string
   idIsDn?: boolean // no unchanging id was found, so the DN stands in for it
   admin: boolean
+  viewer?: boolean
   passwordChecked: boolean
   passwordOk: boolean
 }
@@ -3490,8 +3522,8 @@ export const api = {
     post<IndexerConfig>('/indexers', data),
   deleteIndexer: (id: number) => del<null>(`/indexers/${id}`),
   testIndexerConfig: (data: { name: string; baseUrl: string; apiKey: string }) =>
-    post<{ ok: boolean; message: string }>('/indexers/test', data),
-  testIndexer: (id: number) => post<{ ok: boolean; message: string }>(`/indexers/${id}/test`),
+    post<{ ok: boolean; message: string; detail?: string }>('/indexers/test', data),
+  testIndexer: (id: number) => post<{ ok: boolean; message: string; detail?: string }>(`/indexers/${id}/test`),
   updateIndexer: (id: number, data: { name?: string; baseUrl?: string; apiKey?: string; enabled?: boolean; requestsPerDay?: number; minSeeders?: number }) => put<IndexerConfig>(`/indexers/${id}`, data),
   setIndexerEnabled: (id: number, enabled: boolean) => put<null>(`/indexers/${id}/enabled`, { enabled }),
 
@@ -3527,7 +3559,7 @@ export const api = {
   seriesDiskUsage: (id: number) => get<DiskUsage>(`/series/${id}/disk-usage`),
   artistDiskUsage: (id: number) => get<DiskUsage>(`/music/artists/${id}/disk-usage`),
   deleteMovie: (id: number, deleteFiles: boolean) => del<null>(`/movies/${id}?deleteFiles=${deleteFiles}`),
-  grab: (movieId: number, data: { releaseTitle: string; downloadUrl: string; sizeBytes: number; protocol?: 'usenet' | 'torrent'; replaceQueueId?: number }) =>
+  grab: (movieId: number, data: { releaseTitle: string; downloadUrl: string; sizeBytes: number; protocol?: 'usenet' | 'torrent'; replaceQueueId?: number; replace?: boolean }) =>
     post<{ queueId: number }>(`/movies/${movieId}/grab`, data),
   searchGrab: (data: { releaseTitle: string; downloadUrl: string; sizeBytes: number; protocol?: 'usenet' | 'torrent' }) =>
     post<{ movieId: number; queueId: number }>('/search/grab', data),
@@ -3583,6 +3615,11 @@ export const api = {
   listQueue: () => request<QueueItem[]>('/queue', { revalidate: true }),
   // Only what is waiting, downloading or importing: the count in the menu and the dashboard need no more.
   listActiveQueue: () => request<QueueItem[]>('/queue?active=1', { revalidate: true }),
+  // How many downloads are waiting, downloading or importing: the number beside Activity, without the whole queue.
+  queueCount: () => get<{ active: number; queued: number; downloading: number; importing: number }>('/queue/count'),
+  // Which TMDB titles are in the library and how each is doing (Discover's marks), far smaller than the movie
+  // list, the show list and the queue together. Answers 304 (the very same object) when nothing changed.
+  libraryOwned: () => request<OwnedAnswer>('/library/owned', { revalidate: true }),
   retryQueueItem: (id: number) => post<{ queueId: number }>(`/queue/${id}/retry`),
   clientTorrents: (scope: 'mine' | 'all') => get<ClientTorrentsAnswer>(`/download-client/torrents?scope=${scope}`),
   usenetClientJobs: (scope: 'mine' | 'all') => get<UsenetClientJobsAnswer>(`/usenet-client/jobs?scope=${scope}`),
@@ -3819,7 +3856,7 @@ export const api = {
   addTitleCopy: (kind: 'movie' | 'series', id: number, profileId: number) => post<TitleCopy>(`/${kind === 'movie' ? 'movies' : 'series'}/${id}/copies`, { profileId }),
   seriesSearch: (id: number, season: number, episode?: number) =>
     get<SearchAnswer<SearchResult>>(`/series/${id}/search?detail=1&season=${season}${episode ? `&episode=${episode}` : ''}`),
-  grabSeries: (id: number, data: { releaseTitle: string; downloadUrl: string; sizeBytes: number; protocol?: 'usenet' | 'torrent'; season?: number; episode?: number; replaceQueueId?: number }) =>
+  grabSeries: (id: number, data: { releaseTitle: string; downloadUrl: string; sizeBytes: number; protocol?: 'usenet' | 'torrent'; season?: number; episode?: number; replaceQueueId?: number; replace?: boolean }) =>
     post<{ queueId: number }>(`/series/${id}/grab`, data),
 
   discoverTrending: () => get<DiscoverMovie[]>('/discover/trending'),
@@ -4065,6 +4102,8 @@ export interface MoveTitle {
   method: 'rename' | 'copy' | '' // same drive, another drive, or nothing on disk to move
   problem?: string // why this title will be left as it is
   note?: string
+  linkedFiles?: number // files hard-linked to something else (a seeding torrent)
+  linkNote?: string // what a copy to another drive does to those links
 }
 
 export interface MovePreview {

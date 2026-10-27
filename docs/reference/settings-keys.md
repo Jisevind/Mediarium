@@ -88,7 +88,7 @@ The keys the app stores in its settings table. You normally change these from th
 | `library.illegal_char_replacement` | used when mode=replace, e.g. "-" |
 | `library.import_added_backfill` | "1" once it has run (set by the app, not user-editable) |
 | `library.import_conflict_policy` | "skip" \| "overwrite" \| "overwrite_if_better" \| "ask" |
-| `library.keep_original_names` | "1" keeps the file name an imported video came with (folders are still named by the preset; a random, obfuscated name falls back to the preset); unset or "0" renames as the preset says |
+| `library.keep_original_names` | "1" keeps the file name an imported video came with (folders are still named by the preset; a random, obfuscated name is replaced by the release's name for a movie or single episode, else by the preset); unset or "0" renames as the preset says |
 | `library.metadata_files` | JSON: movies and tv, each {nfo, artwork}, and replace (true replaces files Mediarium wrote earlier); unset = nothing is written |
 | `library.movie_copies_path` | where second copies of movies go (a 4K copy next to the 1080p one); unset = second copies of movies are off |
 | `library.movie_folder_format` | token string; unset = "{Movie Title} ({Year})" |

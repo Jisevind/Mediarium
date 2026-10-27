@@ -7,6 +7,7 @@ import { indexerChoices, type Searched } from '../searched'
 import { FIRST_DIRECTION, ageOf, defaultOrder, filterReleases, publishedAt, qualitiesIn, scoreOf, sortReleases, type ReleaseSortKey, type SortDir } from '../releaseSort'
 import Dropdown from './Dropdown'
 import Icon from './Icon'
+import TorrentsOffNote from './TorrentsOffNote'
 
 // Interactive-search results: every release with quality info, badges for
 // packs / blocklisted / "automation would skip this" (with the reason on
@@ -86,6 +87,7 @@ export default function ReleaseTable({
 
   return (
     <>
+      <TorrentsOffNote results={results} />
       <div className="rel-tools">
         <input type="search" value={words} onChange={(e) => setWords(e.target.value)} placeholder={t('Find in these releases')} aria-label={t('Find in these releases')} />
         {indexers.length > 1 && (

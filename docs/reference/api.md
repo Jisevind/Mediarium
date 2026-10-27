@@ -378,6 +378,7 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | POST | `/api/library/move-files/cancel` | admin |  |
 | POST | `/api/library/move-files/preview` | admin | is POST /api/library/move-files/preview: what moving the files of the chosen titles to a folder would do. |
 | GET | `/api/library/move-files/status` | admin |  |
+| GET | `/api/library/owned` | any account |  |
 | POST | `/api/library/scan` | admin | starts a scan of an existing folder. |
 | GET | `/api/library/scan/{id}` | admin |  |
 
@@ -606,6 +607,7 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | DELETE | `/api/queue` | admin | empties the list of completed and failed entries. |
 | GET | `/api/queue` | any account |  |
 | POST | `/api/queue/bulk` | admin | does one thing (pause, resume, stop, retry, remove from the list, or send to the front) to several downloads at once. |
+| GET | `/api/queue/count` | any account | answers how many downloads are waiting, downloading or importing: the number beside Activity in the menu, which used to need the whole queue answer (names, p... |
 | POST | `/api/queue/pause-all` | admin | pauses every download that is running or waiting, or only the Usenet or only the torrent ones with ?protocol=. |
 | POST | `/api/queue/resume-all` | admin | puts every paused download back in the download line (or only the Usenet or only the torrent ones with ?protocol=). |
 | DELETE | `/api/queue/{id}` | admin | removes a finished, failed, stopped, paused or parked entry from the list. |
@@ -905,4 +907,4 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | PUT | `/api/watched/settings` | admin | PUT /api/watched/settings {"sync": true, "cleanup": {...}} |
 | POST | `/api/watched/sync` | admin | POST /api/watched/sync: read what's been watched now. |
 
-555 routes.
+557 routes.

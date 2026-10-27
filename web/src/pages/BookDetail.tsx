@@ -11,6 +11,7 @@ import ReleaseNotice from '../components/ReleaseNotice'
 import ReleaseTable from '../components/ReleaseTable'
 import Switch from '../components/Switch'
 import { useToast } from '../components/Toast'
+import { useTorrentsSwitch } from '../useTorrentsSwitch'
 import AuthorBooks from '../components/AuthorBooks'
 import BookSeries from '../components/BookSeries'
 import { audioDetails, localDate } from '../bookSeries'
@@ -160,6 +161,7 @@ function BookPage({ id }: { id?: string }) {
 function FormatPanel({ book, format, queue, onChanged }: { book: Book; format: BookFormat; queue: QueueItem[]; onChanged: () => void }) {
   const me = useAuth().user
   const toast = useToast()
+  const { grabError } = useTorrentsSwitch()
   const st = book[format]
   const state = bookState(book, format, queue)
   const [searching, setSearching] = useState(false)
@@ -213,7 +215,7 @@ function FormatPanel({ book, format, queue, onChanged }: { book: Book; format: B
       setOpen(false)
       setTimeout(onChanged, 500)
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e))
+      grabError(e, () => void grab(r))
     } finally {
       setGrabbing(null)
     }

@@ -30,10 +30,12 @@ import TitleEvents from '../components/TitleEvents'
 import SearchStatus from '../components/SearchStatus'
 import { describeState } from '../components/state'
 import { useToast } from '../components/Toast'
+import { useTorrentsSwitch } from '../useTorrentsSwitch'
 import { useAuth } from '../AuthContext'
 import { useModules } from '../ModulesContext'
 import { formatBytes, qualityText } from '../format'
 import { rescanMessage } from '../rescanMessage'
+import { movieFileToReplace, replaceQuestion } from '../replaceFile'
 import { api, can, isAdmin, type DiscoverMovie, type MovieDetail as MovieDetailData, type SearchResult } from '../api'
 import { useLive } from '../useLive'
 import { useConfirm } from '../components/ConfirmProvider'
@@ -63,6 +65,7 @@ function MoviePage() {
   const navigate = useNavigate()
   const id = Number(tmdbId)
   const toast = useToast()
+  const { grabError } = useTorrentsSwitch()
 
   const [movie, setMovie] = useState<MovieDetailData | null>(null)
   useDocumentTitle(movie?.title)
@@ -80,7 +83,7 @@ function MoviePage() {
   useEffect(() => {
     if (hasResults) releasesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [hasResults])
-  const [answered, setAnswered] = useState<{ sources: number; unanswered: Unanswered[]; warnings?: string[]; searched?: Searched[] }>({ sources: 0, unanswered: [] })
+  const [answered, setAnswered] = useState<{ sources: number; unanswered: Unanswered[]; warnings?: string[]; searched?: Searched[]; ignoredSamples?: string[] }>({ sources: 0, unanswered: [] })
   const [searching, setSearching] = useState(false)
   const [searchingNow, setSearchingNow] = useState(false)
   const [grabbing, setGrabbing] = useState<string | null>(null)
@@ -223,7 +226,7 @@ function MoviePage() {
     setResults(null)
     try {
       const a = await api.movieSearch(libraryId)
-      setAnswered({ sources: a.sources, unanswered: a.unanswered, warnings: a.warnings, searched: a.searched })
+      setAnswered({ sources: a.sources, unanswered: a.unanswered, warnings: a.warnings, searched: a.searched, ignoredSamples: a.ignoredSamples })
       setResults(a.results)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e))
@@ -234,20 +237,41 @@ function MoviePage() {
 
   // A grab that was refused because another download is in the way, with the
   // release that was picked, so it can be repeated once that one is cancelled.
-  const [blocked, setBlocked] = useState<{ release: SearchResult; blocking: BlockingDownload; message: string } | null>(null)
+  const [blocked, setBlocked] = useState<{ release: SearchResult; blocking: BlockingDownload; message: string; replace: boolean } | null>(null)
 
-  async function grab(r: SearchResult, replaceQueueId?: number) {
+  // replaceFile is what the person already decided about the file the movie
+  // has (when the grab is repeated); left out, a movie that has a file asks first.
+  async function grab(r: SearchResult, replaceQueueId?: number, replaceFile?: boolean) {
     if (!libraryId) return
+    let replace = replaceFile ?? false
+    if (replaceFile === undefined) {
+      const old = movie ? movieFileToReplace({ status: movie.status ?? '', filePath: movie.filePath, quality: movie.quality, sizeBytes: diskBytes }) : null
+      if (old) {
+        const q = replaceQuestion([old], r)
+        const answer = await confirm({
+          title: q.title,
+          body: q.lines.map((line) => (
+            <p key={line} className="confirm-break">
+              {line}
+            </p>
+          )),
+          confirmLabel: t('Replace'),
+          cancelLabel: t('Cancel'),
+        })
+        if (!answer) return
+        replace = true
+      }
+    }
     setGrabbing(r.downloadUrl)
     setBlocked(null)
     try {
-      await api.grab(libraryId, { releaseTitle: r.title, downloadUrl: r.downloadUrl, sizeBytes: r.sizeBytes, protocol: r.protocol, replaceQueueId })
+      await api.grab(libraryId, { releaseTitle: r.title, downloadUrl: r.downloadUrl, sizeBytes: r.sizeBytes, protocol: r.protocol, replaceQueueId, replace: replace || undefined })
       toast.success(t('Started downloading "{title}". Follow it in Activity.', { title: r.title }))
       setTimeout(reload, 500)
     } catch (e) {
       const blocking = blockingOf(e)
-      if (blocking) setBlocked({ release: r, blocking, message: e instanceof Error ? e.message : String(e) })
-      else toast.error(e instanceof Error ? e.message : String(e))
+      if (blocking) setBlocked({ release: r, blocking, message: e instanceof Error ? e.message : String(e), replace })
+      else grabError(e, () => void grab(r, replaceQueueId, replace))
     } finally {
       setGrabbing(null)
     }
@@ -371,7 +395,7 @@ function MoviePage() {
         {inLibrary && (
           <div className="title-controls">
             <Switch checked={monitored ?? true} onChange={toggleMonitored} disabled={!can(me, 'manage')} label={<span className="has-tip">{t('Monitored')}<InfoTip text={t('Mediarium keeps searching and downloads a release when one turns up. Switch it off to leave this movie alone; files you already have stay where they are.')} /></span>} description={monitored ?? true ? t('Keeps looking until it finds this movie.') : t('Not looking for this movie. Files you already have stay where they are.')} />
-            <ProfilePicker kind="movie" itemId={movie.libraryId!}>
+            <ProfilePicker kind="movie" itemId={movie.libraryId!} onMoved={reload}>
               {movie.libraryId && <TitleTags kind="movie" id={movie.libraryId} />}
             </ProfilePicker>
             {movie.filePath && <code className="filepath">{movie.filePath}</code>}
@@ -408,7 +432,7 @@ function MoviePage() {
       {results !== null && (
         <section ref={releasesRef} className="card" style={{ marginBottom: 24, scrollMarginTop: 80 }}>
           <h2>{t('Releases')}</h2>
-          <ReleaseNotice sources={answered.sources} unanswered={answered.unanswered} warnings={answered.warnings} searched={answered.searched} results={results.length} />
+          <ReleaseNotice sources={answered.sources} unanswered={answered.unanswered} warnings={answered.warnings} searched={answered.searched} ignoredSamples={answered.ignoredSamples} results={results.length} />
           {results.length === 0 && (
             <button className="btn-sm" onClick={() => setResults(null)}>
               {t('Close')}
@@ -419,7 +443,7 @@ function MoviePage() {
               message={blocked.message}
               blocking={blocked.blocking}
               busy={grabbing !== null}
-              onReplace={() => void grab(blocked.release, blocked.blocking.id)}
+              onReplace={() => void grab(blocked.release, blocked.blocking.id, blocked.replace)}
               onDismiss={() => setBlocked(null)}
             />
           )}

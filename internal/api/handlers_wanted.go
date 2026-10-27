@@ -23,14 +23,14 @@ import (
 // rejected release by hand is always allowed.
 // currentRelease is the release the file came from ("" when unknown).
 func rejectionsFor(title string, profile quality.Profile, downloaded bool, currentQuality, currentRelease string) []string {
-	return reasonTexts(rejectionReasonsFor(title, profile, downloaded, currentQuality, currentRelease))
+	return reasonTexts(rejectionReasonsFor(title, profile, downloaded, currentQuality, currentRelease, keepsNothing))
 }
 
 // rejectionReasonsFor is rejectionsFor with the kind of each reason: profile
 // (the profile's own rules, including the minimum score), language, quality
 // (not allowed, or only as a fallback) and upgrade (the file you have is as
-// good or better).
-func rejectionReasonsFor(title string, profile quality.Profile, downloaded bool, currentQuality, currentRelease string) []releaseReason {
+// good or better, or the import would turn the release away: keeps).
+func rejectionReasonsFor(title string, profile quality.Profile, downloaded bool, currentQuality, currentRelease string, keeps importKeeps) []releaseReason {
 	var out []releaseReason
 	rel := parser.Parse(title)
 	tier := quality.Classify(rel)
@@ -61,6 +61,9 @@ func rejectionReasonsFor(title string, profile quality.Profile, downloaded bool,
 		case profile.TierRank(tier) <= profile.TierRank(quality.Tier(currentQuality)):
 			out = append(out, releaseReason{"upgrade", fmt.Sprintf("not an upgrade over %s", currentQuality)})
 		}
+	}
+	if r, ok := notPickedReason(keeps); ok && downloaded {
+		out = append(out, r)
 	}
 	return out
 }
@@ -114,6 +117,8 @@ func (s *Server) handleMovieSearch(w http.ResponseWriter, r *http.Request) {
 
 	_, beforeHome := s.homeReleaseHold(r.Context(), m, profile)
 	sizeReasons := s.movieSizeRejections(r.Context(), m, profile)
+	_, haveTier := existingTier(m.Quality, m.ReleaseTitle, m.FilePath)
+	keeps := s.importKeepsFor(m.NoUpgrade, haveTier)
 	m = s.movieWithAltTitles(r.Context(), m)
 	// A site that lists no movie category is not asked, and is shown as left out.
 	asked, left := indexers.SplitByCategories(r.Context(), instances, movieCategory)
@@ -127,14 +132,16 @@ func (s *Server) handleMovieSearch(w http.ResponseWriter, r *http.Request) {
 	merged := indexers.MergeResults(outcomes)
 	out := []searchResultPayload{}
 	var found []indexers.Result
+	var ignored ignoredReleases
 	for _, res := range merged {
 		if !matchesMovie(res.Title, m) {
+			ignored.add(res.Title)
 			continue
 		}
 		p := s.toSearchResultPayload(res)
 		p.MatchedTitle = matchedOtherTitle(res.Title, m.Title, m.AltTitles)
 		p.Blocklisted = blocked[blocklist.Key(res.Title)]
-		p.addReasonList(rejectionReasonsFor(res.Title, profile, m.Status == library.StatusDownloaded, m.Quality, m.ReleaseTitle))
+		p.addReasonList(rejectionReasonsFor(res.Title, profile, m.Status == library.StatusDownloaded, m.Quality, m.ReleaseTitle, keeps))
 		p.addReasons("size", sizeReasons(res.Title, res.SizeBytes))
 		if beforeHome && looksLikeHomeCopy(res.Title) {
 			p.addReasons("release", []string{cinemaCopyWarning})
@@ -147,7 +154,7 @@ func (s *Server) handleMovieSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	markBestMatch(out, found, profile)
 	s.markCachedPayloads(r.Context(), out)
-	writeSearchAll(w, r, out, len(instances), outcomes, notAsked, instances)
+	writeSearchIgnoring(w, r, out, len(instances), outcomes, notAsked, instances, ignored)
 }
 
 type searchNowResponse struct {

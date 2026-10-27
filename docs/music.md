@@ -83,7 +83,7 @@ By default an artist's page lists albums, EPs and singles, and leaves out every 
 
 The choice decides what **following an artist** adds: a new artist gets the releases that pass, and the 12-hourly check only adds new releases that pass. It never removes or unmonitors an album that is already in the library, whatever you change. If you widen the choice (say you allow EPs), the next check adds the EPs that were left out before, and saving an artist's own choice starts that check at once.
 
-On an artist's page, administrators see chips **Show: Albums EPs Singles** and a folded **More filters** with the same checkboxes as the settings card and **Use the library setting** (the default for every artist). Under them a line says what the choice leaves out of the artist's page on the music database, for example "3 hidden: 2 live, 1 bootleg". **Show them** lists those releases for this visit, and **Add to library** adds one by hand. Nothing is hidden without being counted.
+On an artist's page, administrators see chips **Show: Albums EPs Singles** and a folded **More filters** with the same checkboxes as the settings card and **Use the library setting** (the default for every artist). Under them a line says what the choice leaves out of the artist's page on the music database, for example "3 hidden: 2 live, 1 bootleg". **Show them** lists those releases for this visit, and **Add to library** adds one by hand. The same choice also applies to the albums you already have: an album in your library that the choice leaves out and that has no files yet is left out of the list, and a second line says so ("3 in your library are hidden by this filter") with its own **Show them** / **Hide them again** button. An album with files always stays in the list. This only changes what the page shows: a filter never deletes, unmonitors or changes an album, so showing a type again brings its albums straight back. Nothing is hidden without being counted.
 
 ## How albums are found
 
@@ -264,7 +264,22 @@ A card on the Music tab of Discover opens a page of its own: the cover, the arti
 
 ## Cover art
 
-Covers are the 500 pixel front cover of the album, fetched **once** per album and kept in the `music-covers` folder inside your config folder, so the app never loads images from an outside site and your browser only talks to Mediarium. `GET /api/music/albums/{id}/cover` and `GET /api/music/artists/{id}/cover` (any account) serve the image with cache headers so browsers keep it for a day. An artist's picture is the cover of its first album that has one. If there's no cover the answer is a plain 404, and Mediarium doesn't look again for a day.
+Covers are the 500 pixel front cover of the album, fetched **once** per album and kept in the `music-covers` folder inside your config folder, so the app never loads images from an outside site and your browser only talks to Mediarium. `GET /api/music/albums/{id}/cover` and `GET /api/music/artists/{id}/cover` (any account) serve the image with cache headers so browsers keep it for a day, and with an `ETag`, so a browser that asks again gets a short "not modified" answer. An artist's picture is the cover of its first album that has one.
+
+### Thumbnails
+
+The artist and album grids don't need a 500 pixel cover (or a 3000 pixel scan from your album folder), so they ask for a small one: add `?size=thumb` to any cover address, for example `/api/music/artists/12/cover?size=thumb`. Mediarium makes a JPEG of at most 256 by 256 pixels at quality 70 (a few kilobytes) the first time it is asked, keeps it in the same `music-covers` folder as `thumb-<hash>.img` and serves that from then on. Browsers keep a thumbnail for three days and ask again with its `ETag`. Without `?size=thumb` you still get the full picture, and a picture that can't be shrunk is sent as it is. A thumbnail is made from the picture it belongs to, so when you replace a `cover.jpg` the new thumbnail follows by itself, and the cover files in your album folders are never touched. There is no setting for this: thumbnails cost a few kilobytes each and are only made for covers that are shown.
+
+Looking for and shrinking covers is kept gentle on large libraries:
+
+- Many requests for the same cover (or the same artist) share one download. At most four downloads from the archive or resizes run at the same time, the rest wait their turn. A download carries on even when the browser has already moved on, so the cover is there next time.
+- An artist whose albums have no cover is remembered for three hours (and an album or artist without a cover tells the browser not to ask again for half an hour). A cover that is found is remembered for ten minutes. When the archive can't be reached, the answer is kept for a minute only and the cover is tried again after that. Importing an album forgets what was remembered for its artist.
+- A cover already in an album folder is found with one look at the folder, not one per file name.
+- The cache keeps up to 20,000 covers and 60,000 thumbnails, the oldest first. The small "no cover" notes aren't counted and expire after a day. A cover that is in use is marked as used every few days, so the ones you look at stay.
+
+To clear the thumbnails (they come back by themselves), delete the files starting with `thumb-` in the `music-covers` folder. To start over completely, delete the whole `music-covers` folder: covers are fetched again as they are shown. Nothing in your music folders is touched.
+
+If there's no cover the answer is a plain 404, and Mediarium doesn't look again for a day.
 
 When an album is imported after a download and its folder has no `cover.jpg`, `folder.jpg` or `cover.png`, the cover is saved there as `cover.jpg` (`cover.png` for a PNG) so Plex, Jellyfin and Navidrome show it too. **An existing cover is never replaced**, and a cover file already in the album folder is also what the cover routes serve. Scanning an existing collection writes nothing into your folders.
 
@@ -323,7 +338,7 @@ Album, artist and release information, cover art and the popular and new-release
 | GET | `/api/music/artists` | | `[artist]` |
 | GET | `/api/music/artists/{id}` | | artist with `albums` |
 | PUT | `/api/music/artists/{id}` | `{monitored?, profileId?, filter?, useLibraryFilter?}` | the artist with `albums`; admin only |
-| GET | `/api/music/artists/{id}/discography` | | what the artist's filter leaves out and is not in the library: `{filter, hidden: [{mbid, title, type, releaseDate, secondaryTypes, hiddenBy}], counts: {reason: n}, checking}`; `hiddenBy` is `album`, `ep`, `single`, a kind (`live`, `remix`, ...) or `bootleg`; `checking` counts releases the bootleg test has not looked at yet |
+| GET | `/api/music/artists/{id}/discography` | | what the artist's filter leaves out: `{filter, hidden: [{mbid, title, type, releaseDate, secondaryTypes, hiddenBy}], library: [{albumId, mbid, hiddenBy}], counts: {reason: n}, checking}`. `hidden` and `counts` are releases that are not in the library; `library` names the albums that are, which the page leaves out of its list because they have no files (an album with files is never named); `hiddenBy` is `album`, `ep`, `single`, a kind (`live`, `remix`, ...) or `bootleg`; `checking` counts releases the bootleg test has not looked at yet |
 | POST | `/api/music/artists/{id}/albums` | `{mbid}` | 201 album: adds one release the filter left out, monitored; needs the manage permission |
 | GET | `/api/music/filters` | | `{filter: {types, hideSecondary, hideBootlegs}, defaults, studio, secondaryTypes: [{key, name}]}` |
 | PUT | `/api/music/filters` | `{types, hideSecondary, hideBootlegs}` | the same as GET; admin only |

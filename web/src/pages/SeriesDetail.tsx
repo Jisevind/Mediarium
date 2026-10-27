@@ -18,6 +18,8 @@ import FolderLine from '../components/FolderLine'
 import LocateDialog from '../components/LocateDialog'
 import TitleEvents from '../components/TitleEvents'
 import { useToast } from '../components/Toast'
+import { useTorrentsSwitch } from '../useTorrentsSwitch'
+import { isTorrentsOff } from '../torrentsOff'
 import ReleaseTable from '../components/ReleaseTable'
 import GrabBlocked from '../components/GrabBlocked'
 import { blockingOf, type BlockingDownload } from '../grabBlocked'
@@ -46,6 +48,7 @@ import { entryDay, entryTime, readZonePref, resolveZone } from '../airTime'
 import { locale, plural, t } from '../i18n'
 import { monitoringSummary, readSeasonsOpen, rememberSeasonsOpen, seasonStartsOpen, type SeasonsOpen } from '../seriesView'
 import { sumBytes } from '../diskTotals'
+import { episodeFilesToReplace, replaceQuestion } from '../replaceFile'
 
 // A target for interactive search: one episode, or a whole season (no
 // episode set) which only offers season packs.
@@ -109,6 +112,7 @@ function SeriesPage() {
   }
   const [missingOnly, setMissingOnly] = useState(false)
   const toast = useToast()
+  const { grabError } = useTorrentsSwitch()
 
   const load = useCallback(() => {
     api
@@ -127,7 +131,7 @@ function SeriesPage() {
 
   // Refreshes itself, faster while anything is downloading so statuses update without a reload.
   const anyDownloading = series?.episodes.some((e) => e.status === 'downloading') ?? false
-  useLive(load, anyDownloading ? 3000 : 5000)
+  useLive(load, anyDownloading ? 3000 : 10000)
 
   const seasons = useMemo(() => {
     const map = new Map<number, Episode[]>()
@@ -167,9 +171,31 @@ function SeriesPage() {
 
   // A grab that was refused because another download is in the way, with the
   // release that was picked, so it can be repeated once that one is cancelled.
-  const [blocked, setBlocked] = useState<{ release: SearchResult; blocking: BlockingDownload; message: string } | null>(null)
+  const [blocked, setBlocked] = useState<{ release: SearchResult; blocking: BlockingDownload; message: string; replace: boolean } | null>(null)
 
-  async function grab(r: SearchResult, replaceQueueId?: number) {
+  // replaceFiles is what the person already decided about the files the
+  // episodes have (when the grab is repeated); left out, episodes that have
+  // files ask first.
+  async function grab(r: SearchResult, replaceQueueId?: number, replaceFiles?: boolean) {
+    let replace = replaceFiles ?? false
+    if (replaceFiles === undefined) {
+      const old = episodeFilesToReplace(series?.episodes ?? [], { season: r.season, episodes: r.episodes }, target)
+      if (old.length > 0) {
+        const q = replaceQuestion(old, r)
+        const answer = await confirm({
+          title: q.title,
+          body: q.lines.map((line) => (
+            <p key={line} className="confirm-break">
+              {line}
+            </p>
+          )),
+          confirmLabel: t('Replace'),
+          cancelLabel: t('Cancel'),
+        })
+        if (!answer) return
+        replace = true
+      }
+    }
     setGrabbing(r.downloadUrl)
     setError('')
     setBlocked(null)
@@ -182,12 +208,14 @@ function SeriesPage() {
         season: target?.season,
         episode: target?.episode,
         replaceQueueId,
+        replace: replace || undefined,
       })
       setMessage(t('Started downloading "{title}". Follow it in Activity.', { title: r.title }))
       setTimeout(load, 500)
     } catch (e) {
       const blocking = blockingOf(e)
-      if (blocking) setBlocked({ release: r, blocking, message: e instanceof Error ? e.message : String(e) })
+      if (blocking) setBlocked({ release: r, blocking, message: e instanceof Error ? e.message : String(e), replace })
+      else if (isTorrentsOff(e)) grabError(e, () => void grab(r, replaceQueueId, replace))
       else setError(e instanceof Error ? e.message : String(e))
     } finally {
       setGrabbing(null)
@@ -427,7 +455,7 @@ function SeriesPage() {
       >
         <div className="title-controls">
           <Switch checked={series.monitored} onChange={toggleSeries} disabled={!canManage} label={<span className="has-tip">{t('Monitored')}<InfoTip text={t('Mediarium keeps searching for the episodes of this show that are monitored and missing. Switch it off to leave the show alone; files you already have stay where they are.')} /></span>} description={[series.monitored ? t('Keeps looking for missing episodes.') : t('Not looking for missing episodes. Files you already have stay where they are.'), monitoring.detail].filter(Boolean).join(' ')} />
-          <ProfilePicker kind="series" itemId={seriesId}>
+          <ProfilePicker kind="series" itemId={seriesId} onMoved={load}>
             <TitleTags kind="tv" id={seriesId} />
           </ProfilePicker>
           {canManage && <MonitorModePicker id={seriesId} onDone={load} />}
@@ -472,7 +500,7 @@ function SeriesPage() {
               message={blocked.message}
               blocking={blocked.blocking}
               busy={grabbing !== null}
-              onReplace={() => void grab(blocked.release, blocked.blocking.id)}
+              onReplace={() => void grab(blocked.release, blocked.blocking.id, blocked.replace)}
               onDismiss={() => setBlocked(null)}
             />
           )}

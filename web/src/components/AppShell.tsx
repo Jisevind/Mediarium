@@ -325,12 +325,12 @@ function Shell() {
   // A small count of downloads in flight next to "Activity".
   const loadActive = useCallback(() => {
     api
-      .listActiveQueue()
-      .then((q) => setActive(q.length))
+      .queueCount()
+      .then((c) => setActive(c.active))
       .catch(() => undefined)
   }, [])
   useEffect(loadActive, [loadActive])
-  useLive(loadActive, 3000)
+  useLive(loadActive, 5000)
 
   return (
     <div className="app-shell" data-section={sectionFor(location.pathname)}>

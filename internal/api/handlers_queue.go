@@ -42,6 +42,11 @@ type queueItemPayload struct {
 	// naming collision was found at, under the "always ask" import
 	// conflict policy. See handleResolveQueueConflict.
 	DestPath string `json:"destPath,omitempty"`
+	// KeptFile and KeptData are set on a download that finished but was not
+	// imported because the file the title already had was kept: that file, and
+	// what became of the downloaded data ("deleted", "seeding" or "client").
+	KeptFile string `json:"keptFile,omitempty"`
+	KeptData string `json:"keptData,omitempty"`
 	// Interrupted is a paused download nobody paused: Mediarium was restarted
 	// while it was downloading.
 	Interrupted bool `json:"interrupted,omitempty"`
@@ -196,7 +201,7 @@ func (s *Server) handleListQueue(w http.ResponseWriter, r *http.Request) {
 		p := queueItemPayload{
 			ID: it.ID, MovieID: it.MovieID, SeriesID: it.SeriesID, AlbumID: it.AlbumID, BookID: it.BookID, BookFormat: it.BookFormat, Title: title, Subtitle: subtitle, PosterURL: poster,
 			ReleaseTitle: it.ReleaseTitle, Protocol: string(it.Protocol), SizeBytes: it.SizeBytes, Status: string(it.Status),
-			ProgressPct: it.ProgressPct, Error: memberText(r, plainerror.Text(it.Error)), AddedAt: it.AddedAt, CompletedAt: it.CompletedAt, DestPath: fileLabel(r, it.DestPath),
+			ProgressPct: it.ProgressPct, Error: memberText(r, plainerror.Text(it.Error)), AddedAt: it.AddedAt, CompletedAt: it.CompletedAt, DestPath: fileLabel(r, it.DestPath), KeptFile: fileLabel(r, it.KeptFile), KeptData: it.KeptData,
 			Interrupted: it.Interrupted, Pending: s.pipelines.pending(it.ID), QueuePosition: positions[it.ID],
 		}
 		if it.IndexerID.Valid {
@@ -396,13 +401,13 @@ func (s *Server) regrab(item queue.Item) (int64, error) {
 		if err != nil {
 			return 0, fmt.Errorf("That show isn't in your library any more.")
 		}
-		return s.grabTVRelease(series, item.Season, item.Episode, item.ReleaseTitle, item.NZBURL, item.SizeBytes, protocol)
+		return s.grabTVOpts(series, item.Season, item.Episode, item.ReleaseTitle, item.NZBURL, item.SizeBytes, protocol, grabPicked, item.ReplaceByHand)
 	case item.MovieID > 0:
 		movie, err := s.MovieRepo.Get(item.MovieID)
 		if err != nil {
 			return 0, fmt.Errorf("That movie isn't in your library any more.")
 		}
-		return s.grabRelease(movie, item.ReleaseTitle, item.NZBURL, item.SizeBytes, protocol)
+		return s.grabMovieOpts(movie, item.ReleaseTitle, item.NZBURL, item.SizeBytes, protocol, grabPicked, grabOpts{byHand: item.ReplaceByHand})
 	case item.AlbumID > 0:
 		album, err := s.MusicRepo.GetAlbum(item.AlbumID)
 		if err != nil {

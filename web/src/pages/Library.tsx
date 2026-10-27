@@ -24,6 +24,7 @@ import { useToast } from '../components/Toast'
 import { formatBytes, withNameTag } from '../format'
 import { useConfirm } from '../components/ConfirmProvider'
 import { useLive } from '../useLive'
+import { anyMoving, fileDetailsPending, libraryTick, pollEvery } from '../pollPlan'
 import { chosenOf, count, failureLines, nameList, selectAllKeys, selectionText, selectRange, toggleKey } from '../librarySelection'
 import { removeOption } from '../diskUsage'
 import FilterToggle from '../components/FilterToggle'
@@ -275,14 +276,25 @@ export default function Library() {
         setShows(same(s.map((x) => fromSeries(x, q))))
       }).catch(failed)
     api.libraryCounts().then((c) => setTitleCounts((prev) => (prev && prev.movies === c.movies && prev.shows === c.shows ? prev : c))).catch(() => undefined)
-    if (musicOn) api.listArtists().then((a) => { setArtists(same(a)); setError('') }).catch(failed)
-    if (booksOn) api.listBooks().then((b) => { setBookList(same(b)); setError('') }).catch(failed)
+    // Only the shown tab's list is read each time. The artists and books are also read once (below) for the numbers
+    // on their tabs, so a Movies tab does not ask for them every few seconds.
+    const tick = libraryTick(active)
+    if (musicOn && tick.artists) api.listArtists().then((a) => { setArtists(same(a)); setError('') }).catch(failed)
+    if (booksOn && tick.books) api.listBooks().then((b) => { setBookList(same(b)); setError('') }).catch(failed)
     queue.then((q) => setQueueNow(same(q)))
-  }, [musicOn, booksOn, onMovies, onTV])
+  }, [musicOn, booksOn, onMovies, onTV, active])
   useEffect(() => {
     load()
   }, [load])
-  useLive(load, 4000)
+  // The numbers on the Music and Book tabs: read once when the page opens (and when a module is switched on).
+  useEffect(() => {
+    const same = <T,>(next: T) => (prev: T | null): T => (prev !== null && JSON.stringify(prev) === JSON.stringify(next) ? prev : next)
+    if (musicOn) api.listArtists().then((a) => setArtists(same(a))).catch(() => undefined)
+    if (booksOn) api.listBooks().then((b) => setBookList(same(b))).catch(() => undefined)
+  }, [musicOn, booksOn])
+  // Every 4 seconds while a download moves, every 10 when nothing does.
+  const downloading = anyMoving(queueNow)
+  useLive(load, pollEvery(downloading, 4000, 10000))
   useEffect(() => {
     api.listProfiles().then((r) => {
       setProfiles(r.profiles)
@@ -340,14 +352,18 @@ export default function Library() {
   useEffect(() => {
     if (!onMovies && !onTV) return
     let stop = false
-    const look = () => api.fileDetailsStatus().then((p) => !stop && setFileProgress((prev) => (prev && prev.done === p.done && prev.total === p.total ? prev : p))).catch(() => undefined)
-    void look()
-    const timer = setInterval(() => void look(), 20000)
+    api.fileDetailsStatus().then((p) => !stop && setFileProgress((prev) => (prev && prev.done === p.done && prev.total === p.total ? prev : p))).catch(() => undefined)
     return () => {
       stop = true
-      clearInterval(timer)
     }
-  }, [onMovies, onTV])
+    // Looked at again when the tab changes, titles come or go, or downloads start or end: that is when new files can have appeared.
+  }, [onMovies, onTV, movieCount, shows?.length, downloading])
+  // While files are still being read it is asked for every 20 seconds (only while the tab is shown); once they are all read it stops.
+  useLive(
+    () => api.fileDetailsStatus().then((p) => setFileProgress((prev) => (prev && prev.done === p.done && prev.total === p.total ? prev : p))).catch(() => undefined),
+    20000,
+    (onMovies || onTV) && fileDetailsPending(fileProgress),
+  )
   const genreOptions = useMemo(() => [...new Set((items ?? []).flatMap((i) => i.genres))].sort(), [items])
   const tagOptions = useMemo(() => [...new Set((items ?? []).flatMap((i) => i.tags))].sort((a, b) => a.localeCompare(b)), [items])
   const profileOptions = useMemo(() => profileFilterOptions(items ?? [], sortProfiles(profiles), defaultProfile, defaultTvProfile), [items, profiles, defaultProfile, defaultTvProfile])
