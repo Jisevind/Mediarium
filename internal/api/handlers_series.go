@@ -232,7 +232,7 @@ func (s *Server) handleGetSeries(w http.ResponseWriter, r *http.Request) {
 	}
 	out := seriesDetailPayload{seriesPayload: toSeriesPayload(sr, s.accountNames()), Episodes: make([]episodePayload, len(eps))}
 	out.RootPath = folderShown(r, s.tvFolders(), sr.RootPath)
-	if all, err := s.MovieRepo.ListSeries(); err == nil {
+	if all, err := s.MovieRepo.ListSeriesNames(); err == nil {
 		key := sr.ID
 		if sr.CopyOf != 0 {
 			key = sr.CopyOf
@@ -588,7 +588,7 @@ func (s *Server) handleGrabSeries(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	queueID, err := s.grabTVRelease(sr, req.Season, req.Episode, req.ReleaseTitle, req.DownloadURL, req.SizeBytes, req.protocol())
+	queueID, err := s.grabTVOpts(sr, req.Season, req.Episode, req.ReleaseTitle, req.DownloadURL, req.SizeBytes, req.protocol(), grabPicked, req.Replace)
 	if err != nil {
 		writeGrabError(w, err, http.StatusBadRequest)
 		return

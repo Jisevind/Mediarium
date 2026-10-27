@@ -21,6 +21,7 @@ import { entryDay, entryTime, readZonePref, resolveZone } from '../airTime'
 import { dismiss, factsFromDashboard, isDismissed, setupGaps } from '../setupStatus'
 import { useGridColumns } from '../useGridColumns'
 import { useLive } from '../useLive'
+import { anyMoving, pollEvery } from '../pollPlan'
 import { useUnreadErrors } from '../useProblems'
 import TwoStepTip from '../components/TwoStepTip'
 
@@ -410,7 +411,8 @@ export default function Dashboard() {
       .catch((e) => setError(e instanceof Error ? e.message : String(e)))
   }, [])
   useEffect(loadDashboard, [loadDashboard])
-  useLive(loadDashboard, 5000)
+  // The dashboard moves quickly only while a download does.
+  useLive(loadDashboard, pollEvery(anyMoving(active), 5000, 15000))
 
   useEffect(() => {
     api.calendar().then(setCal).catch(() => undefined)
@@ -424,7 +426,7 @@ export default function Dashboard() {
       .catch(() => undefined)
   }, [])
   useEffect(loadActive, [loadActive])
-  useLive(loadActive, 3000)
+  useLive(loadActive, pollEvery(anyMoving(active), 3000, 10000))
 
   const name = displayName(user)
   // Members get a trimmed dashboard: no setup warnings, no server paths and

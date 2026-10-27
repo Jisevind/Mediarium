@@ -142,6 +142,7 @@ type Server struct {
 	// library changes (library_overview.go).
 	overviewCache   sharedCache[libraryOverview]
 	seriesListCache sharedCache[seriesListData]
+	ownedCache      sharedCache[ownedData]
 	builtin         BuiltinKeys // app-wide keys baked into official releases (see keys.go)
 
 	importMu         sync.Mutex
@@ -419,7 +420,7 @@ func (s *Server) Routes() http.Handler {
 	public.Handle("/api/", s.signedIn(routes))
 
 	root := http.NewServeMux()
-	root.Handle("/api/", s.busyGuard(noStore(metricsBearerOnly(public))))
+	root.Handle("/api/", s.busyGuard(noStore(gzipJSON(metricsBearerOnly(public)))))
 	// Prometheus' default path. It is the same protected page as /api/metrics.
 	root.Handle("GET /metrics", s.busyGuard(noStore(metricsAlias(public))))
 	root.Handle("/mcp", s.busyGuard(noStore(http.HandlerFunc(s.handleMCP))))
@@ -552,6 +553,7 @@ func (s *Server) protectedRoutes() *routeTable {
 	manage.HandleFunc("PUT /api/series/{id}/folder", s.handleSetSeriesFolder)
 	member.HandleFunc("GET /api/library/folders", s.handleLibraryFolders)
 	member.HandleFunc("GET /api/library/counts", s.handleLibraryCounts)
+	member.HandleFunc("GET /api/library/owned", revalidated(s.handleLibraryOwned))
 	member.HandleFunc("GET /api/library/file-details", s.handleMediaInfoStatus)
 
 	// Shows: the same.
@@ -658,6 +660,7 @@ func (s *Server) protectedRoutes() *routeTable {
 
 	// Downloads: watch and retry.
 	member.HandleFunc("GET /api/queue", revalidated(s.handleListQueue))
+	member.HandleFunc("GET /api/queue/count", s.handleQueueCount)
 	member.HandleFunc("GET /api/plex-watchlist", s.handleWatchlistStatus)
 	member.HandleFunc("PUT /api/plex-watchlist", s.handleUpdateWatchlist)
 	member.HandleFunc("DELETE /api/plex-watchlist", s.handleDisconnectWatchlist)

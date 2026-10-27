@@ -305,6 +305,12 @@ func ProblemMessage(o Outcome) string {
 	if msg := netproxy.WaitMessage(o.Err); msg != "" {
 		return msg
 	}
+	if addr, ok := FlareSolverrDown(o.Err); ok {
+		return FlareSolverrDownMessage(addr)
+	}
+	if status, ok := GoneStatus(o.Err); ok {
+		return GoneMessage(status)
+	}
 	if IsDailyLimit(o.Err) {
 		return fmt.Sprintf("The daily limit of requests for %s is used up. It is used again after midnight (UTC).", o.IndexerName)
 	}

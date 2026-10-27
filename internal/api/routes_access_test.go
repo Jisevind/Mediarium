@@ -155,7 +155,7 @@ var memberRoutes = []string{
 	"GET /api/music/preview/{mbid}",
 	"GET /api/collections", "GET /api/collections/{id}",
 	"GET /api/library/folders",
-	"GET /api/library/counts",
+	"GET /api/library/counts", "GET /api/library/owned", "GET /api/queue/count",
 	"GET /api/library/file-details",
 	"PUT /api/movies/{id}/folder",
 	"PUT /api/series/{id}/folder",

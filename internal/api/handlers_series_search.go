@@ -230,6 +230,7 @@ func (s *Server) handleSeriesSearch(w http.ResponseWriter, r *http.Request) {
 	profile := s.profileForSeries(profiles, series)
 	blocked := s.searchSkipKeys()
 	sizeReasons := s.tvSizeRejections(r.Context(), series, profile)
+	keeps := s.tvImportKeeps(series, season, episode)
 	out := []searchResultPayload{}
 	var found []indexers.Result
 	for _, res := range merged {
@@ -240,7 +241,7 @@ func (s *Server) handleSeriesSearch(w http.ResponseWriter, r *http.Request) {
 		payload := s.toSearchResultPayload(res)
 		payload.MatchedTitle = matchedOtherTitle(res.Title, series.Title, series.AltTitles)
 		payload.Blocklisted = blocked[blocklist.Key(res.Title)]
-		payload.addReasonList(rejectionReasonsFor(res.Title, profile, false, "", ""))
+		payload.addReasonList(rejectionReasonsFor(res.Title, profile, keeps != keepsNothing, "", "", keeps))
 		payload.addReasons("size", sizeReasons(res.Title, res.SizeBytes))
 		payload.addStateReasons()
 		setFormatScore(&payload, profile, res.Title)
@@ -319,7 +320,7 @@ func (s *Server) grabFromSearchTV(w http.ResponseWriter, r *http.Request, req gr
 		_ = s.QueueRepo.LogSeriesActivity(series.ID, "added", series.Title+" (series) added to library"+byline)
 	}
 
-	queueID, err := s.grabTVRelease(series, 0, 0, req.ReleaseTitle, req.DownloadURL, req.SizeBytes, req.protocol())
+	queueID, err := s.grabTVOpts(series, 0, 0, req.ReleaseTitle, req.DownloadURL, req.SizeBytes, req.protocol(), grabPicked, req.Replace)
 	if err != nil {
 		writeGrabError(w, err, http.StatusBadRequest)
 		return

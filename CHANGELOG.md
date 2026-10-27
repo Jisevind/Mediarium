@@ -8,6 +8,36 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.8.0] - 2026-10-27
+
+In short: big libraries load much faster, music covers are small thumbnails, a title's files can move with its folder, a hand-picked release can replace a file, a Viewer group for single sign-on, and clearer help when torrents are off.
+
+### Added
+
+- Changing **Keep it in** on a movie or show that has files now asks whether to **move the files to the new folder** or **leave them where they are**. The window shows from and to, how many files, how big, and whether it is the same drive (instant) or another drive (a copy). Moving stays inside your library folders, never overwrites a file, copies and checks every file before the old one is deleted, undoes everything if something goes wrong, warns about files linked to a download, and writes a line to Activity for each title. The bulk "Move to folder" takes up to 50 titles at a time. Idea from nexus4004 on GitHub, #137.
+- A **Viewer group** for single sign-on (OIDC) and a **Viewer group filter** for LDAP, next to the Administrator group. Someone in the viewer group becomes a Viewer, the admin group wins if both match, and everyone else gets the default role. A role you set by hand is left alone. Idea from mirisbowring on GitHub, #138.
+- When torrents are switched off, a release list that holds torrent releases says so at the top, with a **Switch on torrents** button for administrators (and "Ask an administrator" for everyone else). The same button is on the message after grabbing a torrent anyway and on a failed download in Activity. Thanks to a problem report sent from inside the app.
+- Torrent sites that fail now say why. When FlareSolverr isn't running, the card says "Start FlareSolverr, or set its address". A site that answers "gone" (HTTP 404 or 410) says so. The "No indexer is set up" warning only shows when none has been added. Thanks to a problem report sent from inside the app.
+- Activity writes a "renamed" line when a download's file name was replaced and says why.
+- A release you pick by hand under Choose a release can now replace the file a title already has. Mediarium asks first ("This will replace <old file> with <release>"), only that title is affected, the old file goes to the recycle bin, and the new file is only swapped in when it is complete. Automatic searches still respect "Leave what I have alone". Reported by Jisevind on GitHub, #140.
+- The release list no longer marks a release as the best match when the import would turn it away (a title set to leave what you have alone, or a file whose quality can't be told), and says so on the release. A same-quality release with a higher custom-format score is accepted at the import when the search called it an upgrade. Reported by Jisevind on GitHub, #140.
+- A download that was kept now shows which file it kept and what became of the downloaded files (deleted, still seeding, or still in your download client). Reported by Jisevind on GitHub, #140.
+
+### Changed
+
+- Music: the artist and album grids load small thumbnails (a few KB, kept on disk) instead of full covers, with browser caching, and the artist grid only draws the cards near the screen. Several requests for the same cover share one download, only four run at once, an artist without a cover is remembered for a few hours, and the cover cache holds 20,000 covers instead of 4,000. Reported by mirisbowring on GitHub, #52.
+- A show's page, Discover and the download queue are lighter and faster, especially on big libraries. The show page no longer reads every show on each refresh, Discover marks what you own from one small answer, new database indexes speed up album and queue lookups, and big answers (a show with many episodes, artist and album pages) are sent compressed. Reported by mirisbowring on GitHub, #52.
+- Pages ask for less in the background: the Library only refreshes the tab you are on, the number next to Activity comes from a tiny request, the file-details counter stops once every file is read, and Activity, the Dashboard and a show's page slow down when nothing is downloading.
+- After a start, the background jobs begin one after another over the first minutes instead of all at the same second, so Mediarium answers sooner on slow disks.
+- With **Keep the original file names** on, a movie or a single episode whose file inside has a random name (an obfuscated post) is now saved under the release name, and the naming preset only steps in when the release name looks random too. Season packs keep using the preset. Reported by Jisevind on GitHub, #139.
+- With Detailed logging on, the Radarr, Sonarr and Lidarr-style answers in the log now show what the app asked for (sort, page and filters, never the API key), so an empty card in a phone app can be matched to its request.
+
+### Fixed
+
+- Music: on an artist page the album list now agrees with the type chips and "More filters". Albums in your library that the filter would hide and that have no downloaded files are left out of the list, with a line "N in your library are hidden by this filter" and a Show them button. Albums with files stay, and nothing is deleted or unmonitored. Reported by u/troelsdk on Reddit.
+- Choose a release for a movie no longer says "your indexers have nothing" when they did send releases that were left out because the title or year is not the movie's. It now says so and names a few of them. Reported by Hoopes80 on GitHub, #121.
+- Three tests that failed now and then under load are reliable, and a small data race in the download client's poll timer is fixed.
+
 ## [3.7.4] - 2026-10-26
 
 In short: a big library loads faster, a music import waits for MusicBrainz instead of failing, a Detailed logging switch, a Quality profile filter, folders for new titles, and a Reddit community.

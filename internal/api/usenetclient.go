@@ -303,7 +303,7 @@ func (s *Server) downloadViaUsenetClient(ctx context.Context, queueID int64, nzb
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-time.After(downloadClientPoll):
+			case <-time.After(downloadClientPollEvery()):
 			}
 			continue
 		}
@@ -353,7 +353,7 @@ func (s *Server) downloadViaUsenetClient(ctx context.Context, queueID int64, nzb
 		select {
 		case <-ctx.Done():
 			return ctx.Err() // paused or stopped: the job stays in the downloader for later
-		case <-time.After(downloadClientPoll):
+		case <-time.After(downloadClientPollEvery()):
 		}
 	}
 }

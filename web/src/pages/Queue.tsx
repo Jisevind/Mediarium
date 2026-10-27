@@ -9,6 +9,9 @@ import InfoTip from '../components/InfoTip'
 import HelpLink from '../components/HelpLink'
 import { PosterFallback } from '../components/PosterCard'
 import { useToast } from '../components/Toast'
+import TorrentsOffNote from '../components/TorrentsOffNote'
+import { useTorrentsSwitch } from '../useTorrentsSwitch'
+import { isTorrentsOffText } from '../torrentsOff'
 import { formatBytes, timeAgo } from '../format'
 import { useConfirm } from '../components/ConfirmProvider'
 import AddDownloadDialog from '../components/AddDownloadDialog'
@@ -24,9 +27,11 @@ import { lostMarkerFolder } from '../rootMarker'
 import { useModules } from '../ModulesContext'
 import { bulkState, groupQueue, RUNNING, stateNote, statusLabel, stillWaiting, unpackLine } from '../queueView'
 import { useLive } from '../useLive'
+import { anyMoving, pollEvery } from '../pollPlan'
 import { etaText, nextSample, type RateSample } from '../transferRate'
 import { locale, plural, t, tx, st } from '../i18n'
 import { useUrlState } from '../useUrlState'
+import { keptDataText, keptFileLine } from '../keptFile'
 import '../activity.css'
 
 type Tab = 'queue' | 'clients' | 'history' | 'requests' | 'reports' | 'blocklist' | 'bin'
@@ -272,6 +277,18 @@ function QueueDetails({ q, admin }: { q: QueueItem; admin: boolean }) {
             <dd className="mono">{q.destPath}</dd>
           </>
         )}
+        {q.keptFile && (
+          <>
+            <dt>{t('Kept file')}</dt>
+            <dd className="mono">{q.keptFile}</dd>
+          </>
+        )}
+        {q.keptData && (
+          <>
+            <dt>{t('Downloaded files')}</dt>
+            <dd>{keptDataText(q.keptData)}</dd>
+          </>
+        )}
       </dl>
       {admin && q.protocol === 'torrent' && ['queued', 'downloading', 'importing', 'paused', 'completed'].includes(q.status) && <TorrentControls q={q} open={open} />}
       {events !== null && events.length > 0 && (
@@ -301,7 +318,7 @@ function QueueRow({ q, admin, busy, act, stop, remove, picked, onPick }: RowProp
   return (
     <div className={`qrow st-${q.status}${q.status === 'failed' ? ' failed' : ''} kind-${q.bookId ? 'book' : q.albumId ? 'music' : q.seriesId ? 'tv' : 'movie'}`}>
       <div className="qthumb">
-        {q.albumId ? <Cover src={q.posterUrl} /> : q.posterUrl ? <img src={q.posterUrl} alt="" loading="lazy" /> : <PosterFallback />}
+        {q.albumId ? <Cover src={q.posterUrl} thumb /> : q.posterUrl ? <img src={q.posterUrl} alt="" loading="lazy" /> : <PosterFallback />}
         {admin && onPick && (
           <label className="qpick" title={t('Pick this download')}>
             <input type="checkbox" checked={!!picked} onChange={(e) => onPick(q.id, e.target.checked)} aria-label={t('Pick {title}', { title: q.title })} />
@@ -356,6 +373,9 @@ function QueueRow({ q, admin, busy, act, stop, remove, picked, onPick }: RowProp
         {note && <div className="qnote">{note}</div>}
         {q.note && <div className="qnote">{st(q.note)}</div>}
         {q.error && (q.status === 'completed' ? <div className="qnote">{st(q.error)}</div> : <div className="error-text qerror">{st(q.error)}</div>)}
+        {q.status === 'completed' && q.keptFile && <div className="qnote mono">{keptFileLine(q.keptFile)}</div>}
+        {q.status === 'completed' && q.keptData && <div className="qnote">{keptDataText(q.keptData)}</div>}
+        {q.status === 'failed' && isTorrentsOffText(q.error) && <TorrentsOffNote failed />}
         {q.status === 'failed' && admin && lostMarkerFolder(q.error) && <RootMarkerFix path={lostMarkerFolder(q.error)!} />}
         {q.status === 'failed' && <FailureTips q={q} link={link} />}
         {q.status === 'conflict' && q.destPath && <div className="qrelease">{t('A file already exists at {path}', { path: q.destPath })}</div>}
@@ -462,6 +482,7 @@ function QueueRow({ q, admin, busy, act, stop, remove, picked, onPick }: RowProp
 export default function Queue() {
   const confirm = useConfirm()
   const toast = useToast()
+  const { grabError } = useTorrentsSwitch()
   // Members can watch the queue and retry, but pausing, stopping, removing,
   // blocklisting and resolving conflicts are for administrators.
   const admin = isAdmin(useAuth().user)
@@ -569,7 +590,8 @@ export default function Queue() {
   useEffect(() => {
     void load()
   }, [load])
-  useLive(load, 3000)
+  // Every 3 seconds while a download moves, every 10 when nothing does.
+  useLive(load, pollEvery(anyMoving(queue), 3000, 10000))
 
   // The number next to the Blocklist tab.
   const loadBlocklistCount = useCallback(() => {
@@ -587,12 +609,12 @@ export default function Queue() {
         toast.success(done)
         await load()
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : String(e))
+        grabError(e)
       } finally {
         setBusy(null)
       }
     },
-    [load, toast],
+    [load, toast, grabError],
   )
 
   // Stop asks first, and offers to delete the partly downloaded files (on by
@@ -989,7 +1011,7 @@ export default function Queue() {
                   return (
                     <li key={w.key} className={`kind-${w.kind}`}>
                       <Link to={w.to} className="wait-thumb" aria-hidden="true" tabIndex={-1}>
-                        {w.kind === 'music' ? <Cover src={w.posterUrl} /> : w.posterUrl ? <img src={w.posterUrl} alt="" loading="lazy" /> : <PosterFallback />}
+                        {w.kind === 'music' ? <Cover src={w.posterUrl} thumb /> : w.posterUrl ? <img src={w.posterUrl} alt="" loading="lazy" /> : <PosterFallback />}
                       </Link>
                       <div className="wait-body">
                         <Link to={w.to} className="wait-title">

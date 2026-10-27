@@ -606,6 +606,10 @@ ol.steps strong { color: var(--text); font-weight: 600; }
 .event-pick small { color: var(--text-dim); }
 .stats-totals { margin: 12px 0 0; overflow-wrap: anywhere; }
 .grab-blocked { display: grid; gap: 6px; margin: 8px 0 12px; }
+.torrents-off-note { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; margin: 8px 0 12px; }
+.torrents-off-text, .torrents-off-ask { text-wrap: balance; }
+.searched-reason, .searched-detail { display: block; margin-top: 2px; color: var(--text-dim); text-wrap: balance; }
+.searched-detail { font-family: var(--mono, monospace); opacity: 0.8; overflow-wrap: anywhere; }
 .grab-blocked p { margin: 0; }
 .grab-blocked-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .event-cell { display: grid; gap: 6px; align-content: start; }
@@ -1574,6 +1578,7 @@ fieldset.group .card, fieldset.group table { max-width: 100%; }
 .confirm-dialog.is-danger .confirm-ico { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
 .btn-danger-solid { background: var(--danger); border-color: var(--danger); color: #fff; font-weight: 600; }
 .btn-danger-solid:hover { filter: brightness(1.08); }
+.confirm-break { overflow-wrap: anywhere; }
 .confirm-option { display: flex; align-items: flex-start; gap: 10px; margin-top: 12px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; cursor: pointer; }
 .confirm-option input { margin-top: 3px; width: auto; }
 .confirm-option span { display: grid; gap: 2px; }
