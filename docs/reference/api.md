@@ -315,6 +315,7 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | POST | `/api/indexers/test` | admin | tests an indexer that has not been saved yet. |
 | DELETE | `/api/indexers/{id}` | admin |  |
 | PUT | `/api/indexers/{id}` | admin | edits a saved indexer. |
+| GET | `/api/indexers/{id}/categories` | admin | lists the categories a saved Newznab or Torznab indexer says it has (its capabilities), as suggestions for the extra categories. |
 | PUT | `/api/indexers/{id}/enabled` | admin |  |
 | PUT | `/api/indexers/{id}/priority` | admin | sets how much an indexer is preferred: a number from 1 to 50, lower first. |
 | POST | `/api/indexers/{id}/resume` | admin | is "Try again now": the indexer is asked by the next search, and its failures are forgotten. |
@@ -883,6 +884,7 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | POST | `/api/vpn/deactivate` | admin |  |
 | GET | `/api/vpn/egress-ip` | admin | makes a real request through the active tunnel, so a person can check for themselves that traffic leaves through the VPN provider and is not leaking. |
 | GET | `/api/vpn/status` | admin | surfaces connection state for the UI, so VPN status is shown clearly in the UI, not just in logs. |
+| POST | `/api/vpn/test` | admin | makes a small real request through the active tunnel and answers whether it worked, with the time of the latest handshake or, when it failed, a plain reason. |
 
 ## wanted
 
@@ -901,4 +903,4 @@ Every route the server exposes. Routes marked **public** need no sign-in; all ot
 | PUT | `/api/watched/settings` | admin | PUT /api/watched/settings {"sync": true, "cleanup": {...}} |
 | POST | `/api/watched/sync` | admin | POST /api/watched/sync: read what's been watched now. |
 
-551 routes.
+553 routes.

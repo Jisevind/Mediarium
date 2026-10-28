@@ -67,6 +67,17 @@ A torrent with few or no seeders can sit in the download client for days. Each t
 
 Scripts: `GET /api/indexers` has `minSeeders`; `PUT /api/indexers/{id}` takes `minSeeders` (a whole number from 0 to 1000) and a search result has `belowMinSeeders` and `minSeeders` when it is under the minimum. In a settings file an indexer can have `minSeeders: 5`.
 
+## Extra categories
+
+Mediarium searches an indexer in the standard categories: 2000 for movies, 5000 for TV, 3000 for music, 7000 and 7020 for books and 3030 for audiobooks. Some indexers file releases under numbers of their own as well, such as 105000 for TV or 7120 for German ebooks, and a search for the standard number never finds those. **Edit** on a Newznab or Torznab indexer has an **Extra categories** part with a box for movies, TV, music, books and audiobooks. Type the extra numbers you want, separated by commas, for example `105000, 105010`, and **Save changes**. From then on those numbers are asked for together with the standard ones whenever that kind of media is searched on that indexer, in manual searches and in the automatic ones. Other indexers are not affected, and leaving a box empty keeps the standard search.
+
+- **Finding the numbers.** **Show the categories this indexer lists** asks the indexer what it offers and puts the categories that fit each box under it. Click one to add its number. This is only a help: you can always type a number yourself, and an indexer that doesn't list its categories simply shows nothing.
+- **What is accepted.** Whole numbers from 1 to 999999, up to 30 for each kind of media. Anything else is refused with a message under the box.
+- **Sites from the definition list.** They get the numbers too when the site's definition lists the number among its categories, but the box is only on the Newznab and Torznab cards for now.
+- **Language.** The numbers only change where Mediarium looks. A release found in an extra category is not treated as being in that language: the language of a release still comes from its name.
+
+Scripts: `GET /api/indexers` has `extraCategories`, an object such as `{"tv": [105000], "books": [7120]}` (the kinds are `movies`, `tv`, `music`, `books` and `audiobooks`); `PUT /api/indexers/{id}` takes it too, and an empty object clears it. `GET /api/indexers/{id}/categories` lists what the indexer says it has. In a settings file an indexer can have `extraCategories`.
+
 ## Daily limits
 
 Free indexers often allow only a few requests a day, 25 for example, and answer "Request limit reached" after that. Spacing searches apart does nothing against a daily count, so Mediarium counts the requests it makes to each indexer per day (UTC) and leaves the indexer alone before the day is used up.
