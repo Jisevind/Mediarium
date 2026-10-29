@@ -839,6 +839,8 @@ export interface IndexerConfig {
   priority?: number
   // The fewest seeders a torrent from this indexer needs to be grabbed by itself (0 = off)
   minSeeders?: number
+  // Extra category numbers searched besides the standard ones, per kind of media
+  extraCategories?: Record<string, number[]> | null
   // Set after repeated failures: searches skip the indexer until pausedUntil.
   failures?: number
   pausedUntil?: string
@@ -2300,6 +2302,27 @@ export interface VPNStatus {
   label?: string
   reason?: string
   connectedAt?: string
+  // The tunnel exists, whether or not its server answers.
+  tunnelUp?: boolean
+  // When the VPN server last answered, and how many seconds ago. Both are left out when it never has.
+  lastHandshake?: string
+  handshakeAgeSec?: number
+  // The server has stayed silent past the start-up grace time.
+  noHandshake?: boolean
+  // What the tunnel carried since it came up.
+  rxBytes?: number
+  txBytes?: number
+}
+
+// The answer to the Test button: a real request through the tunnel.
+export interface VPNTestResult {
+  ok: boolean
+  ip?: string
+  reason?: string
+  lastHandshake?: string
+  handshakeAgeSec?: number
+  rxBytes: number
+  txBytes: number
 }
 
 export interface NotificationTarget {
@@ -3524,7 +3547,8 @@ export const api = {
   testIndexerConfig: (data: { name: string; baseUrl: string; apiKey: string }) =>
     post<{ ok: boolean; message: string; detail?: string }>('/indexers/test', data),
   testIndexer: (id: number) => post<{ ok: boolean; message: string; detail?: string }>(`/indexers/${id}/test`),
-  updateIndexer: (id: number, data: { name?: string; baseUrl?: string; apiKey?: string; enabled?: boolean; requestsPerDay?: number; minSeeders?: number }) => put<IndexerConfig>(`/indexers/${id}`, data),
+  updateIndexer: (id: number, data: { name?: string; baseUrl?: string; apiKey?: string; enabled?: boolean; requestsPerDay?: number; minSeeders?: number; extraCategories?: Record<string, number[]> }) => put<IndexerConfig>(`/indexers/${id}`, data),
+  indexerCategories: (id: number) => get<{ categories: { id: number; name: string }[] }>(`/indexers/${id}/categories`),
   setIndexerEnabled: (id: number, enabled: boolean) => put<null>(`/indexers/${id}/enabled`, { enabled }),
 
   listUsenetServers: () => get<UsenetServer[]>('/usenet-servers'),
@@ -3988,6 +4012,7 @@ export const api = {
   deactivateVPN: () => post<null>('/vpn/deactivate'),
   vpnEgressIp: () => get<{ ip: string }>('/vpn/egress-ip'),
   vpnStatus: () => get<VPNStatus>('/vpn/status'),
+  vpnTest: () => post<VPNTestResult>('/vpn/test'),
   pushKey: () => get<{ publicKey: string }>('/notifications/push-key'),
   statsHistory: (days = 0) => get<{ days: StatsDay[] }>(`/stats/history${days ? `?days=${days}` : ''}`),
   getProxy: () => get<ProxySettings>('/proxy'),

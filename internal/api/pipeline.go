@@ -575,8 +575,9 @@ func (s *Server) downloadTorrent(ctx context.Context, queueID int64, downloadURL
 			return errVPNChanged
 		}
 		if errors.Is(err, torrentclient.ErrNoMetadata) && ctx.Err() == nil {
-			// A dead magnet: blocklist it and try another release.
-			return badRelease(err)
+			// A dead magnet: blocklist it and try another release. The message
+			// says what was tried and how the traffic was routed.
+			return badRelease(s.explainTorrentFailure(err, tunnel))
 		}
 		return fmt.Errorf("couldn't add the torrent: %w", err)
 	}
@@ -603,7 +604,7 @@ func (s *Server) downloadTorrent(ctx context.Context, queueID int64, downloadURL
 		}
 		if errors.Is(err, torrentclient.ErrStalled) {
 			// No one is sharing it: blocklist it and try another release.
-			return badRelease(err)
+			return badRelease(s.explainTorrentFailure(err, tunnel))
 		}
 		return err
 	}

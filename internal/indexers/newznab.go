@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -160,6 +161,61 @@ func (c *NewznabClient) Caps(ctx context.Context) error {
 		return fmt.Errorf("%s answered with a web page, not an indexer feed. Check the address: it must be the indexer's API address, not the site's home page", c.Name)
 	}
 	return fmt.Errorf("%s did not answer the capabilities question the way an indexer does", c.Name)
+}
+
+// CapCategory is one category an indexer lists in its capabilities.
+type CapCategory struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+// Categories asks for the indexer's capabilities (t=caps) and returns the
+// categories it lists, sub-categories included (named "Parent/Child"), in
+// the order of their numbers. It is only a help for choosing extra categories.
+func (c *NewznabClient) Categories(ctx context.Context) ([]CapCategory, error) {
+	q := url.Values{}
+	q.Set("t", "caps")
+	q.Set("apikey", c.APIKey)
+	q.Set("o", "xml")
+	body, err := c.get(ctx, q)
+	if err != nil {
+		return nil, err
+	}
+	return parseCapCategories(body)
+}
+
+func parseCapCategories(body []byte) ([]CapCategory, error) {
+	var root struct {
+		Categories []struct {
+			ID     string `xml:"id,attr"`
+			Name   string `xml:"name,attr"`
+			Subcat []struct {
+				ID   string `xml:"id,attr"`
+				Name string `xml:"name,attr"`
+			} `xml:"subcat"`
+		} `xml:"categories>category"`
+	}
+	if err := xml.Unmarshal(body, &root); err != nil {
+		return nil, fmt.Errorf("read the categories of the indexer: %w", err)
+	}
+	var out []CapCategory
+	seen := map[int]bool{}
+	add := func(id, name string) {
+		n, err := strconv.Atoi(strings.TrimSpace(id))
+		if err != nil || n <= 0 || seen[n] {
+			return
+		}
+		seen[n] = true
+		out = append(out, CapCategory{ID: n, Name: truncate(strings.TrimSpace(name), 80)})
+	}
+	for _, cat := range root.Categories {
+		add(cat.ID, cat.Name)
+		for _, sub := range cat.Subcat {
+			add(sub.ID, cat.Name+"/"+sub.Name)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out, nil
 }
 
 // get sends one request to the indexer's API and returns the body of an answer

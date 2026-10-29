@@ -54,7 +54,7 @@ export function helpers(): Helper[] {
     { name: 'Jisevind', where: 'GitHub', href: github('Jisevind'), ideas: [t('Keeping the original file names')] },
     { name: 'franciscojnneto', where: 'GitHub', href: github('franciscojnneto'), ideas: [t('Pages for cast and crew')] },
     { name: 'Bayharbourbutcher1', where: 'GitHub', href: github('Bayharbourbutcher1'), ideas: [t('Sending the seeding rules to an outside torrent client')] },
-    { name: 'mirisbowring', where: 'GitHub', href: github('mirisbowring'), ideas: [t('Replacing a movie with a smaller version'), t('Searching under another title of a movie or show, such as the German one')] },
+    { name: 'mirisbowring', where: 'GitHub', href: github('mirisbowring'), ideas: [t('Replacing a movie with a smaller version'), t('Searching under another title of a movie or show, such as the German one'), t('Extra categories')] },
     { name: 'spamoom', where: 'GitHub', href: github('spamoom'), ideas: [t('Sending indexer traffic through the VPN, with the code to do it')] },
     { name: 'acortespr06', where: 'GitHub', href: github('acortespr06'), ideas: [t('Transmission as a download client')] },
     { name: 'MrBanditt', where: 'GitHub', href: github('MrBanditt'), ideas: [t('Ended and continuing shows, file sizes for episodes and seasons, an age column in the release list, a TMDB link on title pages and sorting titles without “The”')] },
@@ -66,5 +66,7 @@ export function helpers(): Helper[] {
       href: github('Apostol6'),
       ideas: [t('Toloka.to as a built-in site'), t('Prowlarr feed addresses that end in /api'), t('Sites that write dates in their own way'), t('Torrent sites from Prowlarr added as Usenet'), t('Titles and descriptions in your language')],
     },
+    { name: 'Marty-SK', where: 'GitHub', href: github('Marty-SK'), ideas: [t('Seeing whether the VPN really passes traffic, with a Test button')] },
+    { name: 'Joshuancsu', where: 'Reddit', href: reddit('Joshuancsu'), ideas: [t('Saying why a torrent was given up')] },
   ]
 }

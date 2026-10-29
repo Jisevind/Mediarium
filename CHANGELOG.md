@@ -8,6 +8,31 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.8.2] - 2026-10-29
+
+In short: a security update to the libraries Mediarium uses to read ebook files. Nothing else changed.
+
+### Security
+
+- Updated `golang.org/x/net` and the Go libraries that go with it (GO-2026-6860). The flaw was in the HTML reader Mediarium uses when it converts a Kindle ebook, so it could only be reached by importing a deliberately broken book file.
+
+## [3.8.1] - 2026-10-28
+
+In short: a Back to top button, extra categories for each indexer, a VPN test and last-handshake time, torrents that say why they failed, and fixes for the nzb360 episode list, Chrome scrolling and imports on Windows drives.
+
+### Added
+
+- A **Back to top** button, bottom right, shows once you have scrolled about a screen down a long page and takes you smoothly back up to the filters (straight up if you have reduced motion on). It stays clear of the music bar and the phone's home bar, and never shows on a short page. Idea from mirisbowring on GitHub, #142.
+- An **Extra categories** part on every Newznab and Torznab indexer (Edit), with a box for movies, TV, music, books and audiobooks. Type the category numbers your indexer files releases under besides the standard ones, for example `105000` for TV or `7120` for German ebooks, and they are searched together with the standard categories, so those releases are found too. **Show the categories this indexer lists** suggests the numbers the indexer itself reports. Also in the settings file (`extraCategories`) and the API. The language of a release still comes from its name, not from the category. Reported by mirisbowring on GitHub, #129, #128.
+- The VPN page now shows **when the VPN server last answered** (the last handshake) and how much the tunnel has carried since it connected, so a connection that says "connected" but moves nothing no longer looks fine. If the server hasn't answered after a short wait, the connection says **No handshake yet** in a warning colour. A new **Test** button on the connection makes a small real request through the tunnel and tells you whether traffic really flows (with the public address it came from and the handshake age) or, in plain words, why it doesn't, for example that the server did not answer and the key may have expired. For PIA it adds: run their script again and load the new file. Asked for by Marty-SK on GitHub, discussion #126.
+- A torrent that is given up now says why. Instead of only "no one sent the torrent's details", Activity shows how many of its trackers answered, how many peers were found and how many connected, whether the VPN was on and connected, a proxy was used, or the VPN was off, and what to try next ("try the same torrent with the VPN off" is only suggested when a VPN really was on; a link with no trackers says that DHT is off while the VPN is on). Reported by u/Joshuancsu on Reddit.
+- **Detailed logging** now also writes what the torrent engine learned about a torrent: which trackers answered or failed (only the tracker's host, never the key in its address), how many peers were found and connected, and how far a magnet link got. A waiting magnet link writes one line a minute and a downloading torrent one line every five minutes, so the log doesn't fill up.
+
+### Fixed
+
+- An import that is refused the file it just downloaded ("permission denied" on a Windows drive in Docker Desktop, where a virus scanner or another program can hold a new file for a few seconds) now waits and tries again a few times before it fails. The message also mentions that cause. Reported by nexus4004 on Reddit.
+- Apps such as nzb360 that ask the Sonarr-compatible API for episodes by id alone (without a show) now get them instead of an error, so rows that were empty in their history fill in. Found from the log lines sent by Bayharbourbutcher1 on GitHub, #94.
+- Scrolling a big library is lighter on Chrome. The slow decorations (the light along the menu's edge and the shapes drifting behind the page) now stand still while the page is moving, the faint blurred shapes are drawn once instead of on every frame, and cards that appear while you scroll a very long list no longer fade in one by one. Reported by mirisbowring on GitHub, #52. If Chrome still feels slow on your machine, tell me what you see.
 ## [3.8.0-jisevind.1] - 2026-10-27
 
 A fork release based on upstream 3.8.0, with the fork's own changes listed under 3.7.4-jisevind.2. Published as `ghcr.io/jisevind/mediarium:latest` (also `3.8.0-jisevind.1`) for `linux/amd64` and `linux/arm64`. This is not an official Mediarium release.
