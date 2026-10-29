@@ -8,6 +8,14 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.8.2] - 2026-10-29
+
+In short: a security update to the libraries Mediarium uses to read ebook files. Nothing else changed.
+
+### Security
+
+- Updated `golang.org/x/net` and the Go libraries that go with it (GO-2026-6860). The flaw was in the HTML reader Mediarium uses when it converts a Kindle ebook, so it could only be reached by importing a deliberately broken book file.
+
 ## [3.8.1] - 2026-10-28
 
 In short: a Back to top button, extra categories for each indexer, a VPN test and last-handshake time, torrents that say why they failed, and fixes for the nzb360 episode list, Chrome scrolling and imports on Windows drives.
