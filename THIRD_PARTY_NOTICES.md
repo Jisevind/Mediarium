@@ -128,14 +128,14 @@ Air times from TVmaze. Only a show's TheTVDB or IMDb id, or its name and year, i
 | go.opentelemetry.io/otel | v1.46.0 | Apache-2.0 |
 | go.opentelemetry.io/otel/metric | v1.46.0 | Apache-2.0 |
 | go.opentelemetry.io/otel/trace | v1.46.0 | Apache-2.0 |
-| golang.org/x/crypto | v0.57.0 | BSD-3-Clause |
+| golang.org/x/crypto | v0.58.0 | BSD-3-Clause |
 | golang.org/x/exp | v0.0.0-20251113190631-e25ba8c21ef6 | BSD-3-Clause |
 | golang.org/x/image | v0.46.0 | BSD-3-Clause |
-| golang.org/x/net | v0.60.0 | BSD-3-Clause |
+| golang.org/x/net | v0.62.0 | BSD-3-Clause |
 | golang.org/x/oauth2 | v0.37.0 | BSD-3-Clause |
-| golang.org/x/sync | v0.23.0 | BSD-3-Clause |
-| golang.org/x/sys | v0.48.0 | BSD-3-Clause |
-| golang.org/x/text | v0.42.0 | BSD-3-Clause |
+| golang.org/x/sync | v0.24.0 | BSD-3-Clause |
+| golang.org/x/sys | v0.49.0 | BSD-3-Clause |
+| golang.org/x/text | v0.43.0 | BSD-3-Clause |
 | golang.org/x/time | v0.16.0 | BSD-3-Clause |
 | golang.zx2c4.com/wireguard | v0.0.0-20260522210424-ecfc5a8d5446 | MIT |
 | gopkg.in/yaml.v3 | v3.0.1 | Apache-2.0 |
@@ -7621,7 +7621,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
 
-### golang.org/x/crypto v0.57.0
+### golang.org/x/crypto v0.58.0
 
 ```text
 Copyright 2009 The Go Authors.
@@ -7720,7 +7720,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
 
-### golang.org/x/net v0.60.0
+### golang.org/x/net v0.62.0
 
 ```text
 Copyright 2009 The Go Authors.
@@ -7786,7 +7786,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
 
-### golang.org/x/sync v0.23.0
+### golang.org/x/sync v0.24.0
 
 ```text
 Copyright 2009 The Go Authors.
@@ -7819,7 +7819,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
 
-### golang.org/x/sys v0.48.0
+### golang.org/x/sys v0.49.0
 
 ```text
 Copyright 2009 The Go Authors.
@@ -7852,7 +7852,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
 
-### golang.org/x/text v0.42.0
+### golang.org/x/text v0.43.0
 
 ```text
 Copyright 2009 The Go Authors.
