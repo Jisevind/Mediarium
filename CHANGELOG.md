@@ -8,6 +8,10 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.8.2-jisevind.1] - 2026-10-29
+
+A fork release based on upstream 3.8.1 and 3.8.2, with the fork's own changes listed under 3.7.4-jisevind.2. Published as `ghcr.io/jisevind/mediarium:latest` (also `3.8.2-jisevind.1`) for `linux/amd64` and `linux/arm64`. This is not an official Mediarium release.
+
 ## [3.8.2] - 2026-10-29
 
 In short: a security update to the libraries Mediarium uses to read ebook files. Nothing else changed.
