@@ -8,6 +8,10 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.9.1-jisevind.1] - 2026-10-31
+
+A fork release based on upstream 3.9.1, with the fork's own changes listed under 3.7.4-jisevind.2. Published as `ghcr.io/jisevind/mediarium:latest` (also `3.9.1-jisevind.1`) for `linux/amd64` and `linux/arm64`. This is not an official Mediarium release.
+
 ## [3.9.1] - 2026-10-31
 
 In short: UDP trackers and DHT can go through the built-in VPN, Choose a release has a search box for your own words and reads up to 1,000 releases, Activity can blocklist picked downloads, and several name and warning fixes.
