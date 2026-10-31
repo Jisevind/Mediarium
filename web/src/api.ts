@@ -736,6 +736,7 @@ export interface Settings {
   ffmpegAvailable?: boolean // read-only: the configured ffmpeg can be run
   unmonitorDownloaded?: boolean // stop monitoring a movie once it is downloaded (off by default)
   unmonitorFinished?: boolean // stop monitoring a show once it has ended and every episode is in (off by default)
+  foldersInInfoLanguage?: boolean // name new movie and show folders and files with the title in the info language (off by default)
   seasonPacks?: boolean // look for a season pack once a season has ended (off by default)
   tvmazeAirTimes?: boolean // look up the time episodes air on TVmaze (on by default; off = TVmaze is never contacted)
   hasOpenSubtitlesAccount?: boolean
@@ -763,6 +764,8 @@ export interface Settings {
   requireVpnForTorrents?: boolean
   // Send indexer traffic through the VPN; off until switched on.
   routeIndexersThroughVpn?: boolean
+  // UDP trackers and DHT through the built-in VPN; off until switched on.
+  discoverThroughTunnel?: boolean
   // The person said their torrent client is already behind a VPN: no "Torrenting without a VPN" notice.
   vpnNoticeAcknowledged?: boolean
   importConflictPolicy?: string
@@ -1195,6 +1198,8 @@ export interface SearchResult {
   // The other title of the movie or show the release is named by ("Der Herr der
   // Ringe"), when it is not the main one. Only set for a search on a library item.
   matchedTitle?: string
+  // The indexer's category numbers of the release. Only set for a book search.
+  categories?: number[]
 }
 
 export type MediaStatus = 'missing' | 'downloading' | 'downloaded'
@@ -3657,7 +3662,7 @@ export const api = {
   resumeQueueItem: (id: number) => post<{ status: string }>(`/queue/${id}/resume`),
   stopQueueItem: (id: number, deleteFiles: boolean) => post<{ status: string; pending?: string }>(`/queue/${id}/stop`, { deleteFiles }),
   frontQueueItem: (id: number) => post<{ status: string }>(`/queue/${id}/front`),
-  bulkQueue: (ids: number[], action: 'pause' | 'resume' | 'stop' | 'retry' | 'front' | 'remove', deleteFiles = false) =>
+  bulkQueue: (ids: number[], action: 'pause' | 'resume' | 'stop' | 'retry' | 'front' | 'remove' | 'blocklist', deleteFiles = false) =>
     post<{ done: number; failed: { id: number; error: string }[] }>('/queue/bulk', { ids, action, deleteFiles }),
   pauseAllQueue: (protocol?: 'usenet' | 'torrent') => post<{ paused: number }>(`/queue/pause-all${protocol ? `?protocol=${protocol}` : ''}`),
   resumeAllQueue: (protocol?: 'usenet' | 'torrent') => post<{ resumed: number; skipped: number; problem?: string }>(`/queue/resume-all${protocol ? `?protocol=${protocol}` : ''}`),
@@ -3674,7 +3679,7 @@ export const api = {
   replaceMovieSmaller: (id: number) => post<{ grabbed: number; message: string }>(`/movies/${id}/replace-smaller`),
   searchNowSeries: (id: number, scope: { season?: number; episode?: number } = {}) =>
     post<{ grabbed: number; message: string }>(`/series/${id}/search-now`, scope),
-  movieSearch: (id: number) => get<SearchAnswer<SearchResult>>(`/movies/${id}/search?detail=1`),
+  movieSearch: (id: number, q?: string) => get<SearchAnswer<SearchResult>>(`/movies/${id}/search?detail=1${q ? `&q=${encodeURIComponent(q)}` : ''}`),
   libraryFolders: () => get<LibraryFolders>('/library/folders'),
   setMovieFolder: (id: number, rootPath: string) => put<{ rootPath: string }>(`/movies/${id}/folder`, { rootPath }),
   setSeriesFolder: (id: number, rootPath: string) => put<{ rootPath: string }>(`/series/${id}/folder`, { rootPath }),
@@ -3878,8 +3883,8 @@ export const api = {
   deleteSeries: (id: number, deleteFiles = false) => del<null>(`/series/${id}?deleteFiles=${deleteFiles}`),
   titleCopies: (kind: 'movie' | 'series', id: number) => get<TitleCopies>(`/${kind === 'movie' ? 'movies' : 'series'}/${id}/copies`),
   addTitleCopy: (kind: 'movie' | 'series', id: number, profileId: number) => post<TitleCopy>(`/${kind === 'movie' ? 'movies' : 'series'}/${id}/copies`, { profileId }),
-  seriesSearch: (id: number, season: number, episode?: number) =>
-    get<SearchAnswer<SearchResult>>(`/series/${id}/search?detail=1&season=${season}${episode ? `&episode=${episode}` : ''}`),
+  seriesSearch: (id: number, season: number, episode?: number, q?: string) =>
+    get<SearchAnswer<SearchResult>>(`/series/${id}/search?detail=1&season=${season}${episode ? `&episode=${episode}` : ''}${q ? `&q=${encodeURIComponent(q)}` : ''}`),
   grabSeries: (id: number, data: { releaseTitle: string; downloadUrl: string; sizeBytes: number; protocol?: 'usenet' | 'torrent'; season?: number; episode?: number; replaceQueueId?: number; replace?: boolean }) =>
     post<{ queueId: number }>(`/series/${id}/grab`, data),
 

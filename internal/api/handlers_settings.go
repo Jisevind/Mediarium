@@ -173,6 +173,9 @@ type settingsPayload struct {
 	// SeasonPacks looks for a season pack once a season has ended (off unless
 	// switched on; a show can say otherwise for itself).
 	SeasonPacks *bool `json:"seasonPacks,omitempty"`
+	// FoldersInInfoLanguage names new movie and show folders and files with the
+	// title in the info language (off unless switched on).
+	FoldersInInfoLanguage *bool `json:"foldersInInfoLanguage,omitempty"`
 	// TVmazeAirTimes looks up the time episodes air on TVmaze (on unless
 	// switched off; off means TVmaze is never contacted).
 	TVmazeAirTimes *bool `json:"tvmazeAirTimes,omitempty"`
@@ -210,8 +213,9 @@ type settingsPayload struct {
 	QualityLanguageOnly *bool `json:"qualityLanguageOnly,omitempty"`
 
 	// The language titles, plots, genres and posters are shown in, as a TMDB
-	// tag like "de-DE" (English by default), and the choices. File and folder
-	// names always use the English title, whatever is picked.
+	// tag like "de-DE" (English by default), and the choices. New movie and
+	// show folders and file names use that language's title. Indexer searches
+	// stay in English, and a title that already has files keeps its folder.
 	InfoLanguage  string              `json:"infoLanguage,omitempty"`
 	InfoLanguages []metadata.Language `json:"infoLanguages,omitempty"`
 
@@ -232,6 +236,9 @@ type settingsPayload struct {
 
 	// Indexer traffic through the VPN. A pointer for the same reason.
 	RouteIndexersThroughVPN *bool `json:"routeIndexersThroughVpn,omitempty"`
+
+	// UDP trackers and DHT through the VPN. A pointer for the same reason.
+	DiscoverThroughTunnel *bool `json:"discoverThroughTunnel,omitempty"`
 
 	// The person said their torrent client is already behind a VPN, so the
 	// "Torrenting without a VPN" notice stays away.
@@ -390,6 +397,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	osEnabled, subdlEnabled, addonsEnabled := sources.OpenSubtitles.Switch, sources.SubDL.Switch, sources.Addons.Switch
 	unmonitorDownloaded, unmonitorFinished := s.unmonitorDownloaded(), s.unmonitorFinished()
 	seasonPacks := s.seasonPackDefault()
+	foldersInInfoLanguage := s.settingOn(settings.KeyFoldersInInfoLanguage, false)
 	tvmazeAirTimes := s.tvmazeOn()
 	qualityLanguageOnly := s.languageOnly()
 	showAdvanced := s.showAdvanced()
@@ -409,6 +417,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	illegalCharReplacement, _ := s.Settings.Get(settings.KeyIllegalCharReplacement)
 	requireVPNForTorrents := s.vpnRequiredForTorrents()
 	routeIndexersThroughVPN := s.vpnForIndexers()
+	discoverThroughTunnel := s.vpnUDPDiscovery()
 	vpnNoticeAcknowledged := s.vpnNoticeAcknowledged()
 	importConflictPolicy, _ := s.Settings.Get(settings.KeyImportConflictPolicy)
 	if importConflictPolicy == "" {
@@ -506,6 +515,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		FFmpegAvailable:          s.ffmpegFound(),
 		UnmonitorFinished:        &unmonitorFinished,
 		SeasonPacks:              &seasonPacks,
+		FoldersInInfoLanguage:    &foldersInInfoLanguage,
 		TVmazeAirTimes:           &tvmazeAirTimes,
 		HasOpenSubtitlesAccount:  s.Subtitles().HasCredentials(),
 		OpenSubtitlesAccountName: osUser,
@@ -528,6 +538,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		ReleaseCountryEffective:  s.releaseRegion(),
 		RequireVPNForTorrents:    &requireVPNForTorrents,
 		RouteIndexersThroughVPN:  &routeIndexersThroughVPN,
+		DiscoverThroughTunnel:    &discoverThroughTunnel,
 		VPNNoticeAcknowledged:    &vpnNoticeAcknowledged,
 		ImportConflictPolicy:     importConflictPolicy,
 		HasTraktClientID:         s.Trakt().HasClientID(),
@@ -993,6 +1004,13 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if req.FoldersInInfoLanguage != nil {
+		if err := setBool(tx, settings.KeyFoldersInInfoLanguage, *req.FoldersInInfoLanguage); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+
 	if req.SeasonPacks != nil {
 		changed := *req.SeasonPacks != s.seasonPackDefault()
 		if err := setBool(tx, settings.KeySeasonPacks, *req.SeasonPacks); err != nil {
@@ -1110,6 +1128,18 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		tx.then(s.applyVPNRoutes)
+	}
+	if req.DiscoverThroughTunnel != nil {
+		value := "1"
+		if !*req.DiscoverThroughTunnel {
+			value = "0"
+		}
+		if err := tx.Set(settings.KeyVPNDiscoverThroughTunnel, value, false); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		on := *req.DiscoverThroughTunnel
+		tx.then(func() { s.torrents.setDiscover(on) })
 	}
 
 	if req.TMDBAPIKey != "" {
