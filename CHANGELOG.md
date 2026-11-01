@@ -8,6 +8,10 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.9.2-jisevind.1] - 2026-11-01
+
+A fork release based on upstream 3.9.2, with the fork's own changes listed under 3.7.4-jisevind.2. Published as `ghcr.io/jisevind/mediarium:latest` (also `3.9.2-jisevind.1`) for `linux/amd64` and `linux/arm64`. This is not an official Mediarium release.
+
 ## [3.9.2] - 2026-11-01
 
 In short: no more false "too many connections" emails from Mediarium's own checks, SABnzbd and NZBGet leftovers are cleaned up after import, albums no longer get linked to a single of the same name, and a long list of search, naming and download fixes.
