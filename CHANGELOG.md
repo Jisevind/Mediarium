@@ -8,6 +8,10 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [3.9.3-jisevind.1] - 2026-11-04
+
+A fork release based on upstream 3.9.3, with the fork's own changes listed under 3.7.4-jisevind.2. Published as `ghcr.io/jisevind/mediarium:latest` (also `3.9.3-jisevind.1`) for `linux/amd64` and `linux/arm64`. This is not an official Mediarium release.
+
 ## [3.9.3] - 2026-11-03
 
 In short: Decypharr works again, book search can use Google Books for missing covers and descriptions, old SABnzbd and NZBGet jobs are cleaned up, library titles and posters can follow the info language, and a few calendar and search fixes.
