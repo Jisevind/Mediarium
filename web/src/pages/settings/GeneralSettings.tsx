@@ -53,39 +53,16 @@ function LookCard() {
   )
 }
 
-// The decorative motion can be switched off per browser. Everything that
-// shows what the app is doing (spinners, progress bars, live downloads) keeps
-// moving.
-function MotionCard() {
-  const [off, setOff] = useState(savedEffectsOff)
-  return (
-    <fieldset className="group">
-      <legend>
-        <Icon name="sparkles" size={14} /> {t('Motion')}
-      </legend>
-      <Switch
-        checked={off}
-        onChange={(next) => {
-          setOff(next)
-          setEffectsOff(next)
-        }}
-        label={t('Reduce effects')}
-        description={t('Stops the decorative background motion, such as the drifting shapes, the moving grain and the film-strip edge. Loading spinners and progress bars keep moving. Kept in this browser.')}
-        showState
-      />
-    </fieldset>
-  )
-}
-
 // The foldable and dual-screen layout (fold.ts).
 function FoldCard() {
   return <FoldSettings />
 }
 
-// Pure black for OLED screens and a bigger text size (V4 B7), kept in this browser like the theme.
+// Pure black for OLED screens, a bigger text size (V4 B7) and the reduced-effects switch, kept in this browser like the theme.
 function LookExtras() {
   const [black, setBlackState] = useState(savedBlack)
   const [size, setSize] = useState<TextSize>(savedTextSize)
+  const [noEffects, setNoEffects] = useState(savedEffectsOff)
   return (
     <div className="grid-form" style={{ marginTop: 12 }}>
       <Switch
@@ -96,6 +73,17 @@ function LookExtras() {
         }}
         label={t('Pure black background')}
         description={t('For phones and screens with OLED panels: the dark look with a black background. It has no effect in the light look.')}
+        showState
+      />
+      {/* The decorative motion can be switched off per browser; spinners, progress bars and live downloads keep moving. */}
+      <Switch
+        checked={noEffects}
+        onChange={(next) => {
+          setNoEffects(next)
+          setEffectsOff(next)
+        }}
+        label={t('Reduce effects')}
+        description={t('Stops the decorative background motion, such as the drifting shapes, the moving grain and the film-strip edge. Loading spinners and progress bars keep moving. Kept in this browser.')}
         showState
       />
       <label className="inline-field">
@@ -171,7 +159,6 @@ export default function GeneralSettings() {
     <div className="settings-stack">
       <LanguageCard />
       <LookCard />
-      <MotionCard />
       <FoldCard />
       <TimeZoneCard />
       <InstallCard />
