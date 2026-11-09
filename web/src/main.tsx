@@ -1,5 +1,7 @@
 import { loadLanguage } from './i18n'
 import { applySavedEffects } from './motion'
+import { applyLook } from './look'
+import { startFold } from './fold'
 
 // Dark unless light was picked (ThemeToggle.tsx), set before anything paints.
 let theme = 'dark'
@@ -9,6 +11,8 @@ try {
   // blocked storage: dark
 }
 document.documentElement.dataset.theme = theme
+applyLook() // pure black and the text size (look.ts)
+startFold() // foldable and dual-screen layout (fold.ts)
 
 // The decorative motion can be switched off per browser (Settings > General),
 // also before the first paint so a reload does not flash it back on.

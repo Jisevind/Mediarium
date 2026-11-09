@@ -41,6 +41,9 @@ type Result struct {
 	// MinSeeders is the minimum the indexer was given for torrents (0 = off);
 	// set by the engine on torrent results only.
 	MinSeeders int
+	// TorrentRoute is where the indexer sends its torrents (see Instance);
+	// set by the engine on torrent results only.
+	TorrentRoute string
 	// Cached is set by the search code (never by an indexer) when the debrid
 	// service in use already has this torrent. False means "not cached or not
 	// known".
@@ -539,18 +542,18 @@ func (item newznabItem) toResult(indexerName string) Result {
 	r := Result{
 		Title:       item.Title,
 		IndexerName: indexerName,
-		DownloadURL: item.Enclosure.URL,
+		DownloadURL: strings.TrimSpace(item.Enclosure.URL),
 		InfoURL:     item.Comments,
 		SizeBytes:   item.Enclosure.Length,
 	}
 	if r.DownloadURL == "" {
-		r.DownloadURL = item.Link
+		r.DownloadURL = strings.TrimSpace(item.Link)
 	}
-	if magnet := item.attr("magneturl"); magnet != "" && strings.HasPrefix(magnet, "magnet:") {
-		r.DownloadURL = magnet
+	if magnet := strings.TrimSpace(item.attr("magneturl")); len(magnet) >= 7 && strings.EqualFold(magnet[:7], "magnet:") {
+		r.DownloadURL = "magnet:" + magnet[7:]
 	}
 	r.Torrent = strings.Contains(strings.ToLower(item.Enclosure.Type), "bittorrent") ||
-		strings.HasPrefix(r.DownloadURL, "magnet:") ||
+		strings.HasPrefix(strings.ToLower(r.DownloadURL), "magnet:") ||
 		item.attr("infohash") != "" ||
 		item.attr("seeders") != ""
 	if size := item.attr("size"); size != "" {

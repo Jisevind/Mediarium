@@ -6,8 +6,13 @@ import Switch from '../../components/Switch'
 import { UsageStatsCard } from '../../components/UsageStats'
 import PublicAddress from '../../components/PublicAddress'
 import ThemeToggle from '../../components/ThemeToggle'
+import Switch from '../../components/Switch'
+import FoldSettings from '../../components/FoldSettings'
+import { savedBlack, savedTextSize, setBlack, setTextSize, type TextSize } from '../../look'
 import { PushCard, UpdatesCard } from '../../components/UpdateCards'
 import { savedEffectsOff, setEffectsOff } from '../../motion'
+import RollbackCard from '../../components/RollbackCard'
+import InstallCard from '../../components/InstallCard'
 import { LANGUAGES, chooseLanguage, currentLanguage, locale, t, type Lang } from '../../i18n'
 
 // The language the app itself is shown in (not the audio or subtitle language).
@@ -44,6 +49,7 @@ function LookCard() {
         <ThemeToggle />
         <span style={{ color: 'var(--text-dim)' }}>{t('Switches Mediarium between its dark and light look. It is kept in this browser.')}</span>
       </div>
+      <LookExtras />
     </fieldset>
   )
 }
@@ -69,6 +75,46 @@ function MotionCard() {
         showState
       />
     </fieldset>
+  )
+}
+
+// The foldable and dual-screen layout (fold.ts).
+function FoldCard() {
+  return <FoldSettings />
+}
+
+// Pure black for OLED screens and a bigger text size (V4 B7), kept in this browser like the theme.
+function LookExtras() {
+  const [black, setBlackState] = useState(savedBlack)
+  const [size, setSize] = useState<TextSize>(savedTextSize)
+  return (
+    <div className="grid-form" style={{ marginTop: 12 }}>
+      <Switch
+        checked={black}
+        onChange={(on) => {
+          setBlack(on)
+          setBlackState(on)
+        }}
+        label={t('Pure black background')}
+        description={t('For phones and screens with OLED panels: the dark look with a black background. It has no effect in the light look.')}
+        showState
+      />
+      <label className="inline-field">
+        {t('Text size')}
+        <select
+          value={size}
+          onChange={(e) => {
+            const v = e.target.value as TextSize
+            setTextSize(v)
+            setSize(v)
+          }}
+        >
+          <option value="normal">{t('Normal')}</option>
+          <option value="large">{t('Large')}</option>
+          <option value="larger">{t('Larger')}</option>
+        </select>
+      </label>
+    </div>
   )
 }
 
@@ -127,9 +173,12 @@ export default function GeneralSettings() {
       <LanguageCard />
       <LookCard />
       <MotionCard />
+      <FoldCard />
       <TimeZoneCard />
+      <InstallCard />
       {admin && <PublicAddress />}
       {admin && <UpdatesCard />}
+      {admin && <RollbackCard />}
       {admin && (
         <details className="how-details span-all">
           <summary>{t('Advanced: updates pushed through the API')}</summary>
