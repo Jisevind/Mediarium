@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/rdborg/mediarium/internal/blocklist"
 	"github.com/rdborg/mediarium/internal/indexers"
@@ -29,6 +31,69 @@ const maxMusicSearchesPerHunt = 25
 // albumQuery is what is searched for: "Artist Album".
 func albumQuery(artist music.Artist, album music.Album) string {
 	return artist.Name + " " + album.Title
+}
+
+// soulseekWords turns a name into the words Soulseek matches: letters and
+// digits only (so "AC/DC" is "AC DC" and "Don't" is "Don t"), no bracketed tail
+// such as "(Deluxe Edition)" or "[Remastered]".
+func soulseekWords(name string) string {
+	var b strings.Builder
+	depth := 0
+	for _, r := range name {
+		switch {
+		case r == '(' || r == '[':
+			depth++
+			b.WriteByte(' ')
+		case r == ')' || r == ']':
+			if depth > 0 {
+				depth--
+			}
+			b.WriteByte(' ')
+		case depth > 0:
+		case unicode.IsLetter(r) || unicode.IsDigit(r):
+			b.WriteRune(r)
+		default:
+			b.WriteByte(' ')
+		}
+	}
+	return strings.Join(strings.Fields(b.String()), " ")
+}
+
+// soulseekQueries lists what to ask Soulseek for an album, from the most
+// exact to the widest: artist and title, then the title alone (a soundtrack
+// or a "Various Artists" album is shared under many artist names), then the
+// artist and the first words of a long title. Repeats are dropped.
+func soulseekQueries(artist music.Artist, album music.Album) []string {
+	name := soulseekWords(artist.Name)
+	if strings.EqualFold(name, "various artists") || strings.EqualFold(name, "various") {
+		name = ""
+	}
+	title := soulseekWords(album.Title)
+	if title == "" {
+		title = soulseekWords(strings.NewReplacer("(", " ", ")", " ", "[", " ", "]", " ").Replace(album.Title))
+	}
+	var out []string
+	add := func(q string) {
+		q = strings.TrimSpace(q)
+		if q == "" {
+			return
+		}
+		for _, have := range out {
+			if strings.EqualFold(have, q) {
+				return
+			}
+		}
+		out = append(out, q)
+	}
+	add(name + " " + title)
+	add(title)
+	if w := strings.Fields(title); len(w) > 3 {
+		add(name + " " + strings.Join(w[:3], " "))
+	}
+	if len(out) == 0 {
+		add(albumQuery(artist, album))
+	}
+	return out
 }
 
 // musicReleasePayload is one indexer result for an album.
@@ -133,16 +198,11 @@ func (s *Server) handleAlbumSearch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Soulseek (slskd), when it is set up, is asked at the same time as the indexers.
-	soulseek := make(chan []musicReleasePayload, 1)
-	go func() {
-		found, err := s.soulseekAlbumReleases(r.Context(), artist, album, profile)
-		if err != nil && r.Context().Err() == nil {
-			slog.Info("soulseek: album search failed", "album", album.Title, "err", err)
-		}
-		soulseek <- found
-	}()
+	soulseek := make(chan soulseekRun, 1)
+	go func() { soulseek <- s.soulseekAlbumRun(r.Context(), artist, album, profile) }()
 	if len(instances) == 0 {
-		writeSearch(w, r, append(out, <-soulseek...), 0, nil)
+		run := <-soulseek
+		writeSearchWith(w, r, append(out, run.Releases...), 0, nil, nil, nil, run.extra())
 		return
 	}
 	blocked := s.searchSkipKeys()
@@ -175,8 +235,9 @@ func (s *Server) handleAlbumSearch(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, p)
 	}
-	out = append(out, <-soulseek...)
-	writeSearchAll(w, r, out, len(instances), outcomes, notAsked, instances)
+	run := <-soulseek
+	out = append(out, run.Releases...)
+	writeSearchWith(w, r, out, len(instances), outcomes, notAsked, instances, run.extra())
 }
 
 // handleAlbumGrab grabs one release for an album (from the interactive
@@ -504,14 +565,14 @@ func (s *Server) retryAlbum(albumID int64) {
 }
 
 // albumIncomplete reports whether a downloaded album has tracks without a
-// file (its tracklist is known and not every track has one).
+// file (its tracklist is known and not every wanted track has one).
 func (s *Server) albumIncomplete(albumID int64) bool {
 	tracks, err := s.MusicRepo.ListTracks(albumID)
 	if err != nil || len(tracks) == 0 {
 		return false
 	}
 	for _, t := range tracks {
-		if t.FilePath == "" {
+		if t.FilePath == "" && t.Monitored {
 			return true
 		}
 	}
