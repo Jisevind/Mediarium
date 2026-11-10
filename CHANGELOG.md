@@ -8,6 +8,10 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [4.0.4-jisevind.1] - 2026-11-10
+
+A fork release based on upstream 4.0.4, with the fork's own changes listed under 3.7.4-jisevind.2. Published as `ghcr.io/jisevind/mediarium:latest` (also `4.0.4-jisevind.1`) for `linux/amd64` and `linux/arm64`. This is not an official Mediarium release.
+
 ## [4.0.4] - 2026-11-10
 
 ### Changed
