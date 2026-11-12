@@ -8,6 +8,29 @@ under [Unreleased]. How releases are cut: [docs/RELEASING.md](docs/RELEASING.md)
 
 ## [Unreleased]
 
+## [4.0.6] - 2026-11-12
+
+### Added
+- A Newznab or Torznab indexer that takes a show's IMDb or TheTVDB id is now asked by id as well as by name, for a season or an episode. A search for "The Girlfriend S01" used to find other shows with a similar name and miss the real season pack; asked by id it finds it. Indexers that do not list the id are searched the way they were. The answers of both searches are merged (#181, VanCityGuy).
+
+### Fixed
+- A show that came back as a new version of an older one (Scrubs 2026 and Scrubs 2001) kept downloading the old show's episodes, because a release name without a year looks the same for both. The automatic search now skips a release the indexer lists as posted before the episode first aired (#158, Hoopes80).
+
+## [4.0.5] - 2026-11-11
+
+### Added
+- **Choose a release for the whole series** on a show page with more than one season: lists the packs that hold several seasons or the whole show (Complete Series, S01-S09), so you can pick one yourself instead of leaving it to the automatic search (#176, SanketBaraiya).
+- The **Add** dialog for an album has a **Songs on this album** list, so you can see the tracks before you add it (#143, SanketBaraiya).
+- The release list for an album has a **Quality** filter (FLAC, MP3 320 ...), like the Indexer filter (#143, SanketBaraiya).
+
+### Security
+- Built with Go 1.26.11, which fixes a crash in the web server of the Go standard library (GO-2026-6859, a race when a request body is limited in size).
+
+### Fixed
+- Soulseek searches ended after a few hundredths of a second and found next to nothing. Mediarium asked slskd to search for 10 milliseconds instead of 10 seconds. Searches now run for the time Mediarium waits (about 20 seconds each) (#143, balkie31).
+- A download failed at the first missing article when the NZB's post subjects did not put the file names in quotes (for example `Name.part1.rar (1/0)`). Mediarium then did not see the PAR2 files in the release, so it believed nothing could be repaired. It now reads the file name from such subjects too. Programs and scripts named that way are now also caught by the check for unsafe releases (#178, mirisbowring).
+- Deleting a season's or an episode's files no longer leaves a folder full of `.nfo` files behind. When a season or show folder holds nothing but metadata, artwork or subtitle files after its last video is gone (season.nfo, tvshow.nfo, an episode .nfo named a little differently from its video), those files and the empty folders are removed too. A folder with a video, a text note or another season is left alone (#180, SanketBaraiya).
+
 ## [4.0.4-jisevind.1] - 2026-11-10
 
 A fork release based on upstream 4.0.4, with the fork's own changes listed under 3.7.4-jisevind.2. Published as `ghcr.io/jisevind/mediarium:latest` (also `4.0.4-jisevind.1`) for `linux/amd64` and `linux/arm64`. This is not an official Mediarium release.
