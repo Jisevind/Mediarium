@@ -2,12 +2,14 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, can, isAdmin, type Book, type BookFormat, type QueueItem, type SearchResult } from '../api'
 import { useAuth } from '../AuthContext'
+import AddDownloadDialog from '../components/AddDownloadDialog'
 import ChangeCoverDialog from '../components/ChangeCoverDialog'
 import { useConfirm } from '../components/ConfirmProvider'
 import Icon from '../components/Icon'
 import KindGlyph from '../components/KindGlyph'
 import { PosterFallback } from '../components/PosterCard'
 import ReleaseNotice from '../components/ReleaseNotice'
+import type { Filtered } from '../components/SearchesUsed'
 import ReleaseTable from '../components/ReleaseTable'
 import Switch from '../components/Switch'
 import { useToast } from '../components/Toast'
@@ -20,6 +22,7 @@ import { locale, t, st as serverText } from '../i18n'
 import { useModules } from '../ModulesContext'
 import { useLive } from '../useLive'
 import { bookState } from './BookLibrary'
+import { originText } from '../origin'
 import { listenPath, openBookApp, readPath } from '../bookshelf/open'
 import type { Unanswered } from '../releaseHint'
 import type { Searched } from '../searched'
@@ -92,6 +95,7 @@ function BookPage({ id }: { id?: string }) {
   const fromAudible = book.olKey.startsWith('audnexus:')
   const fromHardcover = book.olKey.startsWith('hc-')
   const fromGoogle = book.olKey.startsWith('gb-')
+  const byHand = book.olKey.startsWith('manual:')
   const formats = (['ebook', 'audiobook'] as BookFormat[]).filter((f) => on(f === 'ebook' ? 'ebooks' : 'audiobooks') || book[f].status === 'downloaded')
   return (
     <div>
@@ -113,13 +117,14 @@ function BookPage({ id }: { id?: string }) {
             </p>
           )}
           {book.description && <p className="title-overview">{book.description}</p>}
+          {admin && originText(book.origin) && <p className="added-by">{originText(book.origin)}</p>}
           <div className="title-links">
             {links.map((l) => (
               <a key={l.serverId} className="link-pill primary-pill" href={l.url} target="_blank" rel="noreferrer">
                 <Icon name={l.kind === 'audiobookshelf' ? 'headphones' : 'book'} size={13} /> {l.kind === 'audiobookshelf' ? t('Listen in {name}', { name: l.name }) : t('Read in {name}', { name: l.name })}
               </a>
             ))}
-            {!fromAudible && !fromHardcover && !fromGoogle && (
+            {!fromAudible && !fromHardcover && !fromGoogle && !byHand && (
               <a className="link-pill" href={`https://openlibrary.org/works/${book.olKey}`} target="_blank" rel="noreferrer">
                 <Icon name="external" size={13} /> {t('More about this book')}
               </a>
@@ -159,7 +164,7 @@ function BookPage({ id }: { id?: string }) {
           <FormatPanel key={f} book={book} format={f} queue={queue} onChanged={load} />
         ))}
       </div>
-      {!fromAudible && <BookSeries workKey={book.olKey} title={book.title} author={book.author} />}
+      {!fromAudible && !byHand && <BookSeries workKey={book.olKey} title={book.title} author={book.author} />}
       {book.authorKey && <AuthorBooks authorKey={book.authorKey} author={book.author} exclude={book.olKey} />}
       {formats.length === 0 && (
         <p className="hint">
@@ -178,10 +183,11 @@ function FormatPanel({ book, format, queue, onChanged }: { book: Book; format: B
   const state = bookState(book, format, queue)
   const [searching, setSearching] = useState(false)
   const [releases, setReleases] = useState<SearchResult[] | null>(null)
-  const [answered, setAnswered] = useState<{ sources: number; unanswered: Unanswered[]; warnings?: string[]; skipped: string[]; searched?: Searched[] }>({ sources: 0, unanswered: [], skipped: [] })
+  const [answered, setAnswered] = useState<{ sources: number; unanswered: Unanswered[]; warnings?: string[]; skipped: string[]; searched?: Searched[]; filtered?: Filtered[] }>({ sources: 0, unanswered: [], skipped: [] })
   const [open, setOpen] = useState(false)
   const [releaseError, setReleaseError] = useState('')
   const [grabbing, setGrabbing] = useState<string | null>(null)
+  const [addingByHand, setAddingByHand] = useState(false)
 
   async function setWanted(v: boolean) {
     try {
@@ -213,7 +219,7 @@ function FormatPanel({ book, format, queue, onChanged }: { book: Book; format: B
     api
       .bookReleases(book.id, format)
       .then((a) => {
-        setAnswered({ sources: a.sources, unanswered: a.unanswered, warnings: a.warnings, skipped: a.skipped ?? [], searched: a.searched })
+        setAnswered({ sources: a.sources, unanswered: a.unanswered, warnings: a.warnings, skipped: a.skipped ?? [], searched: a.searched, filtered: a.filtered })
         setReleases(a.results)
       })
       .catch((e) => setReleaseError(e instanceof Error ? e.message : String(e)))
@@ -277,7 +283,13 @@ function FormatPanel({ book, format, queue, onChanged }: { book: Book; format: B
             <Icon name="list" size={16} /> {open ? t('Hide releases') : t('Choose a release')}
           </button>
         )}
+        {isAdmin(me) && st.wanted && st.status !== 'downloading' && (
+          <button className="btn-with-icon" onClick={() => setAddingByHand(true)} title={t('Use an NZB or torrent you already have for this book.')}>
+            <Icon name="download" size={16} /> {t('Add a download by hand')}
+          </button>
+        )}
       </div>
+      {addingByHand && <AddDownloadDialog fixed={{ kind: 'book', bookId: book.id, format, label: book.title }} onClose={() => setAddingByHand(false)} onAdded={() => setTimeout(onChanged, 500)} />}
       {open && (
         <div className="book-releases">
           {releaseError && <p className="error-text">{releaseError}</p>}
@@ -287,7 +299,7 @@ function FormatPanel({ book, format, queue, onChanged }: { book: Book; format: B
               <ReleaseTable results={releases} searched={answered.searched} grabbing={grabbing} onGrab={grab} onClose={() => setOpen(false)} />
             </div>
           )}
-          {releases && <ReleaseNotice sources={answered.sources} unanswered={answered.unanswered} warnings={answered.warnings} skipped={answered.skipped} searched={answered.searched} results={releases.length} />}
+          {releases && <ReleaseNotice sources={answered.sources} unanswered={answered.unanswered} warnings={answered.warnings} skipped={answered.skipped} searched={answered.searched} filtered={answered.filtered} results={releases.length} />}
         </div>
       )}
     </section>

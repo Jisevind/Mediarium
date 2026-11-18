@@ -4,9 +4,17 @@ package blocklist
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
+)
+
+// What an entry is blocked for: every title, or the one it is tied to.
+const (
+	ScopeAll  = "all"
+	ScopeItem = "item"
 )
 
 // Entry is one blocklisted release.
@@ -17,7 +25,153 @@ type Entry struct {
 	Reason       string
 	MovieID      int64 // 0 if not tied to a movie
 	SeriesID     int64 // 0 if not tied to a series
-	CreatedAt    time.Time
+	AlbumID      int64 // 0 if not tied to an album
+	BookID       int64 // 0 if not tied to a book
+	// ReleaseID says which upload of the release this is (see ReleaseID). With
+	// one, only that upload is blocked and another with the same name is not.
+	// Entries without one (all those from before, and those made where the
+	// upload is not known) block every release with that name.
+	ReleaseID string
+	// ItemOnly makes the entry count for the title named by the ids above and
+	// for no other. Without it the release is blocked everywhere, as before.
+	ItemOnly  bool
+	CreatedAt time.Time
+}
+
+// Scope names the one title (a movie, a series, an album or a book) a search
+// is for, so entries made for that title alone apply to it. The zero Scope is
+// a search that is for no particular title: only entries for everywhere apply.
+type Scope struct {
+	MovieID, SeriesID, AlbumID, BookID int64
+}
+
+// tags lists the scope's targets in the form used inside keys.
+func (sc Scope) tags() []string {
+	var out []string
+	if sc.MovieID != 0 {
+		out = append(out, fmt.Sprintf("m%d", sc.MovieID))
+	}
+	if sc.SeriesID != 0 {
+		out = append(out, fmt.Sprintf("s%d", sc.SeriesID))
+	}
+	if sc.AlbumID != 0 {
+		out = append(out, fmt.Sprintf("a%d", sc.AlbumID))
+	}
+	if sc.BookID != 0 {
+		out = append(out, fmt.Sprintf("b%d", sc.BookID))
+	}
+	return out
+}
+
+// Scope is the title an entry is tied to (zero when it is not tied to one).
+func (e Entry) Scope() Scope {
+	return Scope{MovieID: e.MovieID, SeriesID: e.SeriesID, AlbumID: e.AlbumID, BookID: e.BookID}
+}
+
+// relSep separates a release's name from its ReleaseID inside a key. The NUL
+// bytes keep it from ever being part of a real release title.
+const relSep = "\x00rel\x00"
+
+// releaseKey is the key of a release blocklisted everywhere: its name, and
+// when the upload is known, which upload.
+func releaseKey(releaseTitle, releaseID string) string {
+	if releaseID == "" {
+		return Key(releaseTitle)
+	}
+	return Key(releaseTitle) + relSep + releaseID
+}
+
+// scopedKey is the key of a release blocklisted for one title only. The NUL
+// bytes keep it from ever matching a real release title.
+func scopedKey(tag, releaseTitle, releaseID string) string {
+	return "\x00item\x00" + tag + "\x00" + releaseKey(releaseTitle, releaseID)
+}
+
+// idOfKey is the ReleaseID inside a stored key ("" when it has none).
+func idOfKey(titleKey string) string {
+	if i := strings.LastIndex(titleKey, relSep); i >= 0 {
+		return titleKey[i+len(relSep):]
+	}
+	return ""
+}
+
+var magnetHashRe = regexp.MustCompile(`(?i)[?&]xt=urn:btih:([0-9a-z]{32,40})`)
+
+// ReleaseID names one upload of a release, from what is known of it on both
+// sides, when it fails and when it turns up in a search: the torrent's info
+// hash when the link is a magnet link, else the indexer and the size. It is ""
+// when there is too little to tell uploads apart, and then a blocklist entry
+// blocks every release with that name, as it always did.
+func ReleaseID(indexerID, size int64, downloadURL string) string {
+	if m := magnetHashRe.FindStringSubmatch(downloadURL); m != nil {
+		return "h:" + strings.ToLower(m[1])
+	}
+	if indexerID > 0 && size > 0 {
+		return fmt.Sprintf("i%d:%d", indexerID, size)
+	}
+	return ""
+}
+
+// GUIDID names one upload by the id its indexer gave it (the guid of its entry
+// in the feed). Unlike ReleaseID it tells apart two uploads of the same size
+// from the same indexer. It is "" when the indexer gave no guid.
+func GUIDID(indexerID int64, guid string) string {
+	guid = strings.TrimSpace(guid)
+	if guid == "" {
+		return ""
+	}
+	return fmt.Sprintf("g%d:%s", indexerID, guid)
+}
+
+// ReleaseIDs lists every way an upload is known by, the most exact first: its
+// guid (when the indexer gave one), then what ReleaseID makes of it. A search
+// result is looked up under all of them, so entries made before guids were
+// kept (by size or info hash) still match.
+func ReleaseIDs(indexerID int64, guid string, size int64, downloadURL string) []string {
+	var out []string
+	if id := GUIDID(indexerID, guid); id != "" {
+		out = append(out, id)
+	}
+	if id := ReleaseID(indexerID, size, downloadURL); id != "" {
+		out = append(out, id)
+	}
+	return out
+}
+
+// Blocked reports whether the release is blocklisted for a search for sc: on
+// the blocklist for everywhere, or for that title alone. set is from Keys.
+// It only finds entries that block every release of that name; BlockedRelease
+// also finds those that block one upload.
+func Blocked(set map[string]bool, releaseTitle string, sc Scope) bool {
+	return BlockedRelease(set, releaseTitle, "", sc)
+}
+
+// BlockedRelease is Blocked for a release whose upload is known (ReleaseID):
+// it is blocked by an entry for its name alone, or by one for this upload.
+func BlockedRelease(set map[string]bool, releaseTitle, releaseID string, sc Scope) bool {
+	if releaseID == "" {
+		return BlockedAny(set, releaseTitle, nil, sc)
+	}
+	return BlockedAny(set, releaseTitle, []string{releaseID}, sc)
+}
+
+// BlockedAny is BlockedRelease for an upload known in several ways (see
+// ReleaseIDs): it is blocked by an entry for the name alone, or by one for
+// any of the ids. An entry for another upload with the same name does not
+// block it.
+func BlockedAny(set map[string]bool, releaseTitle string, releaseIDs []string, sc Scope) bool {
+	ids := append([]string{""}, releaseIDs...)
+	for _, id := range ids {
+		if set[releaseKey(releaseTitle, id)] {
+			return true
+		}
+		for _, tag := range sc.tags() {
+			if set[scopedKey(tag, releaseTitle, id)] {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // Key is how titles are compared: case and surrounding whitespace ignored.
@@ -40,35 +194,134 @@ func nullIfZero(id int64) any {
 
 // Add blocklists a release; adding one that is already blocklisted just
 // refreshes its reason and timestamp.
+//
+// With ItemOnly and a title to tie it to, the release is blocklisted for that
+// title alone; an entry for everywhere that the same title made for the same
+// release is dropped, or it would still block the release for every title.
+// ItemOnly without a title is blocklisted everywhere, as there is nothing to
+// limit it to.
 func (r *Repo) Add(e Entry) error {
+	tags := e.Scope().tags()
+	key, scope := releaseKey(e.ReleaseTitle, e.ReleaseID), ScopeAll
+	if e.ItemOnly && len(tags) > 0 {
+		key, scope = scopedKey(tags[0], e.ReleaseTitle, e.ReleaseID), ScopeItem
+	}
 	_, err := r.db.Exec(
-		`INSERT INTO blocklist (release_title, title_key, protocol, reason, movie_id, series_id)
-		 VALUES (?, ?, ?, ?, ?, ?)
+		`INSERT INTO blocklist (release_title, title_key, protocol, reason, movie_id, series_id, album_id, book_id, scope)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT (title_key) DO UPDATE SET reason = excluded.reason, created_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')`,
-		e.ReleaseTitle, Key(e.ReleaseTitle), e.Protocol, e.Reason, nullIfZero(e.MovieID), nullIfZero(e.SeriesID),
+		e.ReleaseTitle, key, e.Protocol, e.Reason, nullIfZero(e.MovieID), nullIfZero(e.SeriesID), nullIfZero(e.AlbumID), nullIfZero(e.BookID), scope,
 	)
 	if err != nil {
 		return fmt.Errorf("blocklist %q: %w", e.ReleaseTitle, err)
 	}
+	if scope == ScopeItem {
+		// Only the entry this same title made: another title's stays, and so
+		// does one tied to no title at all, which a person made on purpose
+		// for a download that was for no title. (Older album and book
+		// entries saved without their ids are tied to them on upgrade.)
+		if _, err := r.db.Exec(
+			`DELETE FROM blocklist WHERE title_key = ? AND scope = ? AND
+			   COALESCE(movie_id, 0) = ? AND COALESCE(series_id, 0) = ? AND COALESCE(album_id, 0) = ? AND COALESCE(book_id, 0) = ?`,
+			releaseKey(e.ReleaseTitle, e.ReleaseID), ScopeAll, e.MovieID, e.SeriesID, e.AlbumID, e.BookID,
+		); err != nil {
+			return fmt.Errorf("narrow blocklist entry %q: %w", e.ReleaseTitle, err)
+		}
+	}
 	return nil
 }
 
-// Reason returns the reason a release is blocklisted for, and false when it
-// is not on the blocklist.
-func (r *Repo) Reason(releaseTitle string) (string, bool, error) {
-	var reason string
-	err := r.db.QueryRow(`SELECT reason FROM blocklist WHERE title_key = ?`, Key(releaseTitle)).Scan(&reason)
-	if err == sql.ErrNoRows {
-		return "", false, nil
+// ErrNoTitle is what SetScope answers when an entry is not tied to a title, so
+// there is no title to limit it to.
+var ErrNoTitle = errors.New("blocklist entry is not tied to a title")
+
+// SetScope switches an entry between everywhere and its own title only. An
+// entry of the same release and scope that is already there is replaced by
+// this one.
+func (r *Repo) SetScope(id int64, itemOnly bool) error {
+	var (
+		e                          Entry
+		scope, titleKey            string
+		movie, series, album, book sql.NullInt64
+	)
+	err := r.db.QueryRow(`SELECT release_title, title_key, scope, movie_id, series_id, album_id, book_id FROM blocklist WHERE id = ?`, id).
+		Scan(&e.ReleaseTitle, &titleKey, &scope, &movie, &series, &album, &book)
+	if errors.Is(err, sql.ErrNoRows) {
+		return err
 	}
 	if err != nil {
-		return "", false, fmt.Errorf("look up blocklist reason of %q: %w", releaseTitle, err)
+		return fmt.Errorf("read blocklist entry %d: %w", id, err)
 	}
-	return reason, true, nil
+	e.MovieID, e.SeriesID, e.AlbumID, e.BookID = movie.Int64, series.Int64, album.Int64, book.Int64
+	e.ReleaseID = idOfKey(titleKey)
+	key, want := releaseKey(e.ReleaseTitle, e.ReleaseID), ScopeAll
+	if itemOnly {
+		tags := e.Scope().tags()
+		if len(tags) == 0 {
+			return ErrNoTitle
+		}
+		key, want = scopedKey(tags[0], e.ReleaseTitle, e.ReleaseID), ScopeItem
+	}
+	if scope == want {
+		return nil
+	}
+	tx, err := r.db.Begin()
+	if err != nil {
+		return fmt.Errorf("switch blocklist entry %d: %w", id, err)
+	}
+	defer tx.Rollback()
+	if _, err := tx.Exec(`DELETE FROM blocklist WHERE title_key = ? AND id != ?`, key, id); err != nil {
+		return fmt.Errorf("switch blocklist entry %d: %w", id, err)
+	}
+	if _, err := tx.Exec(`UPDATE blocklist SET title_key = ?, scope = ? WHERE id = ?`, key, want, id); err != nil {
+		return fmt.Errorf("switch blocklist entry %d: %w", id, err)
+	}
+	return tx.Commit()
+}
+
+// Reason returns the reason a release is blocklisted for everywhere, and false
+// when it is not on the blocklist like that.
+func (r *Repo) Reason(releaseTitle string) (string, bool, error) {
+	return r.ReasonOf(releaseTitle, "")
+}
+
+// ReasonOf is Reason for one upload of the release: the reason of the entry
+// for that upload, or else of the one for the name alone.
+func (r *Repo) ReasonOf(releaseTitle, releaseID string) (string, bool, error) {
+	if releaseID == "" {
+		return r.ReasonOfAny(releaseTitle, nil)
+	}
+	return r.ReasonOfAny(releaseTitle, []string{releaseID})
+}
+
+// ReasonOfAny is ReasonOf for an upload known in several ways (see
+// ReleaseIDs): the reason of the entry for one of them (the first listed
+// first), or else of the one for the name alone.
+func (r *Repo) ReasonOfAny(releaseTitle string, releaseIDs []string) (string, bool, error) {
+	keys := make([]any, 0, len(releaseIDs)+1)
+	for _, id := range releaseIDs {
+		if id != "" {
+			keys = append(keys, releaseKey(releaseTitle, id))
+		}
+	}
+	keys = append(keys, Key(releaseTitle))
+	var reason string
+	for _, k := range keys {
+		err := r.db.QueryRow(`SELECT reason FROM blocklist WHERE title_key = ? LIMIT 1`, k).Scan(&reason)
+		if err == sql.ErrNoRows {
+			continue
+		}
+		if err != nil {
+			return "", false, fmt.Errorf("look up blocklist reason of %q: %w", releaseTitle, err)
+		}
+		return reason, true, nil
+	}
+	return "", false, nil
 }
 
 // Keys returns the set of blocklisted title keys, for filtering search
-// results.
+// results. A release blocked for one title alone is in it under a key of its
+// own, so look releases up with Blocked and not by Key alone.
 func (r *Repo) Keys() (map[string]bool, error) {
 	rows, err := r.db.Query(`SELECT title_key FROM blocklist`)
 	if err != nil {
@@ -86,23 +339,36 @@ func (r *Repo) Keys() (map[string]bool, error) {
 	return out, rows.Err()
 }
 
+const entryColumns = `id, release_title, title_key, protocol, reason, COALESCE(movie_id, 0), COALESCE(series_id, 0), COALESCE(album_id, 0), COALESCE(book_id, 0), scope, created_at`
+
+func scanEntry(rows *sql.Rows) (Entry, error) {
+	var (
+		e       Entry
+		scope   string
+		created string
+		tkey    string
+	)
+	if err := rows.Scan(&e.ID, &e.ReleaseTitle, &tkey, &e.Protocol, &e.Reason, &e.MovieID, &e.SeriesID, &e.AlbumID, &e.BookID, &scope, &created); err != nil {
+		return e, fmt.Errorf("scan blocklist entry: %w", err)
+	}
+	e.ItemOnly = scope == ScopeItem
+	e.ReleaseID = idOfKey(tkey)
+	e.CreatedAt, _ = time.Parse("2006-01-02T15:04:05.000Z", created)
+	return e, nil
+}
+
 func (r *Repo) List() ([]Entry, error) {
-	rows, err := r.db.Query(
-		`SELECT id, release_title, protocol, reason, COALESCE(movie_id, 0), COALESCE(series_id, 0), created_at FROM blocklist ORDER BY created_at DESC, id DESC`)
+	rows, err := r.db.Query(`SELECT ` + entryColumns + ` FROM blocklist ORDER BY created_at DESC, id DESC`)
 	if err != nil {
 		return nil, fmt.Errorf("list blocklist: %w", err)
 	}
 	defer rows.Close()
 	var out []Entry
 	for rows.Next() {
-		var (
-			e       Entry
-			created string
-		)
-		if err := rows.Scan(&e.ID, &e.ReleaseTitle, &e.Protocol, &e.Reason, &e.MovieID, &e.SeriesID, &created); err != nil {
-			return nil, fmt.Errorf("scan blocklist entry: %w", err)
+		e, err := scanEntry(rows)
+		if err != nil {
+			return nil, err
 		}
-		e.CreatedAt, _ = time.Parse("2006-01-02T15:04:05.000Z", created)
 		out = append(out, e)
 	}
 	return out, rows.Err()
@@ -115,23 +381,17 @@ func (r *Repo) Page(limit, offset int) ([]Entry, int, error) {
 	if err := r.db.QueryRow(`SELECT COUNT(*) FROM blocklist`).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count blocklist: %w", err)
 	}
-	rows, err := r.db.Query(
-		`SELECT id, release_title, protocol, reason, COALESCE(movie_id, 0), COALESCE(series_id, 0), created_at FROM blocklist ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
-		limit, offset)
+	rows, err := r.db.Query(`SELECT `+entryColumns+` FROM blocklist ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`, limit, offset)
 	if err != nil {
 		return nil, 0, fmt.Errorf("list blocklist: %w", err)
 	}
 	defer rows.Close()
 	var out []Entry
 	for rows.Next() {
-		var (
-			e       Entry
-			created string
-		)
-		if err := rows.Scan(&e.ID, &e.ReleaseTitle, &e.Protocol, &e.Reason, &e.MovieID, &e.SeriesID, &created); err != nil {
-			return nil, 0, fmt.Errorf("scan blocklist entry: %w", err)
+		e, err := scanEntry(rows)
+		if err != nil {
+			return nil, 0, err
 		}
-		e.CreatedAt, _ = time.Parse("2006-01-02T15:04:05.000Z", created)
 		out = append(out, e)
 	}
 	return out, total, rows.Err()

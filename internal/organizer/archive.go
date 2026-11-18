@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path"
@@ -17,6 +18,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 	"unicode"
 
@@ -694,7 +696,12 @@ func (e *Extractor) run7z(ctx context.Context, limit int, args ...string) (out [
 	buf := &cappedBuffer{max: limit}
 	cmd.Stdout, cmd.Stderr = buf, buf
 	err = cmd.Run()
-	return buf.Bytes(), !buf.dropped, err
+	out = buf.Bytes()
+	if err != nil && buf.dropped {
+		// The reason a run failed is printed last; keep it with the start.
+		out = append(append(append([]byte{}, out...), 0x0a), buf.tail...)
+	}
+	return out, !buf.dropped, err
 }
 
 // sevenZipError turns a failed 7z run into the error the caller reports.
@@ -714,7 +721,31 @@ func (e *Extractor) sevenZipError(ctx context.Context, name string, out []byte, 
 		}
 		return fmt.Errorf("extract %s: %w", name, ErrPasswordProtected)
 	}
-	return fmt.Errorf("extract %s: %w: %s", name, err, truncateOutput(out))
+	return fmt.Errorf("extract %s: %w: %s", name, err, sevenZipReason(out))
+}
+
+// sevenZipReason picks the lines of a failed 7z run that say why: the ones it
+// marks ERROR, or failed to allocate, read or write. 7z prints a banner first,
+// so cutting the output at its start would hide them (#189). With no such line
+// the end of the output is used.
+func sevenZipReason(out []byte) string {
+	var reasons []string
+	for _, line := range strings.Split(string(out), string(rune(10))) {
+		line = strings.TrimSpace(line)
+		l := strings.ToLower(line)
+		if strings.HasPrefix(l, "error") || strings.Contains(l, "can't allocate") || strings.Contains(l, "crc failed") ||
+			strings.Contains(l, "data error") || strings.Contains(l, "unexpected end") || strings.Contains(l, "no space") ||
+			strings.Contains(l, "cannot ") || strings.Contains(l, "can not ") || strings.Contains(l, "is not supported") {
+			reasons = append(reasons, line)
+		}
+	}
+	if len(reasons) > 0 {
+		return truncateOutput([]byte(strings.Join(reasons, "; ")))
+	}
+	if len(out) > 500 {
+		out = out[len(out)-500:]
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // cappedBuffer keeps the first max bytes written and drops the rest, noting
@@ -723,9 +754,15 @@ type cappedBuffer struct {
 	buf     bytes.Buffer
 	max     int
 	dropped bool
+	tail    []byte // the last few KB written, kept even when buf is full
 }
 
 func (c *cappedBuffer) Write(p []byte) (int, error) {
+	const tailMax = 8 << 10
+	c.tail = append(c.tail, p...)
+	if len(c.tail) > tailMax {
+		c.tail = append([]byte{}, c.tail[len(c.tail)-tailMax:]...)
+	}
 	room := max(c.max-c.buf.Len(), 0)
 	if len(p) > room {
 		c.dropped = true
@@ -1005,7 +1042,9 @@ func (x *extraction) writeFile(name string, declared int64, r io.Reader) error {
 		copyErr = x.wbuf.Flush()
 	}
 	if copyErr == nil {
-		copyErr = f.Chmod(0o644)
+		// Only a nicety: a network share or NAS mount that refuses chmod
+		// still holds the file, so a refusal must not fail the unpack.
+		chmodBestEffort(f.Name(), func() error { return chmodFile(f, 0o644) })
 	}
 	closeErr := f.Close()
 	x.budget = lw.left
@@ -1026,6 +1065,31 @@ func (x *extraction) writeFile(name string, declared int64, r io.Reader) error {
 }
 
 var errLimitExceeded = errors.New("size limit exceeded")
+
+// chmodFile sets a mode on an open file. A variable so tests can stand in for a
+// file system that refuses chmod.
+var chmodFile = func(f *os.File, mode os.FileMode) error { return f.Chmod(mode) }
+
+// chmodRefused reports whether err is a file system saying it does not do
+// permissions: not permitted, not supported or invalid on this mount (SMB and
+// NFS shares, some NAS boxes, NTFS and exFAT mounts).
+func chmodRefused(err error) bool {
+	return errors.Is(err, os.ErrPermission) || errors.Is(err, syscall.EPERM) ||
+		errors.Is(err, syscall.EACCES) || errors.Is(err, syscall.ENOTSUP) ||
+		errors.Is(err, syscall.EINVAL) || errors.Is(err, syscall.ENOSYS) ||
+		errors.Is(err, errors.ErrUnsupported)
+}
+
+// chmodBestEffort runs a chmod on a file Mediarium just made. Any failure is
+// logged at debug and carried on from: the mode is cosmetic, and the file is
+// already written, so even a failure the check above does not know is no reason
+// to throw the unpacked data away.
+func chmodBestEffort(name string, do func() error) {
+	if err := do(); err != nil {
+		slog.Debug("couldn't set the permissions on an unpacked file, carrying on",
+			"path", name, "refused", chmodRefused(err), "err", err)
+	}
+}
 
 // limitedWriter fails once more than left bytes have been written.
 type limitedWriter struct {

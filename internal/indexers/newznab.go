@@ -25,6 +25,8 @@ import (
 type Result struct {
 	Title       string
 	IndexerName string
+	GUID        string   // the id the indexer gave the release, when it said one
+	IndexerID   int64    // the indexer's id here; set by the engine, not this client
 	Protocol    Protocol // usenet or torrent — set by the engine, not this client
 	DownloadURL string   // .nzb URL, or a magnet URI / .torrent URL for torrent results
 	InfoURL     string
@@ -37,7 +39,12 @@ type Result struct {
 	SeedersKnown bool
 	Peers        int    // torrent-only (Torznab attr), 0 for usenet results
 	InfoHash     string // torrent-only, when the indexer reports it
-	Priority     int    // the indexer's priority (1 to 50, lower is preferred); set by the engine
+	// Discount is how much of the download the tracker does not count against
+	// the user's ratio, in percent: 100 is freeleech, 50 is half price, 0 is no
+	// discount or not said. It comes from the download volume factor the
+	// indexer reports (Torznab attribute or Cardigann field).
+	Discount int
+	Priority int // the indexer's priority (1 to 50, lower is preferred); set by the engine
 	// MinSeeders is the minimum the indexer was given for torrents (0 = off);
 	// set by the engine on torrent results only.
 	MinSeeders int
@@ -147,9 +154,15 @@ func (c *NewznabClient) Search(ctx context.Context, query string, categories []i
 		maxPages = newznabMaxPagesManual // a person looking at the list wants all of it
 	}
 	var all []Result
+	// An indexer (or Prowlarr in front of it) that ignores the offset sends the
+	// first page again for every page asked, and a release posted while the
+	// pages are read moves the next page back by one: both bring a release
+	// twice. Each is kept once, and a page with nothing new ends the reading.
+	seen := map[string]bool{}
+	offset := 0 // releases the indexer sent so far, repeats included
 	for page := 0; ; page++ {
 		if page > 0 {
-			q.Set("offset", strconv.Itoa(len(all)))
+			q.Set("offset", strconv.Itoa(offset))
 		}
 		body, err := c.get(ctx, q)
 		if err != nil {
@@ -166,8 +179,10 @@ func (c *NewznabClient) Search(ctx context.Context, query string, categories []i
 			}
 			return nil, err
 		}
-		all = append(all, results...)
-		if len(results) == 0 || total <= len(all) || page+1 >= maxPages {
+		offset += len(results)
+		fresh := dedupeResults(seen, results)
+		all = append(all, fresh...)
+		if len(results) == 0 || len(fresh) == 0 || total <= len(all) || page+1 >= maxPages {
 			return all, nil
 		}
 		c.ExtraRequests++
@@ -542,12 +557,20 @@ func (item newznabItem) toResult(indexerName string) Result {
 	r := Result{
 		Title:       item.Title,
 		IndexerName: indexerName,
+		GUID:        strings.TrimSpace(item.GUID),
 		DownloadURL: strings.TrimSpace(item.Enclosure.URL),
-		InfoURL:     item.Comments,
+		InfoURL:     strings.TrimSpace(item.Comments),
 		SizeBytes:   item.Enclosure.Length,
 	}
 	if r.DownloadURL == "" {
 		r.DownloadURL = strings.TrimSpace(item.Link)
+	}
+	// Most indexers put the release's page in <comments>; some only in <guid>.
+	// Whatever is kept is checked again by SafeInfoURL before the UI sees it.
+	if r.InfoURL == "" {
+		if g := strings.TrimSpace(item.GUID); strings.HasPrefix(strings.ToLower(g), "http") {
+			r.InfoURL = g
+		}
 	}
 	if magnet := strings.TrimSpace(item.attr("magneturl")); len(magnet) >= 7 && strings.EqualFold(magnet[:7], "magnet:") {
 		r.DownloadURL = "magnet:" + magnet[7:]
@@ -575,6 +598,7 @@ func (item newznabItem) toResult(indexerName string) Result {
 		}
 	}
 	r.InfoHash = strings.ToLower(item.attr("infohash"))
+	r.Discount = discountFromFactor(item.attr("downloadvolumefactor"))
 	if peers := item.attr("peers"); peers != "" {
 		if n, err := strconv.Atoi(peers); err == nil && n > 0 {
 			r.Peers = int(sane(int64(n)))
@@ -590,6 +614,17 @@ func (item newznabItem) toResult(indexerName string) Result {
 		}
 	}
 	return r
+}
+
+// discountFromFactor turns an indexer's download volume factor (0 = freeleech,
+// 0.5 = half of the download counted, 1 or more = no discount) into the percent
+// that is not counted. Anything that is not a number, or is 1 or more, is 0.
+func discountFromFactor(s string) int {
+	f, err := strconv.ParseFloat(strings.TrimSpace(s), 64)
+	if err != nil || !(f >= 0 && f < 1) {
+		return 0
+	}
+	return int((1-f)*100 + 0.5)
 }
 
 // pubDateLayouts are the ways indexers write an item's date: RFC 822 with a

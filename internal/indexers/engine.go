@@ -184,6 +184,11 @@ type Outcome struct {
 	Elapsed   time.Duration
 	Results   []Result
 	Err       error
+	// Query is the text this indexer was asked for (after SearchText) and
+	// Categories the standard categories that went with it, so a search can
+	// show what was sent.
+	Query      string
+	Categories []int
 	// Skipped is set when the indexer was not asked because it is paused after
 	// repeated failures (see Tracker); PausedUntil says until when. Err is nil
 	// then: a paused indexer is not a new problem.
@@ -302,6 +307,7 @@ func SearchAll(ctx context.Context, instances []Instance, query string, categori
 					results[j].Protocol = ProtocolTorrent
 				}
 				results[j].Priority = inst.Priority
+				results[j].IndexerID = inst.ID
 				if results[j].Protocol == ProtocolTorrent {
 					results[j].MinSeeders = inst.MinSeeders
 					results[j].TorrentRoute = inst.TorrentRoute
@@ -321,6 +327,7 @@ func SearchAll(ctx context.Context, instances []Instance, query string, categori
 	wg.Wait()
 	for i, inst := range enabled {
 		outcomes[i].IndexerID, outcomes[i].Protocol = inst.ID, inst.Protocol
+		outcomes[i].Query, outcomes[i].Categories = query, categories
 	}
 	if ctx.Err() == nil {
 		for _, o := range outcomes {
@@ -378,7 +385,7 @@ func MergeResults(outcomes []Outcome) []Result {
 	// Several queries for one thing (S00E05 and the special's title, an
 	// anime's season and absolute number) often bring back the same release
 	// from the same indexer: it is listed once.
-	seen := map[[3]string]bool{}
+	seen := map[string]bool{}
 	// The same release often comes from several indexers: parse each name once.
 	parsed := map[string]*parser.Release{}
 	for _, o := range outcomes {
@@ -386,11 +393,9 @@ func MergeResults(outcomes []Outcome) []Result {
 			continue
 		}
 		for _, r := range o.Results {
-			key := [3]string{r.IndexerName, r.DownloadURL, r.Title}
-			if r.DownloadURL != "" && seen[key] {
+			if seenRelease(seen, r) {
 				continue
 			}
-			seen[key] = true
 			p := parsed[r.Title]
 			if p == nil {
 				rel := parser.Parse(r.Title)

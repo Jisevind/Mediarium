@@ -18,6 +18,7 @@ import (
 	"github.com/rdborg/mediarium/internal/auth"
 	"github.com/rdborg/mediarium/internal/books"
 	"github.com/rdborg/mediarium/internal/metadata"
+	"github.com/rdborg/mediarium/internal/origin"
 	"github.com/rdborg/mediarium/internal/requests"
 )
 
@@ -60,6 +61,17 @@ func (s *Server) mayAddNew(w http.ResponseWriter, r *http.Request, kind string) 
 		return false
 	}
 	return true
+}
+
+// mayManage reports whether the account behind r has the manage permission
+// (Search now and monitoring): administrators always do.
+func (s *Server) mayManage(r *http.Request) bool {
+	u := auth.UserFromContext(r.Context())
+	if u == nil || u.IsAdmin {
+		return true
+	}
+	p, err := s.Auth.PermissionsOf(u.ID)
+	return err == nil && p.Allows(auth.PermManage)
 }
 
 type requestInfo struct {
@@ -366,7 +378,7 @@ func (s *Server) handleApproveRequest(w http.ResponseWriter, r *http.Request) {
 			who = u
 		}
 	}
-	ctx := context.WithValue(auth.WithUser(r.Context(), who), approvingKey{}, true)
+	ctx := withOrigin(context.WithValue(auth.WithUser(r.Context(), who), approvingKey{}, true), origin.Origin{Kind: origin.Request})
 	inner := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader([]byte(req.Payload))).WithContext(ctx)
 	inner.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()

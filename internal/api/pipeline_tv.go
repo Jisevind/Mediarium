@@ -2,15 +2,18 @@ package api
 
 import (
 	"cmp"
+	"errors"
 	"fmt"
 	"log/slog"
 	"path/filepath"
 	"slices"
 	"strings"
 
+	"github.com/rdborg/mediarium/internal/blocklist"
 	"github.com/rdborg/mediarium/internal/indexers"
 	"github.com/rdborg/mediarium/internal/library"
 	"github.com/rdborg/mediarium/internal/organizer"
+	"github.com/rdborg/mediarium/internal/origin"
 	"github.com/rdborg/mediarium/internal/parser"
 	"github.com/rdborg/mediarium/internal/plainerror"
 	"github.com/rdborg/mediarium/internal/quality"
@@ -42,7 +45,7 @@ func resolveTVTarget(releaseTitle string, hintSeason, hintEpisode int) (season i
 // grabTVRelease enqueues a TV release for series and starts its pipeline in
 // the background — the TV counterpart of grabRelease.
 func (s *Server) grabTVRelease(series library.Series, hintSeason, hintEpisode int, releaseTitle, downloadURL string, sizeBytes int64, protocol indexers.Protocol) (int64, error) {
-	return s.grabTV(series, hintSeason, hintEpisode, releaseTitle, downloadURL, sizeBytes, protocol, grabPicked)
+	return s.grabTVOpts(series, hintSeason, hintEpisode, releaseTitle, downloadURL, sizeBytes, protocol, grabPicked, false, origin.Origin{})
 }
 
 // grabTV is grabTVRelease with auto set for automation's grabs. The
@@ -52,12 +55,19 @@ func (s *Server) grabTVRelease(series library.Series, hintSeason, hintEpisode in
 // them again separately; an automatic grab is refused with
 // errAlreadyGrabbed when any of them is already being downloaded.
 func (s *Server) grabTV(series library.Series, hintSeason, hintEpisode int, releaseTitle, downloadURL string, sizeBytes int64, protocol indexers.Protocol, kind grabKind) (int64, error) {
-	return s.grabTVOpts(series, hintSeason, hintEpisode, releaseTitle, downloadURL, sizeBytes, protocol, kind, false)
+	return s.grabTVOpts(series, hintSeason, hintEpisode, releaseTitle, downloadURL, sizeBytes, protocol, kind, false, origin.Origin{})
+}
+
+// grabTVBy is grabTV for a grab whose origin is known: the person or the job
+// (an RSS check, an IRC announce, a list) that asked for it.
+func (s *Server) grabTVBy(series library.Series, hintSeason, hintEpisode int, releaseTitle, downloadURL string, sizeBytes int64, protocol indexers.Protocol, kind grabKind, by origin.Origin) (int64, error) {
+	return s.grabTVOpts(series, hintSeason, hintEpisode, releaseTitle, downloadURL, sizeBytes, protocol, kind, false, by)
 }
 
 // grabTVOpts is grabTV for a release a person picked by hand and agreed to
 // replace the files of the episodes it covers (byHand, see grabRequest.Replace).
-func (s *Server) grabTVOpts(series library.Series, hintSeason, hintEpisode int, releaseTitle, downloadURL string, sizeBytes int64, protocol indexers.Protocol, kind grabKind, byHand bool) (int64, error) {
+// by is who asked for it (see grabOrigin).
+func (s *Server) grabTVOpts(series library.Series, hintSeason, hintEpisode int, releaseTitle, downloadURL string, sizeBytes int64, protocol indexers.Protocol, kind grabKind, byHand bool, by origin.Origin) (int64, error) {
 	if protocol == indexers.ProtocolTorrent && !s.torrentReleasesOn() {
 		return 0, errTorrentsDisabled
 	}
@@ -99,7 +109,7 @@ func (s *Server) grabTVOpts(series library.Series, hintSeason, hintEpisode int, 
 			return 0, err
 		}
 	}
-	if err := s.grabRefused(kind, releaseTitle, downloadURL); err != nil {
+	if err := s.grabRefused(kind, releaseTitle, downloadURL, sizeBytes, blocklist.Scope{SeriesID: series.ID}); err != nil {
 		s.grabMu.Unlock()
 		return 0, err
 	}
@@ -115,6 +125,7 @@ func (s *Server) grabTVOpts(series library.Series, hintSeason, hintEpisode int, 
 	queueID, err := s.QueueRepo.Enqueue(queue.Item{
 		SeriesID: series.ID, Season: season, Episode: firstEpisode,
 		ReleaseTitle: releaseTitle, NZBURL: downloadURL, SizeBytes: sizeBytes, Protocol: queue.Protocol(protocol), Priority: kind.priority(), ReplaceByHand: byHand && kind == grabPicked,
+		Origin: s.grabOrigin(kind, by, ""),
 	})
 	if err != nil {
 		// Nothing was queued: hand the episodes back.
@@ -201,7 +212,7 @@ func (s *Server) runTVPipeline(queueID int64, series library.Series, season int,
 		_ = s.QueueRepo.SetStatus(queueID, queue.StatusFailed, plain)
 		noteDownloadFailure(queueID, series.Title, fmt.Sprintf("/series/%d", series.ID), stepErr)
 		s.doctorNoteFailure(queueID, stepErr)
-		blocklisted := isBadRelease(stepErr) && s.blocklistBadRelease(releaseTitle, protocol, 0, series.ID, stepErr)
+		blocklisted := isBadRelease(stepErr) && s.blocklistBadRelease(queueID, releaseTitle, protocol, 0, series.ID, stepErr)
 		releaseTargets()
 		message := fmt.Sprintf("%s: %s", series.Title, plain)
 		_ = s.QueueRepo.LogSeriesActivity(series.ID, "failed", message)
@@ -292,10 +303,16 @@ func (s *Server) runTVPipeline(queueID int64, series library.Series, season int,
 		if err := s.checkEpisodeLength(ctx, series.TMDBID, eps[0].Season, file); err != nil {
 			// Not filed: this file is a fake, a sample or cut off. The rest of a
 			// pack is imported as usual.
-			slog.Warn("import: a file is far shorter than its episode, left out", "file", filepath.Base(file))
 			if tooShort == nil {
 				tooShort = err
 			}
+			var nv *notVideoError
+			if errors.As(err, &nv) {
+				slog.Warn("import: a file is an archive, not a video, left out", "file", filepath.Base(file))
+				_ = s.QueueRepo.LogSeriesActivity(series.ID, "skipped", fmt.Sprintf("%s: %s It was left out.", series.Title, nv.msg))
+				continue
+			}
+			slog.Warn("import: a file is far shorter than its episode, left out", "file", filepath.Base(file))
 			if seconds, ok := videoSeconds(file); ok {
 				_ = s.QueueRepo.LogSeriesActivity(series.ID, "skipped", fmt.Sprintf("%s: the file %s was left out because it looks like a fake or broken release (it is only %d min long).", series.Title, filepath.Base(file), lengthMinutes(seconds)))
 			}
@@ -433,11 +450,13 @@ func (s *Server) runTVPipeline(queueID int64, series library.Series, season int,
 		if skipped > 0 {
 			// "If a file already exists" said to keep what is there: a decision,
 			// not a failure (no "failed" notification, nothing in Logs and errors).
+			// The kept file is recorded before the row is marked completed, so a
+			// reader that sees "completed" also sees which file was kept.
+			data := s.discardWorkDirReport(dir, protocol)
+			s.recordKept(queueID, keptFile, data)
 			if err := s.QueueRepo.SetStatus(queueID, queue.StatusCompleted, keptExistingMessage); err != nil {
 				return fail(err)
 			}
-			data := s.discardWorkDirReport(dir, protocol)
-			s.recordKept(queueID, keptFile, data)
 			_ = s.QueueRepo.LogSeriesActivity(series.ID, "kept", fmt.Sprintf("%s: the files of %s are already in your library, so Mediarium kept them and imported nothing.", series.Title, releaseTitle))
 			s.logKeptData(0, series.ID, data, releaseTitle)
 			return nil

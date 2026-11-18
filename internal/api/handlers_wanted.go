@@ -14,6 +14,7 @@ import (
 	"github.com/rdborg/mediarium/internal/indexers"
 	"github.com/rdborg/mediarium/internal/library"
 	"github.com/rdborg/mediarium/internal/metadata"
+	"github.com/rdborg/mediarium/internal/origin"
 	"github.com/rdborg/mediarium/internal/parser"
 	"github.com/rdborg/mediarium/internal/quality"
 )
@@ -150,7 +151,7 @@ func (s *Server) handleMovieSearch(w http.ResponseWriter, r *http.Request) {
 		}
 		p := s.toSearchResultPayload(res)
 		p.MatchedTitle = matchedOtherTitle(res.Title, m.Title, m.AltTitles)
-		p.Blocklisted = blocked[blocklist.Key(res.Title)]
+		p.Blocklisted = releaseBlocked(blocked, res, blocklist.Scope{MovieID: m.ID})
 		p.addReasonList(rejectionReasonsFor(res.Title, profile, m.Status == library.StatusDownloaded, m.Quality, m.ReleaseTitle, keeps))
 		p.addReasons("size", sizeReasons(res.Title, res.SizeBytes))
 		if beforeHome && looksLikeHomeCopy(res.Title) {
@@ -164,7 +165,7 @@ func (s *Server) handleMovieSearch(w http.ResponseWriter, r *http.Request) {
 	}
 	markBestMatch(out, found, profile)
 	s.markCachedPayloads(r.Context(), out)
-	writeSearchIgnoring(w, r, out, len(instances), outcomes, notAsked, instances, ignored)
+	writeSearchIgnoring(w, r, out, len(instances), outcomes, notAsked, instances, ignored, releaseFiltered(ignored, out))
 }
 
 type searchNowResponse struct {
@@ -215,7 +216,7 @@ func (s *Server) handleMovieSearchNow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if s.huntMovie(r.Context(), m, instances, profiles, s.searchSkipKeys(), true) {
+	if s.huntMovie(withGrabBy(r.Context(), userOrigin(r, origin.Search)), m, instances, profiles, s.searchSkipKeys(), true) {
 		writeJSON(w, http.StatusOK, searchNowResponse{Grabbed: 1, Message: "Started a download. Follow it in Activity."})
 		return
 	}
@@ -264,8 +265,9 @@ func (s *Server) handleSeriesSearchNow(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	n := s.autoGrabTV(s.targetedTVSearcher(r.Context(), instances, maxTVSearchesPerHunt, true), "search-now", profiles,
-		searchNowScope(id, req))
+	scope := searchNowScope(id, req)
+	scope.by = userOrigin(r, origin.Search)
+	n := s.autoGrabTV(s.targetedTVSearcher(r.Context(), instances, maxTVSearchesPerHunt, true), "search-now", profiles, scope)
 	msg := "Nothing suitable was found right now."
 	if n > 0 {
 		msg = fmt.Sprintf("Started %s. You can follow the progress in Activity.", plural(n, "download"))

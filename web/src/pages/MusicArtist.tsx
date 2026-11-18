@@ -4,6 +4,7 @@ import { albumRescanNote, type AlbumRescanReport } from '../albumRescan'
 import { api, can, isAdmin, type MusicAlbum, type MusicArtist as MusicArtistData, type MusicHiddenAlbum, type MusicProfile, type MusicRelease, type QueueItem, type SearchResult } from '../api'
 import { useAuth } from '../AuthContext'
 import { useConfirm } from '../components/ConfirmProvider'
+import AddDownloadDialog from '../components/AddDownloadDialog'
 import Cover from '../components/Cover'
 import FilesPanel from '../components/FilesPanel'
 import Icon from '../components/Icon'
@@ -22,10 +23,12 @@ import { useTorrentsSwitch } from '../useTorrentsSwitch'
 import { useModules } from '../ModulesContext'
 import { useLive } from '../useLive'
 import { artistState } from './MusicLibrary'
+import { albumOriginText, originText, type Origin } from '../origin'
 import { removeOption } from '../diskUsage'
 import ReleaseNotice from '../components/ReleaseNotice'
 import type { Unanswered } from '../releaseHint'
 import type { Searched } from '../searched'
+import CustomSearch from '../components/CustomSearch'
 import { useDocumentTitle } from '../documentTitle'
 import { plural, t, st } from '../i18n'
 import '../music.css'
@@ -335,11 +338,14 @@ function ArtistPage() {
               </>
             )}
           </div>
-          <div className="title-links">
-            <a className="link-pill" href={`https://musicbrainz.org/artist/${artist.mbid}`} target="_blank" rel="noreferrer">
-              <Icon name="external" size={13} /> {t('More about this artist')}
-            </a>
-          </div>
+          {admin && originText(artist.origin) && <p className="added-by">{originText(artist.origin)}</p>}
+          {!artist.manual && !artist.mbid.startsWith('manual:') && (
+            <div className="title-links">
+              <a className="link-pill" href={`https://musicbrainz.org/artist/${artist.mbid}`} target="_blank" rel="noreferrer">
+                <Icon name="external" size={13} /> {t('More about this artist')}
+              </a>
+            </div>
+          )}
           {admin && (
             <div className="title-controls">
               <Switch checked={artist.monitored} onChange={(v) => void setFollowed(v)} label={t('Follow this artist')} description={t('Checks for new releases every 12 hours and monitors them.')} />
@@ -419,6 +425,7 @@ function ArtistPage() {
               <Fragment key={a.id}>
               <AlbumCard
                 album={a}
+                artistOrigin={artist.origin}
                 live={liveFor(a.id)}
                 open={open?.id === a.id ? open.tab : null}
                 busy={busy === a.id}
@@ -440,6 +447,7 @@ function ArtistPage() {
 
 function AlbumCard({
   album,
+  artistOrigin,
   live,
   open,
   busy,
@@ -449,6 +457,7 @@ function AlbumCard({
   onChanged,
 }: {
   album: MusicAlbum
+  artistOrigin?: Origin // the artist's, so an album that came the same way says nothing
   live?: QueueItem
   open: Tab | null
   busy: boolean
@@ -464,6 +473,7 @@ function AlbumCard({
   const toast = useToast()
   const [note, setNote] = useState<AlbumRescanReport | null>(null)
   const [rescanning, setRescanning] = useState(false)
+  const [addingByHand, setAddingByHand] = useState(false)
   // Looks at the files in the album's folder again (administrators): files put
   // there by hand are matched to tracks, files removed by hand are let go.
   async function rescan() {
@@ -501,6 +511,11 @@ function AlbumCard({
           <p className="album-sub">
             {[album.year || null, TYPE_NAME[album.type] ?? album.type, album.quality || null].filter(Boolean).join(' · ')}
           </p>
+          {albumOriginText(album.origin, artistOrigin) && (
+            <p className="album-origin" title={albumOriginText(album.origin, artistOrigin)}>
+              {albumOriginText(album.origin, artistOrigin)}
+            </p>
+          )}
           <div className="album-tags">
             <span className={`state-tag st-${state.key}`} title={state.hint}>
               <Icon name={state.icon} size={12} /> {state.label}
@@ -541,6 +556,11 @@ function AlbumCard({
             <Icon name="folder" size={14} /> {rescanning ? t('Checking…') : t('Rescan album folder')}
           </button>
         )}
+        {isAdmin(me) && album.status !== 'downloading' && !live && (
+          <button className="btn-sm btn-with-icon" onClick={() => setAddingByHand(true)} title={t('Use an NZB or torrent you already have for this album.')}>
+            <Icon name="download" size={14} /> {t('Add a download by hand')}
+          </button>
+        )}
         {album.status === 'downloaded' && (
           <>
             <button className="btn-sm btn-with-icon btn-play" onClick={() => void playAlbum()}>
@@ -557,6 +577,7 @@ function AlbumCard({
           <Icon name={open ? 'chevron-up' : 'chevron-down'} size={14} /> {t('Details')}
         </button>
       </div>
+      {addingByHand && <AddDownloadDialog fixed={{ kind: 'album', albumId: album.id, label: `${artistName} – ${album.title}` }} onClose={() => setAddingByHand(false)} onAdded={onChanged} />}
       {noteText && (
         <div className={`notice ${noteText.good ? 'notice-info' : 'notice-warn'} album-note`} role="status">
           {noteText.lines.map((line, i) => (
@@ -741,21 +762,37 @@ function ReleasesPanel({ album, onChanged }: { album: MusicAlbum; onChanged: () 
   const toast = useToast()
   const { grabError } = useTorrentsSwitch()
   const [results, setResults] = useState<MusicRelease[] | null>(null)
-  const [answered, setAnswered] = useState<{ sources: number; unanswered: Unanswered[]; warnings?: string[]; searched?: Searched[] }>({ sources: 0, unanswered: [] })
+  const [answered, setAnswered] = useState<{ sources: number; unanswered: Unanswered[]; warnings?: string[]; searched?: Searched[]; filtered?: { reason: string; count: number }[] }>({ sources: 0, unanswered: [] })
   const [error, setError] = useState('')
   const [grabbing, setGrabbing] = useState<string | null>(null)
+  const [searching, setSearching] = useState(false)
+  // Only the newest search may fill the list: an older, slower answer is dropped.
+  const latest = useRef(0)
 
-  const search = useCallback(() => {
-    setResults(null)
-    setError('')
-    api
-      .albumSearch(album.id)
-      .then((a) => {
-        setAnswered({ sources: a.sources, unanswered: a.unanswered, warnings: a.warnings, searched: a.searched })
-        setResults(a.results)
-      })
-      .catch((e) => setError(e instanceof Error ? e.message : String(e)))
-  }, [album.id])
+  // q is what was typed in the search box; the list stays on screen until its answer comes.
+  const run = useCallback(
+    (q?: string) => {
+      const mine = ++latest.current
+      if (q === undefined) setResults(null)
+      setError('')
+      setSearching(true)
+      api
+        .albumSearch(album.id, q)
+        .then((a) => {
+          if (mine !== latest.current) return
+          setAnswered({ sources: a.sources, unanswered: a.unanswered, warnings: a.warnings, searched: a.searched, filtered: a.filtered })
+          setResults(a.results)
+        })
+        .catch((e) => {
+          if (mine === latest.current) setError(e instanceof Error ? e.message : String(e))
+        })
+        .finally(() => {
+          if (mine === latest.current) setSearching(false)
+        })
+    },
+    [album.id],
+  )
+  const search = useCallback(() => run(), [run])
   useEffect(search, [search])
 
   async function grab(r: SearchResult) {
@@ -771,17 +808,25 @@ function ReleasesPanel({ album, onChanged }: { album: MusicAlbum; onChanged: () 
     }
   }
 
-  if (error) return <p className="error-text">{error}</p>
-  if (results === null) return <div className="skeleton" style={{ height: 120 }} />
-  if (results.length === 0) {
-    return <ReleaseNotice className="album-empty" sources={answered.sources} unanswered={answered.unanswered} warnings={answered.warnings} searched={answered.searched} results={0} />
+  // A failed search keeps the search box and the last list, with the error above it.
+  const failed = error ? <p className="error-text">{error}</p> : null
+  if (results === null || results.length === 0) {
+    return (
+      <div className="album-releases">
+        <CustomSearch busy={searching} onSearch={(q) => run(q || undefined)} />
+        {failed ?? (results === null && <div className="skeleton" style={{ height: 120 }} />)}
+        {results !== null && <ReleaseNotice className="album-empty" sources={answered.sources} unanswered={answered.unanswered} warnings={answered.warnings} searched={answered.searched} filtered={answered.filtered} results={0} />}
+      </div>
+    )
   }
   return (
     <div className="album-releases">
+      <CustomSearch busy={searching} onSearch={(q) => run(q || undefined)} />
+      {failed}
       <p className="album-empty">
         {plural(results.length, '{n} release found. Releases Mediarium would skip are marked with the reason, and you can still pick any of them.', '{n} releases found. Releases Mediarium would skip are marked with the reason, and you can still pick any of them.')}
       </p>
-      <ReleaseNotice className="album-empty" sources={answered.sources} unanswered={answered.unanswered} warnings={answered.warnings} searched={answered.searched} results={results.length} />
+      <ReleaseNotice className="album-empty" sources={answered.sources} unanswered={answered.unanswered} warnings={answered.warnings} searched={answered.searched} filtered={answered.filtered} results={results.length} />
       <div className="table-scroll">
         <ReleaseTable results={results} searched={answered.searched} grabbing={grabbing} onGrab={grab} qualityLabel={releaseQuality} qualityGroup={(r) => (r as MusicRelease).quality} />
       </div>
