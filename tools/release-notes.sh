@@ -24,7 +24,7 @@ if [ -z "${section}" ]; then
 fi
 
 cat <<EOF
-**Install or update:** the Docker image is \`${image}:${version}\` (also \`:latest\`), for \`linux/amd64\` and \`linux/arm64\`. In the compose file, put \`${image}:latest\` on the \`image:\` line. A running Mediarium offers this version under Settings > System, where **Update now** installs it. New here? Start with the [install guide](https://github.com/${repo}/blob/main/docs/INSTALL.md) or [mediarium.app](https://mediarium.app).
+**Install or update:** the Docker image is \`${image}:${version}\` (also \`:latest\`), for \`linux/amd64\` and \`linux/arm64\`. In the compose file, put \`${image}:latest\` on the \`image:\` line. A running Mediarium offers this version under Settings > Basics > General, where **Update now** installs it. New here? Start with the [install guide](https://github.com/${repo}/blob/main/docs/INSTALL.md) or [mediarium.app](https://mediarium.app).
 
 ${section}
 EOF

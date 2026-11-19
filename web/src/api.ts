@@ -322,7 +322,7 @@ export interface SeriesNumbering {
   refreshing?: boolean
 }
 
-// What a basic account may do (Settings > Account & Access). Administrators may do everything.
+// What a basic account may do (Settings > People and access). Administrators may do everything.
 export interface Permissions {
   addDirect: boolean // add titles straight away; off = ask an administrator
   movies: boolean
@@ -406,7 +406,7 @@ export interface AccountChanges {
   permissions?: Permissions
 }
 
-// What an add answers for an account that has to ask (Settings > Account & Access).
+// What an add answers for an account that has to ask (Settings > People and access).
 export interface Requested {
   requested: true
   message: string
@@ -428,7 +428,7 @@ export interface TitleRequest {
   note?: string
   createdAt: string
   decidedAt?: string
-  // Asked for the 4K second copy as well (Settings > Account & Access > All accounts).
+  // Asked for the 4K second copy as well (Settings > People and access > All accounts).
   fourK?: boolean
   // "remove" is a request to take a title out of the library; the reason is what the person wrote.
   action?: 'add' | 'remove'
@@ -518,7 +518,7 @@ export interface SimklStatus {
   hasClientId: boolean
 }
 
-// Scheduled import lists (Settings > Info, lists and subtitles > Import lists).
+// Scheduled import lists (Settings > Library and files > Import lists).
 export interface ImportListConfig {
   url?: string
   chart?: string
@@ -533,7 +533,7 @@ export interface ImportListConfig {
 }
 
 // What an import list has added, and how useful that turned out (the History
-// view of Settings > Import lists).
+// view of Settings > Library and files > Import lists).
 export interface ImportListHistory {
   listId: number
   name: string
@@ -662,7 +662,7 @@ export interface NamingTokens {
   folderSchemes?: { id: string; name: string; movie: string; series: string }[]
 }
 
-// Another program that runs next to Mediarium, with a link to it (Settings > Add-ons).
+// Another program that runs next to Mediarium, with a link to it (Settings > Media servers and apps > Add-ons).
 export interface AppLink {
   id: string
   name: string
@@ -734,6 +734,7 @@ export interface Settings {
   defaultSources?: SourcePref
   qualityLanguage?: string
   qualityLanguageOnly?: boolean // only take releases that say they are in one of those languages
+  qualityLanguageIgnoreExtra?: boolean // a release that has a wanted language ranks the same whatever other languages it carries
   infoLanguage?: string // the TMDB language titles are read in, like "de-DE"
   infoLanguages?: { tag: string; name: string }[]
   releaseCountry?: string // the country release dates are read for, like "IN"; "" = the country of the info language
@@ -769,6 +770,7 @@ export interface Settings {
   seasonPacks?: boolean // look for a season pack once a season has ended (off by default)
   addMonitored?: boolean // the add dialog starts with monitoring on (on by default)
   addSearchNow?: boolean // the add dialog starts with "start searching now" ticked (on by default)
+  addKeepBetter?: boolean // a title added without a choice of its own keeps being searched for better versions (off by default; the setup wizard turns it on)
   holdUnreleased?: boolean // automatic searches wait for a movie to be released and an episode to air (on by default)
   tvmazeAirTimes?: boolean // look up the time episodes air on TVmaze (on by default; off = TVmaze is never contacted)
   hasOpenSubtitlesAccount?: boolean
@@ -903,7 +905,7 @@ export interface IndexerConfig {
   rssNote?: string
 }
 
-// The delay profile (Settings > Languages and automation): how long automatic
+// The delay profile (Settings > Finding releases > Automatic searching): how long automatic
 // searches wait for the protocol you like better. 0 minutes = no wait.
 export interface DelayProfile {
   preferredProtocol: 'usenet' | 'torrent'
@@ -2896,7 +2898,7 @@ export interface ModuleState {
 }
 export type Modules = Record<ModuleKey, ModuleState>
 // What GET /modules answers: the media types plus whether subtitles are switched on.
-export type ModulesAnswer = Modules & { subtitlesEnabled?: boolean; trailerBackground?: boolean; trailerSound?: boolean; artworkProxy?: boolean; torrentsOn?: boolean }
+export type ModulesAnswer = Modules & { subtitlesEnabled?: boolean; trailerBackground?: boolean; trailerSound?: boolean; artworkProxy?: boolean; torrentsOn?: boolean; tmdbKey?: boolean }
 
 export interface MusicArtistResult {
   mbid: string
@@ -3252,7 +3254,7 @@ export interface BulkSearchResult {
   message: string
 }
 
-// ---- Updates and restarts (Settings > System, and the notice on the dashboard) ----
+// ---- Updates and restarts (Settings > Basics > General, Settings > System > Server, and the notice on the dashboard) ----
 
 export interface UpdateLatest {
   version: string
@@ -3274,7 +3276,7 @@ export interface UpdateJob {
 }
 
 // GET /api/system/update/latest and POST /api/system/update/check.
-// The anonymous usage numbers (Settings > General; docs/usage-stats.md).
+// The anonymous usage numbers (Settings > Basics > General; docs/usage-stats.md).
 export interface UsageStatsMessage {
   schema: number
   id: string
@@ -3313,7 +3315,7 @@ export interface UpdateNotice {
   job?: UpdateJob
 }
 
-// What's been watched and the cleanup rules (Settings > Media servers).
+// What's been watched and the cleanup rules (Settings > Media servers and apps > Media servers).
 export interface CleanupRules {
   enabled: boolean
   moviesWatchedDays: number // 0 = rule off
@@ -3341,7 +3343,7 @@ export interface LibraryCleanupItem {
   title: string
   reason: string
 }
-// Library lifecycle (Settings > Media types > Library lifecycle, and the Leaving soon shelf on Home).
+// Library lifecycle (Settings > Basics > Media types > Library lifecycle, and the Leaving soon shelf on Home).
 export interface LifecycleRules {
   moviesWatchedDays: number
   moviesUnwatchedDays: number
@@ -3376,7 +3378,7 @@ export interface LifecycleShelfItem {
   dueAt: string
   daysLeft: number
 }
-// The Channel archiver (Settings > Media types).
+// The Channel archiver (Settings > Basics > Media types).
 export interface ArchiverConfig {
   ytdlpPath: string
   folder: string
@@ -3424,7 +3426,7 @@ export interface WatchedTitle {
   episodes?: number
 }
 
-// Sign-in through a reverse proxy (Settings > Account & Access).
+// Sign-in through a reverse proxy (Settings > People and access).
 // Two-step sign-in (an authenticator app's code after the password).
 export interface TwoStepChallenge {
   twoStep: true
@@ -3433,7 +3435,7 @@ export interface TwoStepChallenge {
 export function isTwoStepChallenge(v: unknown): v is TwoStepChallenge {
   return typeof v === 'object' && v !== null && (v as TwoStepChallenge).twoStep === true
 }
-// One place the account is signed in (Settings > Security > Signed-in devices).
+// One place the account is signed in (Settings > People and access > Security > Signed-in devices).
 export interface SessionInfo {
   createdAt: string
   expiresAt: string
@@ -3461,7 +3463,7 @@ export interface SignInMethods {
   autoSignIn?: 'oidc' // the sign-in page sends visitors to this method by itself
 }
 
-// Settings > Account & Access > All accounts: the general sign-in switches.
+// Settings > People and access > All accounts: the general sign-in switches.
 export interface SignInSettings {
   localSignIn: boolean
   localEffective: boolean
@@ -3572,7 +3574,7 @@ export interface PasskeyCeremony {
   options: { publicKey: Record<string, unknown> }
 }
 
-// Settings > Account & Access > Security: sign out browsers that sit unused.
+// Settings > People and access > Security: sign out browsers that sit unused.
 export interface IdleSignOut {
   days: number // 0 = off
   maxDays: number // the longest limit that can be set
@@ -3586,7 +3588,7 @@ export interface ProxySignIn {
   seen: string // what the proxy put in the header for this request
 }
 
-// Settings > System: the script run after each import.
+// Settings > Library and files > Folders: the script run after each import.
 export interface ScriptRun {
   at: string
   script: string
@@ -3664,7 +3666,7 @@ export interface McpSettings {
   path: string
 }
 
-// An app connected to MCP with OAuth (Settings > Other apps).
+// An app connected to MCP with OAuth (Settings > Media servers and apps > Other apps).
 export interface McpApp {
   id: number
   clientName: string
@@ -3703,7 +3705,7 @@ export interface SystemControl {
 }
 
 // GET /api/system/update.
-// Settings > Media types > the anime library.
+// Settings > Basics > Media types > the anime library.
 export interface AnimeSettings {
   enabled: boolean
   path: string // where new anime shows go
@@ -3722,7 +3724,7 @@ export interface RollbackState {
   previous?: string
 }
 
-// Settings file with a check (Settings > System > Settings file).
+// Settings file with a check (Settings > System > Backup and restore > Settings file).
 export interface ConfigChange {
   section: string
   key?: string
@@ -3951,7 +3953,7 @@ export const api = {
   downloadSubtitle: (movieId: number, pick: Pick<SubtitleResult, 'fileId' | 'source' | 'link' | 'variant'>, language = 'en') =>
     post<{ path: string }>(`/movies/${movieId}/subtitles/download`, { fileId: pick.fileId, source: pick.source ?? '', link: pick.link ?? '', language, variant: pick.variant ?? '' }),
 
-  listProfiles: () => get<{ profiles: QualityProfile[]; tiers: string[]; defaultId: number; defaultTvId: number; defaultSources?: SourcePref; addMonitored?: boolean; addSearchNow?: boolean }>('/quality-profiles'),
+  listProfiles: () => get<{ profiles: QualityProfile[]; tiers: string[]; defaultId: number; defaultTvId: number; defaultSources?: SourcePref; addMonitored?: boolean; addSearchNow?: boolean; addKeepBetter?: boolean }>('/quality-profiles'),
   createProfile: (data: QualityProfileInput) =>
     post<QualityProfile>('/quality-profiles', data),
   updateProfile: (id: number, data: QualityProfileInput) =>
@@ -3982,7 +3984,7 @@ export const api = {
   // Only what is waiting, downloading or importing: the count in the menu and the dashboard need no more.
   listActiveQueue: () => request<QueueItem[]>('/queue?active=1', { revalidate: true }),
   // How many downloads are waiting, downloading or importing: the number beside Activity, without the whole queue.
-  queueCount: () => get<{ active: number; queued: number; downloading: number; importing: number }>('/queue/count'),
+  queueCount: () => request<{ active: number; queued: number; downloading: number; importing: number }>('/queue/count', { revalidate: true }),
   // Which TMDB titles are in the library and how each is doing (Discover's marks), far smaller than the movie
   // list, the show list and the queue together. Answers 304 (the very same object) when nothing changed.
   libraryOwned: () => request<OwnedAnswer>('/library/owned', { revalidate: true }),
@@ -4317,7 +4319,7 @@ export const api = {
   setUsageStats: (choice: 'yes' | 'no') => put<UsageStatsState>('/usage-stats', { choice }),
   resetUsageStatsId: () => post<UsageStatsState>('/usage-stats/reset-id'),
   problems: (query = '') => get<ProblemList>(`/system/problems${query}`),
-  problemCounts: () => get<{ counts: ProblemCounts }>('/system/problems?summary=1').then((r) => r.counts),
+  problemCounts: () => request<{ counts: ProblemCounts }>('/system/problems?summary=1', { revalidate: true }).then((r) => r.counts),
   // With all: true, `query` (the page's filters, as problemQuery makes them) limits it to what matches; without one it is every problem.
   markProblemsRead: (req: { ids?: number[]; all?: boolean }, query = '') => post<{ marked: number; counts: ProblemCounts }>(`/system/problems/read${query}`, req),
   setNotifyOnProblems: (enabled: boolean) => put<{ notifyOnProblems: boolean }>('/system/problems/notify', { enabled }),
@@ -4326,7 +4328,7 @@ export const api = {
   cleanupReport: () => get<CleanupReport>('/system/cleanup'),
   runCleanup: () => post<{ removedBytes: number; removed?: unknown[]; prunedQueueItems?: number; prunedActivity?: number; clientJobs?: number; errors?: unknown }>('/system/cleanup'),
   updateState: () => get<UpdateState>('/system/update'),
-  updateLatest: () => get<UpdateNotice>('/system/update/latest'),
+  updateLatest: () => request<UpdateNotice>('/system/update/latest', { revalidate: true }),
   updateCheck: () => post<UpdateNotice>('/system/update/check'),
   updateInstall: () => post<UpdateNotice>('/system/update/install'),
   updateInstallStatus: () => get<UpdateNotice>('/system/update/install'),
@@ -4454,7 +4456,7 @@ export const api = {
   getScan: (id: string) => get<ImportJob>(`/library/scan/${id}`),
   runImport: (jobId: string, selections: { key: string; tmdbId: number; title?: string; year?: number }[], options: ImportOptions) =>
     post<{ jobId: string; batchId: number }>('/library/import', { jobId, selections, ...options }),
-  importActive: () => get<ImportActive>('/library/import/active'),
+  importActive: () => request<ImportActive>('/library/import/active', { revalidate: true }),
   importBatch: (id: number) => get<ImportBatchDetail>(`/library/import/batches/${id}`),
   dismissImportBatch: (id: number) => post<null>(`/library/import/batches/${id}/dismiss`),
   // Start monitoring exactly the titles one import added (watch), and/or make the missing episodes of its shows wanted (missing).
