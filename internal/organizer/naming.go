@@ -43,8 +43,15 @@ type NamingContext struct {
 	Proper     bool
 	Repack     bool
 	Languages  []string
-	IMDBID     string
-	TVDBID     int
+	// From the file itself, when its media info is known (the api fills these
+	// in and also replaces Codec, AudioCodec, HDR and Languages with the file's
+	// own values): the main audio track's layout ("5.1"), the picture's bit
+	// depth (10, 0 when unknown) and the subtitle languages.
+	AudioChannels     string
+	BitDepth          int
+	SubtitleLanguages []string
+	IMDBID            string
+	TVDBID            int
 
 	// OriginalFilename is the name the file came with, without its folder
 	// or extension; OriginalTitle is the release's own name.

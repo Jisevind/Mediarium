@@ -309,6 +309,10 @@ type settingsPayload struct {
 	// plain limit above applies.
 	SpeedSchedule *[]speedRule `json:"speedSchedule,omitempty"`
 	MinFreeGB     *int         `json:"minFreeGB,omitempty"`
+	// MaxReleaseGB is the largest release taken for any title, in GB (0 = no
+	// limit). A bigger release is skipped by searches, and the list of an
+	// interactive search says why.
+	MaxReleaseGB *int `json:"maxReleaseGB,omitempty"`
 	// TorrentStallHours: hours a torrent may get no data before it is given up on (0 = never, absent = the default of each client).
 	TorrentStallHours *int `json:"torrentStallHours,omitempty"`
 	// DownloadHours is when new downloads may start ("1-7", "" = any time).
@@ -356,10 +360,12 @@ type settingsPayload struct {
 	// Ebooks and audiobooks library folders.
 	EbooksPath     string `json:"ebooksPath,omitempty"`
 	AudiobooksPath string `json:"audiobooksPath,omitempty"`
+	// OtherPath is the Other library folder.
+	OtherPath string `json:"otherPath,omitempty"`
 
 	// ContainerFolders is what the container itself maps: the folders named
-	// by MOVIES_DIR, TV_DIR, DOWNLOADS_DIR, MUSIC_DIR, EBOOKS_DIR and
-	// AUDIOBOOKS_DIR (or their defaults). Read-only. The setup wizard starts
+	// by MOVIES_DIR, TV_DIR, DOWNLOADS_DIR, MUSIC_DIR, EBOOKS_DIR,
+	// AUDIOBOOKS_DIR and OTHER_DIR (or their defaults). Read-only. The setup wizard starts
 	// from these, and shows a note when a saved folder differs from them.
 	ContainerFolders *containerFolders `json:"containerFolders,omitempty"`
 }
@@ -372,6 +378,7 @@ type containerFolders struct {
 	Music      string `json:"music"`
 	Ebooks     string `json:"ebooks"`
 	Audiobooks string `json:"audiobooks"`
+	Other      string `json:"other"`
 }
 
 func (s *Server) containerFolders() *containerFolders {
@@ -382,6 +389,7 @@ func (s *Server) containerFolders() *containerFolders {
 		Music:      s.cfg.MusicDir,
 		Ebooks:     s.cfg.EbooksDir,
 		Audiobooks: s.cfg.AudiobooksDir,
+		Other:      s.cfg.OtherDir,
 	}
 }
 
@@ -453,6 +461,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 	trashDays := s.trashDays()
 	backupAuto, backupKeep := s.backupAutoEnabled(), s.backupKeep()
 	speedMB, minFree := s.speedLimitMB(), s.minFreeGB()
+	maxRelease := s.maxReleaseGB()
 	stallHours := s.stallHours()
 	speedHours, quiet := "", ""
 	if from, to, ok := s.quietHours(); ok {
@@ -585,6 +594,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		SpeedSchedule:              &speedSchedule,
 		DownloadHours:              &dlHours,
 		MinFreeGB:                  &minFree,
+		MaxReleaseGB:               &maxRelease,
 		TorrentStallHours:          &stallHours,
 		NotifyQuietHours:           &quiet,
 		DigestDay:                  &digestDay,
@@ -602,6 +612,7 @@ func (s *Server) handleGetSettings(w http.ResponseWriter, r *http.Request) {
 		MusicDefaultProfileID:      s.musicDefaultProfileIDNow(),
 		EbooksPath:                 s.ebooksRoot(),
 		AudiobooksPath:             s.audiobooksRoot(),
+		OtherPath:                  s.otherRoot(),
 		ContainerFolders:           s.containerFolders(),
 	})
 }
@@ -760,7 +771,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	var chosenRoots []string
 	for _, f := range []struct{ key, value string }{
 		{settings.KeyMoviesPath, req.MoviesPath}, {settings.KeyTVPath, req.TVPath}, {settings.KeyMusicPath, req.MusicPath},
-		{settings.KeyEbooksPath, req.EbooksPath}, {settings.KeyAudiobooksPath, req.AudiobooksPath},
+		{settings.KeyEbooksPath, req.EbooksPath}, {settings.KeyAudiobooksPath, req.AudiobooksPath}, {settings.KeyOtherPath, req.OtherPath},
 	} {
 		if f.value != "" && s.changed(f.key, f.value) {
 			chosenRoots = append(chosenRoots, f.value)
@@ -827,6 +838,7 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		{settings.KeyMusicPath, req.MusicPath},
 		{settings.KeyEbooksPath, req.EbooksPath},
 		{settings.KeyAudiobooksPath, req.AudiobooksPath},
+		{settings.KeyOtherPath, req.OtherPath},
 	}
 	for _, set := range sets {
 		if set.value == "" {
@@ -1355,6 +1367,12 @@ func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		tx.then(func() { s.dispatch.Kick() })
+	}
+	if req.MaxReleaseGB != nil {
+		if err := tx.Set(settings.KeyMaxReleaseGB, strconv.Itoa(*req.MaxReleaseGB), false); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
 	if req.BackupAuto != nil {
 		v := "1"
